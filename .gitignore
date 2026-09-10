@@ -1,0 +1,10 @@
+/Libs/LibOrbitUI-1.0
+/.release/
+/.packager/
+/.staging/
+/.release-notes.md
+.env
+.env.*
+.vscode/
+__pycache__/
+*.pyc

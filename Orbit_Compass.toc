@@ -1,0 +1,49 @@
+## Interface: 120100
+## Title: Orbit: Compass
+## Notes: Navigation ribbon, native map points and destination guidance.
+## Author: MoONSHO7
+## Version: @project-version@
+## X-Curse-Project-ID: 1689597
+## OptionalDeps: Orbit, TomTom
+## SavedVariables: OrbitCompassDB
+## IconTexture: Interface\AddOns\Orbit_Compass\Assets\Orbit.png
+## Group: Orbit_Compass
+## Category: |cffA78BFAOrbit Suite|r
+## X-License: All Rights Reserved
+
+Libs\LibOrbitUI-1.0\LibOrbitUI-1.0.xml
+Core\CompassCompatibility.lua
+Localization\Generated.lua
+Localization\Compass.lua
+Core\CompassConstants.lua
+Core\CompassDefaults.lua
+Core\CompassServices.lua
+Core\Integrations\Orbit.lua
+Core\CompassController.lua
+Core\CompassMath.lua
+Core\Compass.lua
+Core\CompassWaypoint.lua
+Core\CompassCommands.lua
+Core\CompassSourceUtils.lua
+Core\CompassTravelSources.lua
+Core\CompassContentSources.lua
+Core\CompassOfferSources.lua
+Core\CompassTargets.lua
+Core\CompassLocations.lua
+Core\CompassPointMenu.lua
+Core\CompassTomTom.lua
+Core\CompassMapSources.lua
+Core\CompassQuestSources.lua
+Core\CompassSources.lua
+Core\CompassDiscovery.lua
+Core\CompassPosition.lua
+Core\CompassBearings.lua
+Core\CompassMarkerView.lua
+Core\CompassProjection.lua
+Core\CompassView.lua
+Core\CompassNavigation.lua
+Core\CompassNavigationView.lua
+Core\CompassNavigationSettings.lua
+Core\Integrations\OrbitCanvas.lua
+Core\CompassSettings.lua
+Core\CompassBoot.lua

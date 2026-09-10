@@ -1,0 +1,5 @@
+<Bindings>
+    <Binding name="ORBIT_COMPASS_TARGET" category="BINDING_HEADER_ORBIT_COMPASS">
+        if OrbitCompass then OrbitCompass:TargetCompassPoint() end
+    </Binding>
+</Bindings>

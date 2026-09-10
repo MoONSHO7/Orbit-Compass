@@ -1,0 +1,33 @@
+package-as: Orbit_Compass
+
+externals:
+  # LibOrbitUI API 1.4; immutable published source snapshot (not a release tag).
+  Libs/LibOrbitUI-1.0:
+    url: https://github.com/MoONSHO7/LibOrbitUI
+    commit: 382c6e3cfe8168b56747c917db755ebd2c90ffc4
+    path: LibOrbitUI-1.0
+
+ignore:
+  - .git
+  - .github
+  - .scripts
+  - .vscode
+  - .env
+  - .env.*
+  - .release
+  - .packager
+  - .staging
+  - .release-notes.md
+  - .gitattributes
+  - .gitignore
+  - .pkgmeta
+  - .stylua.toml
+  - .styluaignore
+  - Assets/Source
+  - README.md
+  - "**/README.md"
+  - "**/*.svg"
+  - "**/__pycache__"
+  - "**/*.pyc"
+
+enable-nolib-creation: no

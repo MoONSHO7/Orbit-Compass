@@ -1,0 +1,161 @@
+name: Build and Release
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["[0-9]*.[0-9]*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ (github.ref == 'refs/heads/main' || github.ref_type == 'tag') && 'addon-release' || format('addon-build-{0}', github.ref) }}
+  cancel-in-progress: false
+
+env:
+  ADDON: Orbit_Compass
+
+jobs:
+  package:
+    if: github.event_name != 'pull_request' || (github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Check out source and tags
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Authenticate library access
+        env:
+          GH_TOKEN: ${{ secrets.ORBIT_PAT }}
+        run: |
+          test -n "$GH_TOKEN" || { echo "ORBIT_PAT must grant read access to the embedded libraries." >&2; exit 1; }
+          gh auth setup-git --hostname github.com
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Install package validation dependencies
+        run: python -m pip install lupa==2.8 PyYAML==6.0.2
+
+      - name: Fetch immutable library revisions
+        env:
+          GH_TOKEN: ${{ secrets.ORBIT_PAT }}
+        run: python .scripts/fetch-libs.py
+
+      - name: Validate source and library APIs
+        run: python .scripts/check-package.py --release
+
+      - name: Check release credentials
+        if: github.ref == 'refs/heads/main' || github.ref_type == 'tag'
+        env:
+          CF_API_KEY: ${{ secrets.CURSE_API_KEY }}
+        run: test -n "$CF_API_KEY" || { echo "CURSE_API_KEY is required for CurseForge releases." >&2; exit 1; }
+
+      - name: Select stable version
+        id: version
+        if: github.ref == 'refs/heads/main' || github.ref_type == 'tag'
+        run: |
+          python - <<'PY'
+          import os, re, subprocess
+          def git(*args):
+              return subprocess.check_output(["git", *args], text=True).strip()
+          def stable(tag):
+              return re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", tag) is not None
+          tags = sorted(filter(stable, git("tag", "--list").splitlines()),
+                        key=lambda tag: tuple(map(int, tag.split("."))))
+          if os.environ["GITHUB_REF_TYPE"] == "tag":
+              version = os.environ["GITHUB_REF_NAME"]
+              if not stable(version):
+                  raise SystemExit("Release tags must use MAJOR.MINOR.")
+          else:
+              current = set(git("tag", "--points-at", "HEAD").splitlines())
+              reused = [tag for tag in tags if tag in current]
+              if reused:
+                  version = reused[-1]
+              else:
+                  if tags:
+                      subprocess.run(["git", "merge-base", "--is-ancestor", tags[-1], "HEAD"], check=True)
+                      major, minor = map(int, tags[-1].split("."))
+                      version = f"{major}.{minor + 1}"
+                  else:
+                      version = "1.0"
+                  subprocess.run(["git", "-c", "user.name=github-actions[bot]",
+                                  "-c", "user.email=github-actions[bot]@users.noreply.github.com",
+                                  "tag", "-a", version, "-m", f"Release {version}", "HEAD"], check=True)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"version={version}\n")
+          PY
+
+      - name: Check out pinned packager
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: BigWigsMods/packager
+          ref: 6d50adb6e8517eefef63f4afb16a6518166a6b28 # v2.5.1
+          path: .packager
+          persist-credentials: false
+
+      - name: Build without publishing
+        env:
+          GH_TOKEN: ${{ secrets.ORBIT_PAT }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [[ -n "$VERSION" ]]; then
+            export GITHUB_REF="refs/tags/$VERSION" GITHUB_REF_NAME="$VERSION"
+          fi
+          env GITHUB_EVENT_NAME=workflow_dispatch bash .packager/release.sh -u -d -w 0 -a 0
+
+      - name: Validate materialized release
+        run: python .scripts/check-package.py --root ".release/$ADDON" --release
+
+      - name: Retain validated ZIP
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ env.ADDON }}-${{ github.sha }}
+          path: .release/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish verified version tag
+        if: steps.version.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git push origin "refs/tags/$VERSION"
+
+      - name: Publish CurseForge and GitHub release
+        if: steps.version.outputs.version != ''
+        env:
+          CF_API_KEY: ${{ secrets.CURSE_API_KEY }}
+          GITHUB_OAUTH: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          test -n "$CF_API_KEY" || { echo "CURSE_API_KEY is required for CurseForge releases." >&2; exit 1; }
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases" --jq '.[].tag_name' > "$RUNNER_TEMP/existing-releases"
+          if grep -Fxq "$VERSION" "$RUNNER_TEMP/existing-releases"; then
+            echo "::error::Release $VERSION already exists. Verify its GitHub assets and CurseForge upload before retrying; existing releases are never automatically republished."
+            exit 1
+          fi
+          env GITHUB_EVENT_NAME=workflow_dispatch GITHUB_REF="refs/tags/$VERSION" GITHUB_REF_NAME="$VERSION" bash .packager/release.sh -u -o -c -e -w 0 -a 0
+          gh release download "$VERSION" --pattern '*.zip' --pattern release.json --dir "$RUNNER_TEMP/published-release"
+          for archive in .release/*.zip .release/release.json; do
+            cmp "$archive" "$RUNNER_TEMP/published-release/$(basename "$archive")"
+          done
+
+  unavailable-library-coverage:
+    if: github.event_name == 'pull_request' && (github.actor == 'dependabot[bot]' || github.event.pull_request.head.repo.full_name != github.repository)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain private dependency limitation
+        run: echo "::notice::Full package validation needs private library access. Fork and Dependabot pull requests receive no library credentials; trusted validation is required before release."
