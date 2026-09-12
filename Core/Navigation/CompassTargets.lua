@@ -4,7 +4,7 @@ local C = Addon.Constants
 local Plugin = Addon.Controller
 local Utils = Addon.SourceUtils
 local Readable, Number = Utils.Readable, Utils.Number
-local NAVIGATION_RANK = { corpse = 1, tomtom = 2, selected = 3, directions = 4 }
+local NAVIGATION_RANK = { corpse = 1, selected = 2, directions = 3 }
 local MAP_PIN_PREFIXES = {
     [Enum.SuperTrackingMapPinType.AreaPOI] = { "poi:", "mapLink:", "petTamer:" },
     [Enum.SuperTrackingMapPinType.QuestOffer] = { "offer:" },
@@ -75,20 +75,14 @@ function Plugin:SelectCompassNavigation()
     if self.nativeNavigationID ~= selectionID then
         self.nativeNavigationID = selectionID
         self.dismissedNavigationKey = nil
-        if self.nativeSelectionChanged then
-            self.tomtomTarget = nil
-        end
     end
-    self.nativeSelectionChanged = false
-    local x, y = Utils.ReadPosition(C_Map.GetPlayerMapPosition(self.mapID, "player"))
+    local x, y, positionRead
     local target, bestRank, bestDistance
     for _, marker in ipairs(self.markers) do
         marker.navigation = false
         local rank
         if marker.kind == "corpse" then
             rank = NAVIGATION_RANK.corpse
-        elseif marker.kind == "tomtom" and self.tomtomTarget then
-            rank = NAVIGATION_RANK.tomtom
         elseif marker.key == "waypoint" and not keys then
             rank = NAVIGATION_RANK.selected
         elseif keys then
@@ -103,6 +97,10 @@ function Plugin:SelectCompassNavigation()
             rank = NAVIGATION_RANK.directions
         end
         if rank and marker.key ~= self.dismissedNavigationKey then
+            if not positionRead then
+                x, y = Utils.ReadPosition(C_Map.GetPlayerMapPosition(self.mapID, "player"))
+                positionRead = true
+            end
             local distance = x and y and ((marker.x - x) * self.mapWidth) ^ 2 + ((marker.y - y) * self.mapHeight) ^ 2
                 or 0
             if
@@ -120,6 +118,10 @@ function Plugin:SelectCompassNavigation()
     self.navigationKey = target and target.key
     if target then
         target.navigation = true
+    end
+    local profiler = Addon.Services.profiler
+    if profiler and profiler.active then
+        profiler:Count(self, positionRead and "Navigation/PositionRead" or "Navigation/NoCandidates")
     end
 end
 

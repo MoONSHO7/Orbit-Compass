@@ -1,0 +1,10 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Include file="Foundation\Foundation.xml"/>
+    <Include file="Plugin\Plugin.xml"/>
+    <Include file="Discovery\Discovery.xml"/>
+    <Include file="Navigation\Navigation.xml"/>
+    <Include file="Integrations\Integrations.xml"/>
+    <Include file="Ribbon\Ribbon.xml"/>
+    <Include file="Config\Config.xml"/>
+    <Script file="CompassBoot.lua"/>
+</Ui>

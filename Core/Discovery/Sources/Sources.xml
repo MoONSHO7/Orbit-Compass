@@ -1,0 +1,7 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Script file="CompassTravelSources.lua"/>
+    <Script file="CompassContentSources.lua"/>
+    <Script file="CompassOfferSources.lua"/>
+    <Script file="CompassMapSources.lua"/>
+    <Script file="CompassQuestSources.lua"/>
+</Ui>

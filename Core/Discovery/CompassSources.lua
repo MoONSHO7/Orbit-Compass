@@ -25,7 +25,7 @@ function Plugin:ProjectCompassDestination(mapID, x, y)
     end
 end
 
-local function FindWaypointMarker(markers, position)
+local function FindWaypointMarker(markers, position, sourceKey)
     local x, y = ReadPosition(position)
     local match
     if x and y then
@@ -33,6 +33,7 @@ local function FindWaypointMarker(markers, position)
             if
                 math.abs(marker.x - x) < WAYPOINT_MATCH_EPSILON
                 and math.abs(marker.y - y) < WAYPOINT_MATCH_EPSILON
+                and (not sourceKey or marker.key == sourceKey)
                 and (
                     not match
                     or marker.priority < match.priority
@@ -46,25 +47,42 @@ local function FindWaypointMarker(markers, position)
     return match
 end
 
-local function CollectWaypoint(plugin)
+local function ReadWaypoint(plugin)
     local point = Readable(C_Map.GetUserWaypoint())
     local mapID = point and Number(point.uiMapID)
     local position = point and Readable(point.position)
     if not mapID or not position then
         plugin.waypointLabel = nil
+        plugin:ClearCompassHandyNotesGuides()
         return
     end
     local x, y = ReadPosition(position)
     if not x or not y then
+        plugin.waypointLabel = nil
+        plugin:ClearCompassHandyNotesGuides()
         return
     end
-    local title = plugin:GetWaypointTitle(mapID, x, y)
-    position = plugin:ProjectCompassDestination(mapID, x, y)
+    local title, description, sourceKey = plugin:GetWaypointTitle(mapID, x, y)
+    return mapID, x, y, title, description, sourceKey
+end
+
+local function CollectWaypoint(plugin, mapID, x, y, title, description, sourceKey)
+    if not mapID then
+        return
+    end
+    if not plugin.showWaypoint and not sourceKey then
+        return
+    end
+    local position = plugin:ProjectCompassDestination(mapID, x, y)
     if not position then
         return
     end
-    local match = FindWaypointMarker(plugin.markers, position)
-    AddMarker(
+    local match = FindWaypointMarker(plugin.markers, position, sourceKey)
+    if sourceKey and match then
+        title, description = match.name, match.description
+        plugin.waypointLabel.title, plugin.waypointLabel.description = title, description
+    end
+    local marker = AddMarker(
         plugin,
         plugin.markers,
         "waypoint",
@@ -75,12 +93,24 @@ local function CollectWaypoint(plugin)
         match and match.kind or "waypoint",
         { mapID = mapID, x = x, y = y }
     )
+    if marker then
+        marker.description = description
+        marker.sourceKey = sourceKey
+        if match then
+            marker.handynotesNode = match.handynotesNode
+            marker.handynotesPoint = match.handynotesPoint
+            for _, field in ipairs(C.MARKER_ART_FIELDS) do
+                marker[field] = match[field]
+            end
+        end
+    end
 end
 
 function Plugin:RefreshCompassMap()
     self.bearingsDirty = true
     wipe(self.markers)
     self.mapID = Number(C_Map.GetBestMapForUnit("player"))
+    self:RefreshCompassPointArea(self.mapID)
     self.mapWidth, self.mapHeight = nil, nil
     self.positionInstance = nil
     if not self.mapID then
@@ -100,13 +130,12 @@ function Plugin:RebuildCompassMarkers()
     if not self.mapWidth then
         return
     end
+    local mapID, x, y, title, description, sourceKey = ReadWaypoint(self)
     for _, source in pairs(self.compassSources) do
         for _, marker in ipairs(source.markers) do
             self.markers[#self.markers + 1] = marker
         end
     end
-    if self.showWaypoint then
-        CollectWaypoint(self)
-    end
+    CollectWaypoint(self, mapID, x, y, title, description, sourceKey)
     self:SelectCompassNavigation()
 end

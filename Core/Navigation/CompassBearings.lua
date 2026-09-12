@@ -16,7 +16,7 @@ local function MarkerBefore(a, b)
     return a.key < b.key
 end
 
-local function OrderBearings(plugin, forceSort)
+local function OrderBearings(plugin, forceSort, profiler)
     plugin.selectionDirty = true
     if forceSort or plugin.sortElapsed >= C.SORT_INTERVAL then
         for _, marker in ipairs(plugin.markers) do
@@ -25,8 +25,14 @@ local function OrderBearings(plugin, forceSort)
         end
         table.sort(plugin.markers, MarkerBefore)
         plugin.sortElapsed, plugin.sortPending = 0, false
+        if profiler then
+            profiler:Count(plugin, "Bearings/OrderSorted")
+        end
     else
         plugin.sortPending = true
+        if profiler then
+            profiler:Count(plugin, "Bearings/OrderDeferred")
+        end
     end
     wipe(plugin.bearings)
     for _, marker in ipairs(plugin.markers) do
@@ -51,19 +57,18 @@ function Plugin:RefreshCompassMarkerBearing(marker)
     marker.bearingRevision = self.bearingRevision
 end
 
-function Plugin:RefreshCompassBearings()
-    local x, y
-    if self.mapID and self.mapWidth then
-        x, y = self:ReadCompassPosition()
-    end
+local function UpdateBearings(self, x, y, profiler)
     local resort = self.sortPending and self.sortElapsed >= C.SORT_INTERVAL
     local settle = x
         and self.bearingSampleX
         and (x ~= self.bearingSampleX or y ~= self.bearingSampleY)
         and self.discoveryClock >= self.bearingNextRefresh
     if not self.bearingsDirty and not settle and x == self.bearingPlayerX and y == self.bearingPlayerY then
+        if profiler then
+            profiler:Count(self, "Bearings/Unchanged")
+        end
         if resort and x and y then
-            OrderBearings(self, true)
+            OrderBearings(self, true, profiler)
             self.renderDirty = true
         end
         return
@@ -75,6 +80,9 @@ function Plugin:RefreshCompassBearings()
     self.bearingsDirty, self.renderDirty = false, true
     self.bearingPlayerX, self.bearingPlayerY = x, y
     if not x or not y then
+        if profiler then
+            profiler:Count(self, "Bearings/Unavailable")
+        end
         self.navigationTarget, self.bearingSampleX = nil, nil
         self.selectionDirty = true
         wipe(self.bearings)
@@ -86,6 +94,9 @@ function Plugin:RefreshCompassBearings()
         fullRefresh = east * east + north * north >= C.BEARING_RESET_DISTANCE * C.BEARING_RESET_DISTANCE
     end
     if fullRefresh then
+        if profiler then
+            profiler:Count(self, "Bearings/Full")
+        end
         self.bearingNextRefresh = self.discoveryClock + C.BEARING_REFRESH_INTERVAL
         self.bearingSampleX, self.bearingSampleY = x, y
         self.rangeSquared = self.range * self.range
@@ -96,8 +107,11 @@ function Plugin:RefreshCompassBearings()
                 self.navigationTarget = marker
             end
         end
-        OrderBearings(self, forceSort)
+        OrderBearings(self, forceSort, profiler)
     else
+        if profiler then
+            profiler:Count(self, "Bearings/Incremental")
+        end
         if self.navigationTarget then
             self:RefreshCompassMarkerBearing(self.navigationTarget)
         end
@@ -107,6 +121,25 @@ function Plugin:RefreshCompassBearings()
             end
         end
     end
+end
+
+function Plugin:RefreshCompassBearings()
+    local profiler = Addon.Services.profiler
+    local x, y
+    if not profiler or not profiler.active then
+        if self.mapID and self.mapWidth then
+            x, y = self:ReadCompassPosition()
+        end
+        return UpdateBearings(self, x, y)
+    end
+    if self.mapID and self.mapWidth then
+        local start, startKB = profiler:Begin()
+        x, y = self:ReadCompassPosition()
+        profiler:End(self, "Compass.Bearings.Position", start, startKB)
+    end
+    local start, startKB = profiler:Begin()
+    UpdateBearings(self, x, y, profiler)
+    profiler:End(self, "Compass.Bearings.Update", start, startKB)
 end
 
 function Plugin:GetCompassFacing()

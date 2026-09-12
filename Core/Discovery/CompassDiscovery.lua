@@ -22,7 +22,12 @@ local SOURCES = {
     { key = "offers", collect = "CollectCompassQuestOffers", label = "Compass.Discovery.Offers", interval = 30 },
     { key = "locations", collect = "CollectCompassLocations", label = "Compass.Discovery.Locations", interval = 60 },
     { key = "corpse", collect = "CollectCompassCorpse", label = "Compass.Discovery.Corpse", interval = 2 },
-    { key = "tomtom", collect = "CollectCompassTomTom", label = "Compass.Discovery.TomTom", interval = 1 },
+    {
+        key = "handynotes",
+        collect = "CollectCompassHandyNotes",
+        label = "Compass.Discovery.HandyNotes",
+        interval = math.huge,
+    },
 }
 local EVENT_SOURCES = {
     AREA_POIS_UPDATED = "map",
@@ -30,8 +35,8 @@ local EVENT_SOURCES = {
     VIGNETTE_MINIMAP_UPDATED = "vignettes",
     QUEST_LOG_UPDATE = { "quests", "offers" },
     QUEST_WATCH_LIST_CHANGED = "quests",
-    QUEST_POI_UPDATE = "quests",
-    QUEST_DATA_LOAD_RESULT = "quests",
+    QUEST_POI_UPDATE = { "quests", "offers" },
+    QUEST_DATA_LOAD_RESULT = { "quests", "offers" },
     SUPER_TRACKING_CHANGED = { "quests", "content" },
     SUPER_TRACKING_PATH_UPDATED = "content",
     WORLD_QUEST_COMPLETED_BY_SPELL = "quests",
@@ -55,8 +60,29 @@ local EVENT_SOURCES = {
     CORPSE_IN_RANGE = "corpse",
     CORPSE_OUT_OF_RANGE = "corpse",
     ORBIT_COMPASS_LOCATIONS = "locations",
-    ORBIT_COMPASS_TOMTOM = "tomtom",
+    ORBIT_COMPASS_HANDYNOTES = "handynotes",
 }
+local CONTEXT_EVENTS = {
+    USER_WAYPOINT_UPDATED = true,
+    PLAYER_ENTERING_WORLD = true,
+    UNIT_PHASE = true,
+    ZONE_CHANGED = true,
+    ZONE_CHANGED_INDOORS = true,
+    ZONE_CHANGED_NEW_AREA = true,
+}
+
+local function CancelDiscoveryJob(plugin, reason)
+    local job = plugin.discoveryJob
+    if not job then
+        return
+    end
+    plugin.discoveryJob = nil
+    local profiler = Addon.Services.profiler
+    if profiler and profiler.active then
+        profiler:Count(plugin, "Discovery/Cancelled/" .. job.countKey)
+        profiler:Count(plugin, "Discovery/CancelReason/" .. reason)
+    end
+end
 
 local function SourceChanged(plugin, previous, markers)
     if #previous ~= #markers then
@@ -69,8 +95,10 @@ local function SourceChanged(plugin, previous, markers)
             or old.x ~= marker.x
             or old.y ~= marker.y
             or old.name ~= marker.name
+            or old.description ~= marker.description
+            or old.handynotesNode ~= marker.handynotesNode
+            or not Addon.HandyNotesClick:Matches(old.handynotesPoint, marker.handynotesPoint)
             or old.atlas ~= marker.atlas
-            or old.sizeScale ~= marker.sizeScale
             or old.priority ~= marker.priority
             or old.kind ~= marker.kind
             or old.destination.mapID ~= marker.destination.mapID
@@ -78,6 +106,11 @@ local function SourceChanged(plugin, previous, markers)
             or old.destination.y ~= marker.destination.y
         then
             return true
+        end
+        for _, field in ipairs(C.MARKER_ART_FIELDS) do
+            if old[field] ~= marker[field] then
+                return true
+            end
         end
         plugin:CompassDiscoveryCheckpoint()
     end
@@ -92,9 +125,10 @@ function Plugin:CompassDiscoveryCheckpoint()
 end
 
 function Plugin:InitializeCompassDiscovery()
+    CancelDiscoveryJob(self, "ContextReset")
+    self.compassHandyNotesGuide = nil
     self.compassOfferMapID = nil
     self.discoveryClock, self.discoveryNext = 0, 0
-    self.discoveryJob = nil
     self.bearingSampleX = nil
     self.selectionKeys = {}
     self.compassSources = {}
@@ -103,17 +137,32 @@ function Plugin:InitializeCompassDiscovery()
     end
 end
 
-function Plugin:InvalidateCompassSourceSettings(key)
+function Plugin:InvalidateCompassSourceSettings(key, retainProviders)
+    if key == "handynotes" then
+        self.compassHandyNotesGuide = nil
+    end
     local source = self.compassSources[key]
     if self.discoveryJob and self.discoveryJob.source == source then
-        self.discoveryJob = nil
+        CancelDiscoveryJob(self, "Settings")
     end
+    source.mapArtID = nil
     wipe(source.markers)
+    if not retainProviders then
+        source.handynotesProviders = nil
+    end
     source.dirty, source.pathDirty, source.nextAllowed = true, false, self.discoveryClock
     self.discoveryPending, self.waypointDirty = true, true
+    local profiler = Addon.Services.profiler
+    if profiler and profiler.active then
+        profiler:Count(self, "Discovery/Settings/" .. key)
+    end
 end
 
 function Plugin:InvalidateCompassSource(event)
+    local profiler = Addon.Services.profiler
+    if profiler and profiler.active and (EVENT_SOURCES[event] or CONTEXT_EVENTS[event]) then
+        profiler:Count(self, "Discovery/Invalidate/" .. event)
+    end
     if event == "USER_WAYPOINT_UPDATED" then
         self.waypointDirty = true
     elseif event == "PLAYER_ENTERING_WORLD" or event == "UNIT_PHASE" then
@@ -121,9 +170,22 @@ function Plugin:InvalidateCompassSource(event)
     elseif event:find("^ZONE_CHANGED") then
         local mapID = Number(C_Map.GetBestMapForUnit("player"))
         if mapID and mapID == self.mapID and self.mapWidth then
-            self.discoveryJob = nil
-            for _, source in pairs(self.compassSources) do
-                source.dirty, source.pathDirty, source.nextAllowed = true, false, self.discoveryClock
+            self:RefreshCompassPointArea(mapID)
+            local taxi, job = self.compassSources.taxi, self.discoveryJob
+            local retainTaxi = not taxi.dirty and not taxi.pathDirty and not (job and job.source == taxi)
+            if retainTaxi then
+                local mapArtID = Number(C_Map.GetMapArtID(mapID))
+                retainTaxi = mapArtID ~= nil and mapArtID == taxi.mapArtID
+            end
+            CancelDiscoveryJob(self, "Subzone")
+            for key, source in pairs(self.compassSources) do
+                -- Native taxi data is map-scoped, but a different phased map artwork still invalidates it.
+                if key ~= "taxi" or not retainTaxi then
+                    source.dirty, source.pathDirty, source.nextAllowed = true, false, self.discoveryClock
+                    source.handynotesProviders = nil
+                elseif profiler and profiler.active then
+                    profiler:Count(self, "Discovery/SubzoneTaxiRetained")
+                end
             end
             self.discoveryPending, self.waypointDirty = true, true
         else
@@ -143,7 +205,6 @@ function Plugin:InvalidateCompassSource(event)
             self.compassSources.quests.pathDirty = true
         elseif event == "SUPER_TRACKING_CHANGED" then
             self.waypointDirty = true
-            self.nativeSelectionChanged = true
         end
     end
 end
@@ -167,6 +228,9 @@ function Plugin:DiscoverCompassMarkers()
         self:InitializeCompassDiscovery()
         self.discoveryDirty, self.waypointDirty = false, true
         self:RefreshCompassMap()
+    end
+    if self.compassPointAreaRetry and self.discoveryClock >= self.compassPointAreaRetry then
+        self:RefreshCompassPointArea()
     end
     if self.waypointDirty then
         self:RebuildCompassMarkers()
@@ -193,11 +257,14 @@ function Plugin:DiscoverCompassMarkers()
             local collect = pathOnly and definition.refreshPath or definition.collect
             source.dirty, source.pathDirty = false, false
             source.nextAllowed = self.discoveryClock + C.DISCOVERY_MIN_INTERVAL
+            source.mapArtID = nil
             local markers = {}
             job = {
                 source = source,
                 definition = definition,
                 pathOnly = pathOnly,
+                countKey = pathOnly and "questPath" or definition.key,
+                mapArtID = definition.key == "taxi" and Number(C_Map.GetMapArtID(self.mapID)) or nil,
                 markers = markers,
                 thread = coroutine.create(function()
                     local refreshInterval = self[collect](self, markers)
@@ -206,6 +273,10 @@ function Plugin:DiscoverCompassMarkers()
                 end),
             }
             self.discoveryJob = job
+            local profiler = Addon.Services.profiler
+            if profiler and profiler.active then
+                profiler:Count(self, "Discovery/Started/" .. job.countKey)
+            end
         end
         local profiler = Addon.Services.profiler
         local start, startKB
@@ -216,8 +287,17 @@ function Plugin:DiscoverCompassMarkers()
         if start then
             profiler:End(self, job.pathOnly and job.definition.pathLabel or job.definition.label, start, startKB)
         end
+        if self.discoveryJob ~= job then
+            if not ok then
+                error(result, 0)
+            end
+            break
+        end
         if not ok then
             self.discoveryJob = nil
+            if profiler and profiler.active then
+                profiler:Count(self, "Discovery/Failed/" .. job.countKey)
+            end
             if not job.pathOnly then
                 job.source.nextRefresh = self.discoveryClock + job.definition.interval
             end
@@ -226,11 +306,16 @@ function Plugin:DiscoverCompassMarkers()
         if coroutine.status(job.thread) ~= "dead" then
             break
         end
+        if profiler and profiler.active then
+            profiler:Count(self, "Discovery/Completed/" .. job.countKey)
+            profiler:Count(self, "Discovery/" .. (result and "Changed/" or "Unchanged/") .. job.countKey)
+        end
         if result then
             job.source.markers = job.markers
             changed = true
         end
         job.source.nextAllowed = self.discoveryClock + C.DISCOVERY_MIN_INTERVAL
+        job.source.mapArtID = job.mapArtID
         if not job.pathOnly then
             job.source.nextRefresh = job.nextRefresh or self.discoveryClock + job.definition.interval
         end

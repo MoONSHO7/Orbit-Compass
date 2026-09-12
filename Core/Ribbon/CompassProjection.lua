@@ -26,33 +26,21 @@ local function LimitTurn(delta, halfView, minimum, maximum)
     return minimum, maximum
 end
 
-function Plugin:CompassMarkerOverlaps(x, pitch, radius, visibleOnly)
-    for cell = math.floor((x - radius) / pitch), math.floor((x + radius) / pitch) do
-        local occupied = self.occupiedCells[cell]
-        if occupied and (not visibleOnly or occupied.renderShown) and math.abs(x - occupied.projectedX) < radius then
-            return true
-        end
-    end
-    return false
-end
-
-local function ProjectSelection(plugin, facing, width, pitch)
+local function ProjectSelection(plugin, facing, width)
     for _, marker in ipairs(plugin.selectedMarkers) do
         if not marker.bearing then
             return false
         end
         local x, alpha, delta = CompassMath:Project(marker.bearing, facing, plugin.viewAngle, width)
-        if not x or alpha <= 0 or plugin:CompassMarkerOverlaps(x, pitch, pitch) then
+        if not x or alpha <= 0 then
             return false
         end
         marker.projectedX, marker.projectedAlpha, marker.projectedDelta = x, alpha, delta
-        plugin.occupiedCells[math.floor(x / pitch)] = marker
     end
     return true
 end
 
-function Plugin:SelectCompassMarkers(facing, width, pitch, live, cellPitch)
-    wipe(self.occupiedCells)
+function Plugin:SelectCompassMarkers(facing, width, live)
     local selection = self.selectedMarkers
     if not facing then
         wipe(selection)
@@ -66,12 +54,11 @@ function Plugin:SelectCompassMarkers(facing, width, pitch, live, cellPitch)
         -- Turning translates the same points together until one crosses the viewport edge.
         if
             (turn == 0 or (turn > self.selectionTurnMin and turn < self.selectionTurnMax))
-            and ProjectSelection(self, facing, width, cellPitch)
+            and ProjectSelection(self, facing, width)
         then
             return selection
         end
     end
-    wipe(self.occupiedCells)
     wipe(selection)
     self.markerSlotsDirty = true
     local halfView, turnMin, turnMax = self.viewAngle / 2, -C.HALF_TURN, C.HALF_TURN
@@ -82,28 +69,20 @@ function Plugin:SelectCompassMarkers(facing, width, pitch, live, cellPitch)
     end
     for _, marker in ipairs(self.bearings) do
         if marker.bearing then
-            local separation = self.selectionKeys[marker.key] and cellPitch or pitch
             local x, alpha, delta = CompassMath:Project(marker.bearing, facing, self.viewAngle, width)
-            local collisionX = x or delta * width / self.viewAngle
-            local overlaps = self:CompassMarkerOverlaps(collisionX, cellPitch, separation)
-            -- Covered points translate with their earlier blocker; only its viewport exit can expose them.
-            if not overlaps then
-                turnMin, turnMax = LimitTurn(delta, halfView, turnMin, turnMax)
-            end
-            if x and alpha > 0 and not overlaps then
+            turnMin, turnMax = LimitTurn(delta, halfView, turnMin, turnMax)
+            if x and alpha > 0 then
                 if live and marker.bearingRevision ~= self.bearingRevision then
                     self:RefreshCompassMarkerBearing(marker)
                     x, alpha = nil, nil
                     if marker.bearing then
                         x, alpha, delta = CompassMath:Project(marker.bearing, facing, self.viewAngle, width)
                         turnMin, turnMax = LimitTurn(delta, halfView, turnMin, turnMax)
-                        overlaps = x and self:CompassMarkerOverlaps(x, cellPitch, separation)
                     end
                 end
-                if x and alpha > 0 and not overlaps then
+                if x and alpha > 0 then
                     selection[#selection + 1] = marker
                     marker.projectedX, marker.projectedAlpha, marker.projectedDelta = x, alpha, delta
-                    self.occupiedCells[math.floor(x / cellPitch)] = marker
                     if #selection == C.MAX_MARKERS then
                         break
                     end

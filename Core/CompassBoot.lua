@@ -70,6 +70,7 @@ Addon.App = UI.Addon:Create({
     end,
     frames = Addon.GetFrames,
     tabs = Addon.SettingsTabs,
+    registerWidgets = Addon.RegisterSettingsWidgets,
     labels = {
         enabled = L.CFG_FP_ENABLED,
         close = L.CMN_CLOSE,

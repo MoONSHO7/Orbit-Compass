@@ -14,6 +14,7 @@ Services.profiler = Orbit.Profiler
 Services.tooltip = Orbit.Tooltip
 Services.tooltipHide = Orbit.TooltipHide
 Services.IsSecret = Orbit.SecretValueUtils.IsSecret
+Services.navigationDescriptionFont = "PT Sans Narrow"
 Bridge.events = Orbit.EventBus
 
 function Bridge.CreateController()
@@ -118,7 +119,7 @@ function Bridge.EnableNavigationEditMode(plugin)
     }, plugin.navigationFrame, plugin)
     Orbit.EventBus:On("ORBIT_PROFILE_CHANGED", function()
         plugin.navigationFrame.defaultPosition = nil
-        plugin.dismissedNavigationKey, plugin.nativeNavigationID, plugin.tomtomTarget = nil, nil, nil
+        plugin.dismissedNavigationKey, plugin.nativeNavigationID = nil, nil
     end, plugin)
 end
 
@@ -158,6 +159,7 @@ function Bridge.ClearPosition(frame)
 end
 
 function Bridge.RenderSettings(plugin, dialog, frame)
+    Addon.RegisterSettingsWidgets(Engine.Layout)
     Engine.SchemaBuilder:SetTabRefreshCallback(dialog, plugin, frame)
     local tabs = Addon.SettingsTabs(frame.systemIndex)
     local labels, schema = {}, { hideNativeSettings = true, controls = {} }
@@ -179,6 +181,9 @@ function Bridge.RenderSettings(plugin, dialog, frame)
         end
     end
     schema.onReset = function()
+        if current == Addon.L.PLU_COMPASS_POINTS then
+            plugin:ResetCompassPointVisibility()
+        end
         Bridge.ResetPosition(frame.systemIndex)
     end
     Engine.Config:Render(dialog, frame, plugin, schema)

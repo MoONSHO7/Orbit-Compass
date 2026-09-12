@@ -2,4 +2,7 @@
     <Binding name="ORBIT_COMPASS_TARGET" category="BINDING_HEADER_ORBIT_COMPASS">
         if OrbitCompass then OrbitCompass:TargetCompassPoint() end
     </Binding>
+    <Binding name="ORBIT_COMPASS_TOGGLE_POINTS" category="BINDING_HEADER_ORBIT_COMPASS">
+        if OrbitCompass and OrbitCompass.ToggleCompassPoints then OrbitCompass:ToggleCompassPoints() end
+    </Binding>
 </Bindings>

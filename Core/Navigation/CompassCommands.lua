@@ -3,8 +3,6 @@ local L = Addon.L
 local Plugin = Addon.Controller
 local COMPAT_COMMANDS = table.freeze({
     ["/way"] = "ORBITCOMPASSWAY",
-    ["/tway"] = "ORBITCOMPASSTWAY",
-    ["/tomtomway"] = "ORBITCOMPASSTOMTOMWAY",
 })
 
 function Plugin:HandleWaypointCommand(input)

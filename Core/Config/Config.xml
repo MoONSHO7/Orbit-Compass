@@ -1,0 +1,5 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Script file="CompassPointHotkey.lua"/>
+    <Script file="CompassPointsSettings.lua"/>
+    <Script file="CompassSettings.lua"/>
+</Ui>

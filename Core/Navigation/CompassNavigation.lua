@@ -8,10 +8,9 @@ local Plugin = Addon.Controller
 local FEET_Y_OFFSET = 15
 
 function Plugin:CreateNavigationFrame()
-    local frame = CreateFrame("Button", C.NAVIGATION_FRAME_NAME, UIParent)
+    local frame = CreateFrame("Button", C.NAVIGATION_FRAME_NAME, UIParent, "OrbitCompassNavigationButtonTemplate")
     frame:Hide()
     frame:RegisterForClicks("RightButtonUp")
-    frame:SetPassThroughButtons("LeftButton", "MiddleButton", "Button4", "Button5")
     frame:SetScript("OnClick", function(_, button)
         if button ~= "RightButton" or Addon.Services.IsEditMode() then
             return

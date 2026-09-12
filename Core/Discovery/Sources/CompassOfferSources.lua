@@ -33,8 +33,17 @@ end
 local function AddOffer(plugin, markers, info, seen, mapCache, showHidden, showCompleted)
     info = Readable(info)
     local id = info and Number(info.questID)
-    local startMapID = info and Number(info.startMapID)
-    if not id or seen[id] or not startMapID or Readable(info.inProgress) ~= false or not Utils.IsMapPosition(info) then
+    if not id or id <= 0 or seen[id] then
+        return
+    end
+    local atlas = OFFER_ATLASES[Number(C_QuestInfoSystem.GetQuestClassification(id))]
+    if not atlas then
+        return
+    end
+    -- Sparse task records must not override a higher-priority quest line's visibility flags.
+    seen[id] = true
+    local startMapID = Number(info.startMapID)
+    if not startMapID or Readable(info.inProgress) ~= false or not Utils.IsMapPosition(info) then
         return
     end
     local hidden = Readable(info.isHidden)
@@ -53,13 +62,7 @@ local function AddOffer(plugin, markers, info, seen, mapCache, showHidden, showC
             return
         end
     end
-    local atlas = OFFER_ATLASES[Number(C_QuestInfoSystem.GetQuestClassification(id))]
-    if
-        atlas
-        and AddMarker(plugin, markers, "offer:" .. id, info, info.questName, atlas, C.QUEST_PRIORITY, "questOffer")
-    then
-        seen[id] = true
-    end
+    AddMarker(plugin, markers, "offer:" .. id, info, info.questName, atlas, C.QUEST_PRIORITY, "questOffer")
 end
 
 function Plugin:CollectCompassQuestOffers(markers)
@@ -94,6 +97,27 @@ function Plugin:CollectCompassQuestOffers(markers)
                 showHidden,
                 showCompleted
             )
+        end
+        self:CompassDiscoveryCheckpoint()
+    end
+    local tasks = Readable(C_TaskQuest.GetQuestsOnMap(self.mapID))
+    self:CompassDiscoveryCheckpoint()
+    for _, info in ipairs(tasks or {}) do
+        info = Readable(info)
+        local id = info and Number(info.questID)
+        if id and id > 0 and not seen[id] and Readable(info.inProgress) == false then
+            -- Task coordinates are already projected to the queried map, regardless of their source mapID.
+            local offer = {
+                questID = id,
+                startMapID = self.mapID,
+                x = info.x,
+                y = info.y,
+                inProgress = false,
+                questName = C_TaskQuest.GetQuestInfoByQuestID(id),
+                isHidden = C_QuestLog.IsQuestTrivial(id),
+                isAccountCompleted = C_QuestLog.IsQuestFlaggedCompletedOnAccount(id),
+            }
+            AddOffer(self, markers, offer, seen, mapCache, showHidden, showCompleted)
         end
         self:CompassDiscoveryCheckpoint()
     end

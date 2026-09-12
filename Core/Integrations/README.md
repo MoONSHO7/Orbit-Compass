@@ -1,18 +1,20 @@
-# Compass Orbit integration
+# Compass integrations
 
 ## Description
-Optional registration and rendering capabilities supplied by an installed compatible Orbit host.
+Optional Orbit and HandyNotes adapters for the Compass controller.
 
 ## Purpose
-Retain existing Orbit profile/settings ownership and advanced Canvas customization while the product runs independently.
+Keep external addon contracts and lifecycle hooks with their provider while using the same navigation and discovery owners.
 
 ## Implementation
-`../CompassCompatibility.lua` selects the host before localization and controller construction. `Orbit.lua` binds explicit services to that host and creates its real `Compass` plugin. `OrbitCanvas.lua` adds arrow preview and transaction behavior only when that bridge is selected. Product navigation and formatting remain outside this module.
+`Integrations.xml` loads the [HandyNotes module](HandyNotes/README.md), optional-addon lifecycle methods and the late [Orbit Canvas adapter](Orbit/README.md). `CompassIntegrations.lua` connects enabled providers and observes late addon loads.
+
+The Orbit registration bridge has an earlier phase: `../Plugin/Plugin.xml` loads `Orbit/Orbit.lua` before the controller and before consumers capture service hooks. Its `OrbitCanvas.lua` companion loads here after Navigation declarations.
 
 ## Gotchas
-- An absent host uses standalone services. An unsupported host or existing bundled Compass pauses startup with a warning, preserving the old controller, commands and bindings.
-- Preserve `Orbit_Compass`, both settings indices and the historical Orbit migration; do not flatten profile or Canvas state into standalone settings.
-- The hosted settings dialog shares tab state between ribbon and arrow; validate its selected tab against the active surface to keep controls visible when switching.
+- Optional integrations must remain inert while Compass is disabled, including hooks that cannot be uninstalled. Lifecycle owns activation and retirement.
+- Orbit and standalone stores have separate ownership. Provider adapters feed observations and explicit selection actions; they must not bypass the selected controller's settings or navigation path.
+- Complete HandyNotes snapshots remain cached until provider/context changes. Native waypoint ownership survives disabling Compass; stale integration markers are released through discovery invalidation.
 
 ## References
-`../README.md`, Orbit `Core/Plugin/README.md` and `Core/Plugin/ExternalUIHost.lua` contracts.
+`../README.md`, `Orbit/README.md`, `HandyNotes/README.md`, `../Discovery/README.md`, `../Navigation/README.md`.

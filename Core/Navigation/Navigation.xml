@@ -1,0 +1,12 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Script file="CompassWaypoint.lua"/>
+    <Script file="CompassCommands.lua"/>
+    <Script file="CompassTargets.lua"/>
+    <Script file="CompassLocations.lua"/>
+    <Script file="CompassPointMenu.lua"/>
+    <Script file="CompassPosition.lua"/>
+    <Script file="CompassBearings.lua"/>
+    <Script file="CompassNavigation.lua"/>
+    <Script file="CompassNavigationView.lua"/>
+    <Script file="CompassNavigationSettings.lua"/>
+</Ui>

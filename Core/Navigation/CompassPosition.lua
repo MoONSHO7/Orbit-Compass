@@ -5,14 +5,25 @@ local Number, ReadPosition = Utils.Number, Utils.ReadPosition
 local POSITION_SYNC_INTERVAL = 1
 
 function Plugin:ReadCompassPosition()
+    local profiler = Addon.Services.profiler
+    profiler = profiler and profiler.active and profiler
     local north, west, _, instance = UnitPosition("player")
     north, west, instance = Number(north), Number(west), Number(instance)
     if not north or not west or not instance then
+        if profiler then
+            profiler:Count(self, "Position/Fallback")
+        end
         self.positionInstance = nil
         return ReadPosition(C_Map.GetPlayerMapPosition(self.mapID, "player"))
     end
     if self.positionInstance ~= instance or self.discoveryClock >= self.positionNextSync then
+        if profiler then
+            profiler:Count(self, "Position/Sync")
+        end
         if Number(C_Map.GetBestMapForUnit("player")) ~= self.mapID then
+            if profiler then
+                profiler:Count(self, "Position/MapMismatch")
+            end
             self.discoveryDirty = true
             return
         end
@@ -23,6 +34,9 @@ function Plugin:ReadCompassPosition()
             self.positionMapX, self.positionMapY = x, y
             self.positionNorth, self.positionWest = north, west
         elseif self.positionInstance ~= instance then
+            if profiler then
+                profiler:Count(self, "Position/Unavailable")
+            end
             return
         end
     end

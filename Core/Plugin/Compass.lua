@@ -41,6 +41,7 @@ local EVENTS = {
     "CORPSE_IN_RANGE",
     "CORPSE_OUT_OF_RANGE",
     "SUPER_TRACKING_PATH_UPDATED",
+    "MODIFIER_STATE_CHANGED",
 }
 
 local Plugin = Addon.Controller
@@ -81,12 +82,14 @@ function Plugin:OnLoad()
     self:CreateCompassView()
     self:CreateNavigationView()
     frame:SetScript("OnHide", function()
+        self:HideCompassPeek()
         self:HideNavigationView()
     end)
     frame:SetScript("OnShow", function()
         if self.inInstance or self.hiddenByGame then
             frame:Hide()
         else
+            self:RefreshCompassPeekModifier()
             self.renderDirty = true
         end
     end)
@@ -107,11 +110,16 @@ function Plugin:OnLoad()
     end
     Services.RestorePosition(frame, C.SYSTEM_INDEX)
     self.events:SetScript("OnEvent", function(_, event, payload)
+        if event == "MODIFIER_STATE_CHANGED" then
+            if payload == "LALT" or payload == "RALT" then
+                self:RefreshCompassPeekModifier()
+            end
+            return
+        end
         if event == "QUESTLINE_UPDATE" and Addon.SourceUtils.Readable(payload) == true then
             self.compassOfferRequestRequired = true
         elseif event == "USER_WAYPOINT_UPDATED" then
             self.dismissedNavigationKey = nil
-            self:SetCompassTomTomTarget(nil)
         elseif event == "PLAYER_ALIVE" or event == "PLAYER_UNGHOST" then
             self.dismissedNavigationKey = nil
         end
@@ -129,7 +137,18 @@ function Plugin:OnLoad()
     end)
 end
 
+function Plugin:RefreshCompassPeekModifier()
+    local held = Addon.SourceUtils.Readable(IsAltKeyDown()) == true
+    if self.peekAltHeld ~= held then
+        self.peekAltHeld, self.renderDirty = held, true
+        if not held then
+            self:HideCompassPeek()
+        end
+    end
+end
+
 function Plugin:OnEnable()
+    self:RefreshCompassPeekModifier()
     self.discoveryDirty = true
     self.sortElapsed = 0
     for _, event in ipairs(EVENTS) do
@@ -146,8 +165,9 @@ function Plugin:OnEnable()
             self:RegisterNavigationCanvasSettings()
         end, self)
         Addon.Events:On("ORBIT_PROFILE_CHANGED", function()
+            self.compassPointsToggled = false
+            self:ApplyCompassPointVisibility()
             self:InvalidateCompassSourceSettings("locations")
-            self:InvalidateCompassSourceSettings("tomtom")
         end, self)
     end
     self:EnableWaypointCommands()
@@ -158,10 +178,11 @@ function Plugin:OnEnable()
 end
 
 function Plugin:OnDisable()
+    self.compassPointsToggled = false
+    self.peekAltHeld = false
     self.events:SetScript("OnUpdate", nil)
     self.compassUpdating = false
     self.dismissedNavigationKey, self.nativeNavigationID = nil, nil
-    self.nativeSelectionChanged = false
     self:DisableWaypointCommands()
     self:DisableCompassIntegrations()
     self.events:UnregisterAllEvents()
@@ -219,6 +240,7 @@ function Plugin:UpdateCompass(elapsed)
         or self:IsProfileSuppressed()
         or not self.frame:IsVisible()
     then
+        self:HideCompassPeek()
         return
     end
     self.discoveryClock = self.discoveryClock + elapsed
@@ -232,6 +254,7 @@ function Plugin:UpdateCompass(elapsed)
         or self.discoveryJob
         or self.discoveryPending
         or self.discoveryClock >= self.discoveryNext
+        or (self.compassPointAreaRetry and self.discoveryClock >= self.compassPointAreaRetry)
     then
         if profiler and profiler.active then
             start, startKB = profiler:Begin()
@@ -284,6 +307,7 @@ function Plugin:ApplySettings()
         return
     end
     self:RefreshCompassInstanceState()
+    self:CacheCompassPointVisibility()
     if self.inInstance or self.hiddenByGame then
         return
     end
@@ -292,29 +316,9 @@ function Plugin:ApplySettings()
     self.iconSize = self:GetSetting(C.SYSTEM_INDEX, "IconSize")
     self.navigationSize = self:GetSetting(C.NAVIGATION_SYSTEM_INDEX, "NavigationSize")
     self:CacheNavigationComponents()
-    CacheSourceSetting(self, "map", "showPOIs", "ShowPOIs")
-    CacheSourceSetting(self, "vignettes", "showVignettes", "ShowVignettes")
-    CacheSourceSetting(self, "quests", "showQuestObjectives", "ShowQuestObjectives")
-    CacheSourceSetting(self, "quests", "showWorldQuests", "ShowWorldQuests")
-    CacheSourceSetting(self, "taxi", "showFlightMasters", "ShowFlightMasters")
-    CacheSourceSetting(self, "map", "showEvents", "ShowEvents")
-    CacheSourceSetting(self, "map", "showRaces", "ShowRaces")
-    CacheSourceSetting(self, "map", "showQuestHubs", "ShowQuestHubs")
-    self.showWaypoint = self:GetSetting(C.SYSTEM_INDEX, "ShowWaypoint")
     self.showLabel = self:GetSetting(C.SYSTEM_INDEX, "ShowLabel")
-    CacheSourceSetting(self, "directions", "showDirections", "ShowDirections")
-    CacheSourceSetting(self, "links", "showMapLinks", "ShowMapLinks")
-    CacheSourceSetting(self, "tamers", "showPetTamers", "ShowPetTamers")
-    CacheSourceSetting(self, "digsites", "showDigSites", "ShowDigSites")
-    CacheSourceSetting(self, "content", "showTrackedContent", "ShowTrackedContent")
-    CacheSourceSetting(self, "offers", "showQuestOffers", "ShowQuestOffers")
-    CacheSourceSetting(self, "locations", "showSavedLocations", "ShowSavedLocations")
     CacheSourceSetting(self, "corpse", "showCorpse", "ShowCorpse")
     self.followTracked = self:GetSetting(C.SYSTEM_INDEX, "FollowTracked")
-    CacheSourceSetting(self, "tomtom", "followTomTom", "FollowTomTom")
-    if not self.followTomTom then
-        self.tomtomTarget = nil
-    end
     self.frame:SetSize(self:GetSetting(C.SYSTEM_INDEX, "Width"), C.RIBBON_HEIGHT)
     Services.RestorePosition(self.frame, C.SYSTEM_INDEX)
     self:StyleCompassView()

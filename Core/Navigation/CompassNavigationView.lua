@@ -19,7 +19,13 @@ function Plugin:CreateNavigationView()
     local title = frame:CreateFontString(nil, "OVERLAY")
     title:SetMaxLines(1)
     title:SetJustifyH("LEFT")
-    self.navigationView = { arrow = arrow, distance = distance, title = title }
+    local description = frame:CreateFontString(nil, "OVERLAY")
+    description:SetJustifyH("LEFT")
+    description:SetJustifyV("TOP")
+    description:SetWordWrap(true)
+    description:SetNonSpaceWrap(true)
+    description:SetAlpha(C.NAVIGATION_DESCRIPTION_ALPHA)
+    self.navigationView = { arrow = arrow, distance = distance, title = title, description = description }
     frame.Name, frame.Distance = title, distance
     if Bridge then
         Bridge.AttachText(title, frame, "Name")
@@ -39,6 +45,12 @@ function Plugin:LayoutNavigationView()
     view.arrow:SetPoint("CENTER", self.navigationFrame, "CENTER")
     self:RestoreNavigationPosition()
     Services.PositionNavigationText(self)
+    local justify = view.title:GetJustifyH()
+    local edge = justify == "CENTER" and "" or justify
+    view.description:SetJustifyH(justify)
+    view.description:SetWidth(Pixel:Snap(C.NAVIGATION_DESCRIPTION_WIDTH, view.description:GetEffectiveScale()))
+    view.description:ClearAllPoints()
+    Pixel:Point(view.description, "TOP" .. edge, view.title, "BOTTOM" .. edge, 0, -C.NAVIGATION_DESCRIPTION_GAP)
 end
 
 function Plugin:StyleNavigationView(font)
@@ -46,6 +58,11 @@ function Plugin:StyleNavigationView(font)
     local fontSize = self:GetSetting(C.NAVIGATION_SYSTEM_INDEX, "FontSize")
     Services.StyleText(view.distance, { font = font, textSize = fontSize, textColor = GOLD })
     Services.StyleText(view.title, { font = font, textSize = fontSize, textColor = GOLD })
+    Services.StyleText(view.description, {
+        font = Services.navigationDescriptionFont,
+        textSize = C.NAVIGATION_DESCRIPTION_FONT_SIZE,
+        textColor = C.NAVIGATION_DESCRIPTION_COLOR,
+    })
     self.navigationFontPath, self.navigationFontSize = view.distance:GetFont()
     local positions = Services.NavigationPositions(self)
     for key, text in pairs({ Name = view.title, Distance = view.distance }) do
@@ -68,7 +85,9 @@ function Plugin:HideNavigationView()
     view.arrow:Hide()
     view.distance:Hide()
     view.title:Hide()
+    view.description:Hide()
     view.shown, view.titleShown, view.distanceShown = false, false, false
+    view.descriptionShown = false
     self.navigationFrame:Hide()
     if Bridge then
         Bridge.RetireLayer(self.navigationFrame)
@@ -113,7 +132,17 @@ function Plugin:RenderNavigation(facing)
         view.title:SetText(target.name)
         view.lastTitle = target.name
     end
+    local description = target.description or ""
+    if view.lastDescription ~= description then
+        view.description:SetText(description)
+        view.lastDescription = description
+    end
     local showName, showDistance = not self.navigationDisabled.Name, not self.navigationDisabled.Distance
+    local showDescription = showName and description ~= ""
+    if view.descriptionShown ~= showDescription then
+        view.description:SetShown(showDescription)
+        view.descriptionShown = showDescription
+    end
     if view.titleShown ~= showName then
         view.title:SetShown(showName)
         view.titleShown = showName

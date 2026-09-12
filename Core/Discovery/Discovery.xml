@@ -1,0 +1,7 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Script file="CompassSourceUtils.lua"/>
+    <Script file="CompassPointVisibility.lua"/>
+    <Include file="Sources\Sources.xml"/>
+    <Script file="CompassSources.lua"/>
+    <Script file="CompassDiscovery.lua"/>
+</Ui>

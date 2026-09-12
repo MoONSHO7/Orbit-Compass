@@ -24,7 +24,7 @@ local function Text(value)
     end
 end
 
-function Plugin:SetWaypoint(mapID, x, y, title)
+function Plugin:SetWaypoint(mapID, x, y, title, description, sourceKey, handynotesPoint)
     mapID, x, y = Number(mapID), Number(x), Number(y)
     if not mapID or mapID <= 0 or mapID % 1 ~= 0 or not x or not y or x < 0 or x > 1 or y < 0 or y > 1 then
         return false, L.CMD_COMPASS_INVALID
@@ -42,20 +42,29 @@ function Plugin:SetWaypoint(mapID, x, y, title)
     if IsSecret(success, "Compass.Waypoint") or success ~= true then
         return false, L.CMD_COMPASS_UNAVAILABLE
     end
-    title = Text(title)
+    title, description, sourceKey = Text(title), Text(description), Text(sourceKey)
+    self:RetainCompassHandyNotesGuides(sourceKey, mapID, x, y)
     C_SuperTrack.SetSuperTrackedUserWaypoint(true)
     self.dismissedNavigationKey = nil
-    if self:IsActive() then
-        self:SetCompassTomTomTarget(nil)
-    end
-    self.waypointLabel = { mapID = mapID, x = x, y = y, title = title ~= "" and title or nil }
+    self.waypointLabel = {
+        mapID = mapID,
+        x = x,
+        y = y,
+        title = title ~= "" and title or nil,
+        description = description ~= "" and description or nil,
+        sourceKey = sourceKey ~= "" and sourceKey ~= "waypoint" and sourceKey or nil,
+    }
     self.waypointDirty = true
+    if handynotesPoint then
+        self:ActivateCompassHandyNotesPoint(handynotesPoint)
+    end
     return true
 end
 
 function Plugin:ClearWaypoint()
     C_Map.ClearUserWaypoint()
     self.waypointLabel = nil
+    self:ClearCompassHandyNotesGuides()
     self.waypointDirty = true
 end
 
@@ -67,9 +76,10 @@ function Plugin:GetWaypointTitle(mapID, x, y)
         and math.abs(label.x - x) < COORDINATE_EPSILON
         and math.abs(label.y - y) < COORDINATE_EPSILON
     then
-        return label.title or L.PLU_COMPASS_WAYPOINT
+        return label.title or L.PLU_COMPASS_WAYPOINT, label.description, label.sourceKey
     end
     self.waypointLabel = nil
+    self:ClearCompassHandyNotesGuides()
     return L.PLU_COMPASS_WAYPOINT
 end
 
@@ -81,13 +91,7 @@ function Plugin:SetWaypointFromText(input)
     local command, rest = input:match("^(/%S+)%s+(.*)$")
     if command then
         command = command:lower()
-        if
-            command ~= "/way"
-            and command ~= "/tway"
-            and command ~= "/tomtomway"
-            and command ~= "/orbitway"
-            and command ~= "/oway"
-        then
+        if command ~= "/way" and command ~= "/orbitway" and command ~= "/oway" then
             return false, L.CMD_COMPASS_INVALID
         end
         input = rest

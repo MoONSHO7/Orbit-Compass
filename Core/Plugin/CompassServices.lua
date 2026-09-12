@@ -1,6 +1,6 @@
 local addonName, Addon = ...
 local UI = Addon.LibOrbitUI
-assert(UI.VERSION_MAJOR == 1 and UI.VERSION_MINOR >= 4, "Orbit Compass requires LibOrbitUI 1.4")
+assert(UI.VERSION_MAJOR == 1 and UI.VERSION_MINOR >= 5, "Orbit Compass requires LibOrbitUI 1.5")
 local C = Addon.Constants
 local HUD_STRATA = "MEDIUM"
 local ROOT_LEVEL_OFFSET = 1
@@ -13,6 +13,7 @@ Services.tooltip = Services.context.tooltip
 Services.tooltipHide = Services.context.tooltipHide
 Services.IsSecret = issecretvalue
 Services.arrowTexture = "Interface\\AddOns\\" .. addonName .. "\\Assets\\orbit-compass-arrow.tga"
+Services.navigationDescriptionFont = "Interface\\AddOns\\" .. addonName .. "\\Assets\\PTSansNarrow.ttf"
 
 function Services.IsEditMode()
     return Addon.App:IsEditMode()

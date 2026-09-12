@@ -2,7 +2,7 @@ local _, Addon = ...
 local C = Addon.Constants
 local Plugin = Addon.Controller
 local Utils = Addon.SourceUtils
-local Readable, Number, AddMarker = Utils.Readable, Utils.Number, Utils.AddMarker
+local Readable, Number, ReadPosition, AddMarker = Utils.Readable, Utils.Number, Utils.ReadPosition, Utils.AddMarker
 local QUEST_PROGRESS_ATLAS = "Quest-In-Progress-Icon-yellow"
 local QUEST_COMPLETE_ATLAS = "UI-QuestIcon-TurnIn-Normal"
 local WORLD_QUEST_ATLAS = "Worldquest-icon"
@@ -12,6 +12,17 @@ local THREAT_ATLAS = "worldquest-icon-nzoth"
 local function AddQuest(plugin, markers, questID, position, watched, seen, taskOnly)
     if not questID or questID <= 0 or seen[questID] then
         return
+    end
+    local x, y = ReadPosition(position)
+    local profiler = Addon.Services.profiler
+    if not x or not y then
+        if profiler and profiler.active then
+            profiler:Count(plugin, "Discovery/Quest/PositionRejected")
+        end
+        return
+    end
+    if profiler and profiler.active then
+        profiler:Count(plugin, "Discovery/Quest/PositionAccepted")
     end
     local isWorld = Readable(C_QuestLog.IsWorldQuest(questID))
     local title, atlas, priority, kind
@@ -63,6 +74,19 @@ local function AddQuest(plugin, markers, questID, position, watched, seen, taskO
     end
 end
 
+local function AddQuestWaypoint(plugin, markers, questID, watched, seen)
+    local profiler = Addon.Services.profiler
+    local start, startKB
+    if profiler and profiler.active then
+        start, startKB = profiler:Begin()
+    end
+    local x, y = C_QuestLog.GetNextWaypointForMap(questID, plugin.mapID)
+    if start then
+        profiler:End(plugin, "Compass.Discovery.QuestWaypoint", start, startKB)
+    end
+    AddQuest(plugin, markers, questID, { x = x, y = y }, watched, seen)
+end
+
 function Plugin:CollectCompassQuests(markers)
     if not self.showQuestObjectives and not self.showWorldQuests then
         return
@@ -87,8 +111,7 @@ function Plugin:CollectCompassQuests(markers)
         watched[superTracked] = true
     end
     for id in pairs(watched) do
-        local x, y = C_QuestLog.GetNextWaypointForMap(id, self.mapID)
-        AddQuest(self, markers, id, { x = x, y = y }, watched, seen)
+        AddQuestWaypoint(self, markers, id, watched, seen)
         self:CompassDiscoveryCheckpoint()
     end
     if self.showQuestObjectives then
@@ -154,10 +177,13 @@ function Plugin:RefreshCompassQuestPath(markers)
     if questID and questID > 0 and (self.showQuestObjectives or self.showWorldQuests) then
         key = "quest:" .. questID
         local candidates, watched, seen = {}, { [questID] = true }, {}
-        local x, y = C_QuestLog.GetNextWaypointForMap(questID, self.mapID)
-        AddQuest(self, candidates, questID, { x = x, y = y }, watched, seen)
+        AddQuestWaypoint(self, candidates, questID, watched, seen)
         self:CompassDiscoveryCheckpoint()
         if not seen[questID] then
+            local profiler = Addon.Services.profiler
+            if profiler and profiler.active then
+                profiler:Count(self, "Discovery/Quest/PathFallback")
+            end
             CollectQuestPathFallback(self, candidates, questID, watched, seen)
         end
         replacement = candidates[1]

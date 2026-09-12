@@ -10,6 +10,55 @@ local HEADING_ALPHA = 0.495
 local MINOR_TICK_ALPHA = 0.1
 local POINTER_ALPHA = 0.4
 local WHITE = { r = 0.8, g = 0.82, b = 0.84 }
+local PEEK_DESTINATION_EPSILON = 0.00001
+
+local function IsTrackedPoint(marker, target)
+    if marker.navigation then
+        return true
+    end
+    if not target then
+        return false
+    end
+    if marker.key == target.key or (marker.sourceKey or marker.key) == (target.sourceKey or target.key) then
+        return true
+    end
+    local destination, tracked = marker.destination, target.destination
+    return destination.mapID == tracked.mapID
+        and math.abs(destination.x - tracked.x) < PEEK_DESTINATION_EPSILON
+        and math.abs(destination.y - tracked.y) < PEEK_DESTINATION_EPSILON
+end
+
+function Plugin:FindCompassPeekMarker()
+    local target = self.navigationTarget
+    local trackedLeft, trackedRight, trackedSize, trackedLevel
+    for _, marker in ipairs(self.markerGroupOrder) do
+        local slot = self.markerSlotsByKey[marker.key]
+        if slot.marker == marker and slot.renderShown and slot.renderAlpha > 0 and IsTrackedPoint(marker, target) then
+            trackedLeft = trackedLeft and math.min(trackedLeft, marker.projectedLeftPx) or marker.projectedLeftPx
+            trackedRight = trackedRight and math.max(trackedRight, marker.projectedRightPx) or marker.projectedRightPx
+            trackedSize = math.max(trackedSize or 0, marker.projectedHitSize)
+            trackedLevel = math.max(trackedLevel or 0, marker.depthLevel)
+        end
+    end
+    for _, marker in ipairs(self.markerGroupOrder) do
+        local slot = self.markerSlotsByKey[marker.key]
+        if
+            slot.marker == marker
+            and slot.renderShown
+            and slot.renderAlpha > 0
+            and not IsTrackedPoint(marker, target)
+        then
+            local covered = trackedLeft
+                and marker.depthLevel < trackedLevel
+                and marker.projectedLeftPx >= trackedLeft
+                and marker.projectedRightPx <= trackedRight
+                and marker.projectedHitSize <= trackedSize
+            if not covered then
+                return marker, slot
+            end
+        end
+    end
+end
 
 function Plugin:CreateCompassView()
     local frame = self.frame
@@ -31,8 +80,10 @@ function Plugin:CreateCompassView()
     self.pointer:SetColorTexture(WHITE.r, WHITE.g, WHITE.b)
     self.pointer:SetSnapToPixelGrid(true)
     self.pointer:SetTexelSnappingBias(0)
-    self.ticks, self.markerSlots, self.occupiedCells, self.selectedMarkers = {}, {}, {}, {}
+    self.ticks, self.markerSlots, self.selectedMarkers = {}, {}, {}
     self.nextMarkerSlots, self.markerSlotsByKey = {}, {}
+    self.markerGroupOrder, self.markerGroups = {}, {}
+    self.markerLeftOrder, self.markerGroupMembers = {}, {}
     self.markerGeneration, self.markerClock = 0, 0
     local directions = {
         L.PLU_COMPASS_N,
@@ -55,6 +106,7 @@ function Plugin:CreateCompassView()
     self.detail = frame:CreateFontString(nil, "OVERLAY")
     self.detail:SetMaxLines(1)
     self.detail:Hide()
+    self:CreateCompassPeek()
 end
 
 function Plugin:LayoutCompassArtwork()
@@ -82,7 +134,6 @@ function Plugin:LayoutCompassArtwork()
     layout.width, layout.height, layout.centerX, layout.centerY = frameWidth, frameHeight, centerX, centerY
     layout.scale, layout.thickness = scale, thickness
     layout.headingHeight, layout.iconSize = self.headingHeight, self.iconSize
-    layout.markerSourceSize = nil
     self.renderDirty, self.selectionDirty, self.headingsDirty = true, true, true
     self.detail:SetWidth(frameWidth)
     local width = math.max(0, frameWidth - Pixel:Multiple(C.EDGE_INSET * 2, scale))
@@ -144,6 +195,7 @@ function Plugin:StyleCompassView()
         end
     end
     Services.StyleText(self.detail, { font = font, textSize = fontSize, textColor = WHITE })
+    self:StyleCompassPeek(font, fontSize, true)
     self:StyleNavigationView(font)
     for _, texture in ipairs(self.artwork) do
         texture:SetAlpha(1)
@@ -153,12 +205,17 @@ function Plugin:StyleCompassView()
 end
 
 function Plugin:ClearCompassMarkers()
+    self:HideCompassPeek()
     self.markerPool:ReleaseAll()
     wipe(self.markerSlots)
     wipe(self.nextMarkerSlots)
     wipe(self.markerSlotsByKey)
     wipe(self.selectedMarkers)
     wipe(self.selectionKeys)
+    wipe(self.markerGroupOrder)
+    wipe(self.markerGroups)
+    wipe(self.markerLeftOrder)
+    wipe(self.markerGroupMembers)
     self.markerRevealPending = false
     self.selectionDirty = true
     self.detail:Hide()
@@ -222,22 +279,24 @@ function Plugin:RenderCompass(facing, live)
     end
     local layout = self.artworkLayout
     local scale, width = layout.scale, layout.contentWidth
-    local markerY = layout.markerY
     self:RenderCompassHeadings(facing)
     local nearest, nearestDelta
-    if layout.markerSourceSize ~= self.iconSize then
-        -- Reserve the largest marker footprint so distance changes preserve spacing and click areas.
-        layout.maxIconSize = Pixel:Snap(self.iconSize * C.MARKER_NEAR_SCALE, scale)
-        layout.outline = Pixel:Multiple(C.MARKER_OUTLINE * 2, scale)
-        layout.gap = Pixel:Multiple(C.MARKER_GAP, scale)
-        layout.pitch = layout.maxIconSize + layout.outline + layout.gap
-        layout.retainedPitch = layout.maxIconSize + layout.outline + layout.gap * C.MARKER_RETAINED_GAP_FRACTION
-        layout.markerSourceSize = self.iconSize
-    end
-    local maxIconSize, outline = layout.maxIconSize, layout.outline
-    local pitch, retainedPitch = layout.pitch, layout.retainedPitch
+    local outline = Pixel:Multiple(C.MARKER_OUTLINE * 2, scale)
     local interactive = not Addon.Services.IsEditMode()
-    local selection = self:SelectCompassMarkers(facing, width, pitch, live, retainedPitch)
+    local selection = self:SelectCompassMarkers(facing, width, live)
+    local profiler = Services.profiler
+    local start, startKB
+    if profiler and profiler.active then
+        start, startKB = profiler:Begin()
+    end
+    self:LayoutCompassMarkerGroups(selection)
+    if start then
+        profiler:End(self, "Compass.Groups", start, startKB)
+    end
+    start, startKB = nil, nil
+    if profiler and profiler.active then
+        start, startKB = profiler:Begin()
+    end
     self:AssignCompassMarkerSlots(selection, live)
     self.markerRevealPending = false
     for index, marker in ipairs(selection) do
@@ -248,8 +307,7 @@ function Plugin:RenderCompass(facing, live)
             interactive,
             marker.projectedX,
             marker.projectedAlpha,
-            markerY,
-            maxIconSize,
+            layout.markerY,
             outline,
             scale
         )
@@ -257,14 +315,31 @@ function Plugin:RenderCompass(facing, live)
         if
             marker.renderShown
             and absoluteDelta <= C.DETAIL_ANGLE
-            and (not nearestDelta or absoluteDelta < nearestDelta)
+            and (
+                not nearestDelta
+                or absoluteDelta < nearestDelta
+                or (absoluteDelta == nearestDelta and marker.distanceSquared < nearest.distanceSquared)
+            )
         then
             nearest, nearestDelta = marker, absoluteDelta
         end
     end
+    if start then
+        profiler:End(self, "Compass.Markers", start, startKB)
+    end
     self:RefreshCompassTooltip()
     local navigating = self:RenderNavigation(facing)
-    if nearest and self.showLabel and not navigating then
+    if self.peekAltHeld and interactive then
+        local marker, slot = self:FindCompassPeekMarker()
+        if marker then
+            self:ShowCompassPeek(marker, slot)
+        else
+            self:HideCompassPeek()
+        end
+    else
+        self:HideCompassPeek()
+    end
+    if nearest and self.showLabel and not navigating and not self.peekAltHeld then
         local distance = self:CompassDisplayDistance(nearest.distance)
         if
             self.detailName ~= nearest.name

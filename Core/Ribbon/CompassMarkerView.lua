@@ -7,6 +7,8 @@ local Plugin = Addon.Controller
 local GameTooltip = Services.tooltip
 local TYPE_COLOR = { r = 1, g = 0.82, b = 0 }
 local FAILURE_COLOR = { r = 1, g = 0.2, b = 0.2 }
+local ICON_COLOR = { r = 1, g = 1, b = 1 }
+local FULL_TEX_COORDS = { left = 0, right = 1, top = 0, bottom = 1 }
 local TYPE_LABELS = {
     quest = "PLU_COMPASS_TYPE_QUEST",
     worldQuest = "PLU_COMPASS_TYPE_WORLD_QUEST",
@@ -29,7 +31,7 @@ local TYPE_LABELS = {
     questOffer = "PLU_COMPASS_QUEST_OFFERS",
     corpse = "PLU_COMPASS_CORPSE",
     saved = "PLU_COMPASS_SAVED_LOCATIONS",
-    tomtom = "PLU_COMPASS_TOMTOM",
+    handynotes = "PLU_COMPASS_HANDYNOTES",
 }
 local QUEST_BACKGROUND_ATLAS = "UI-QuestPoi-QuestNumber"
 local QUEST_SYMBOL_ATLASES = {
@@ -39,6 +41,7 @@ local QUEST_SYMBOL_ATLASES = {
 }
 
 local function LeaveMarker(button)
+    Plugin:HideCompassHandyNotesTooltip(button)
     if Plugin.hoveredCompassMarker == button then
         Plugin.hoveredCompassMarker = nil
     end
@@ -46,7 +49,8 @@ local function LeaveMarker(button)
         Services.tooltipHide()
     end
     button.pressedMarker, button.tooltipDistance, button.failureReason = nil, nil, nil
-    button.tooltipMarker = nil
+    button.tooltipMarker, button.tooltipGroupCount = nil, nil
+    button.handynotesTooltipFailed = nil
 end
 
 local function ShowMarkerTooltip(button)
@@ -57,6 +61,16 @@ local function ShowMarkerTooltip(button)
     button.tooltipMarker = marker
     button.tooltipDistance = Plugin:CompassDisplayDistance(marker.distance)
     button.tooltipUnits = Plugin.distanceUnits
+    button.tooltipGroupCount = #marker.overlapGroup.markers
+    Plugin.hoveredCompassMarker = button
+    if
+        not button.failureReason
+        and button.handynotesTooltipFailed ~= marker
+        and Plugin:ShowCompassHandyNotesTooltip(button, marker, ShowMarkerTooltip)
+    then
+        return
+    end
+    Plugin:HideCompassHandyNotesTooltip(button)
     if GameTooltip:IsShown() and GameTooltip:IsOwned(button) then
         GameTooltip:ClearLines()
     else
@@ -65,11 +79,13 @@ local function ShowMarkerTooltip(button)
     GameTooltip:SetText(marker.name, 1, 1, 1)
     GameTooltip:AddLine(Plugin:FormatCompassDistance(marker.distance), 1, 1, 1)
     GameTooltip:AddLine(L[TYPE_LABELS[marker.kind]], TYPE_COLOR.r, TYPE_COLOR.g, TYPE_COLOR.b)
+    if button.tooltipGroupCount > 1 then
+        GameTooltip:AddLine(L.PLU_COMPASS_OVERLAP_HINT_F:format(button.tooltipGroupCount), 1, 1, 1, true)
+    end
     if button.failureReason then
         GameTooltip:AddLine(button.failureReason, FAILURE_COLOR.r, FAILURE_COLOR.g, FAILURE_COLOR.b, true)
     end
     GameTooltip:Show()
-    Plugin.hoveredCompassMarker = button
 end
 
 local function SameDestination(a, b)
@@ -77,6 +93,7 @@ local function SameDestination(a, b)
         and a.destination.mapID == b.destination.mapID
         and a.destination.x == b.destination.x
         and a.destination.y == b.destination.y
+        and Addon.HandyNotesClick:Matches(a.handynotesPoint, b.handynotesPoint)
 end
 
 local function ClickMarker(button)
@@ -85,8 +102,22 @@ local function ClickMarker(button)
     if not pressed or not marker or Addon.Services.IsEditMode() or not SameDestination(pressed, marker) then
         return
     end
+    local markers = marker.overlapGroup.markers
+    if #markers > 1 then
+        LeaveMarker(button)
+        Plugin:ShowCompassOverlapMenu(markers)
+        return
+    end
     local destination = marker.destination
-    local success, reason = Plugin:SetWaypoint(destination.mapID, destination.x, destination.y, marker.name)
+    local success, reason = Plugin:SetWaypoint(
+        destination.mapID,
+        destination.x,
+        destination.y,
+        marker.name,
+        marker.description,
+        marker.sourceKey or marker.key,
+        marker.handynotesPoint
+    )
     if not success then
         button.failureReason = reason
         ShowMarkerTooltip(button)
@@ -95,7 +126,7 @@ end
 
 function Plugin:CreateCompassMarkerPool()
     self.markerPool = CreateObjectPool(function()
-        local button = CreateFrame("Button", nil, self.frame)
+        local button = CreateFrame("Button", nil, self.frame, "OrbitCompassMarkerButtonTemplate")
         button.icon = button:CreateTexture(nil, "OVERLAY", nil, C.MARKER_ICON_SUBLEVEL)
         button.shadow = button:CreateTexture(nil, "OVERLAY", nil, C.MARKER_SHADOW_SUBLEVEL)
         button.shadow:SetAlpha(C.MARKER_OUTLINE_ALPHA)
@@ -109,7 +140,10 @@ function Plugin:CreateCompassMarkerPool()
         button.trackedGlow = button:CreateTexture(nil, "BACKGROUND")
         button.trackedGlow:SetAtlas(C.TRACKED_GLOW_ATLAS)
         button.trackedGlow:Hide()
-        button.selection = button:CreateTexture(nil, "OVERLAY", nil, C.SELECTION_MARKER_SUBLEVEL)
+        button.selectionFrame = CreateFrame("Frame", nil, button)
+        button.selectionFrame:SetAllPoints(button)
+        button.selectionFrame:EnableMouse(false)
+        button.selection = button.selectionFrame:CreateTexture(nil, "OVERLAY", nil, C.SELECTION_MARKER_SUBLEVEL)
         button.selection:SetAtlas(C.SELECTION_MARKER_ATLAS)
         button.selection:SetRotation(0)
         button.selection:Hide()
@@ -118,7 +152,6 @@ function Plugin:CreateCompassMarkerPool()
             texture:SetTexelSnappingBias(0)
         end
         button:RegisterForClicks("LeftButtonUp")
-        button:SetPassThroughButtons("RightButton")
         button:SetScript("OnEnter", ShowMarkerTooltip)
         button:SetScript("OnLeave", LeaveMarker)
         button:SetScript("OnHide", LeaveMarker)
@@ -134,7 +167,12 @@ function Plugin:CreateCompassMarkerPool()
     end, function(_, button)
         button:Hide()
         button:ClearAllPoints()
+        if button.marker then
+            button.marker.renderShown = false
+        end
         button.marker, button.atlas = nil, nil
+        button.sourceTexture, button.texLeft, button.texRight, button.texTop, button.texBottom = nil, nil, nil, nil, nil
+        button.colorR, button.colorG, button.colorB = nil, nil, nil
         button.markerKey, button.revealAt, button.selected = nil, nil, false
         button.renderX, button.renderAlpha, button.renderWaypoint, button.renderShown = nil, nil, nil, false
         button.renderLeft, button.renderTop = nil, nil
@@ -186,6 +224,7 @@ function Plugin:AssignCompassMarkerSlots(selection, live)
     for _, slot in ipairs(slots) do
         if slot.markerGeneration ~= generation then
             slot.selected, slot.revealAt = false, nil
+            slot.marker.renderShown = false
             if slot.renderShown then
                 slot:Hide()
                 slot.renderShown = false
@@ -196,25 +235,73 @@ function Plugin:AssignCompassMarkerSlots(selection, live)
     self.markerSlots, self.nextMarkerSlots = nextSlots, slots
 end
 
-function Plugin:BindCompassMarker(button, marker, interactive)
-    local questSymbol = marker.kind == "quest"
-        or marker.kind == "worldQuest"
-        or QUEST_SYMBOL_ATLASES[marker.atlas] == true
-    if button.atlas ~= marker.atlas or button.questSymbol ~= questSymbol then
+local function MarkerArtChanged(button, marker, questSymbol)
+    return button.atlas ~= marker.atlas
+        or button.sourceTexture ~= marker.texture
+        or button.questSymbol ~= questSymbol
+        or button.texLeft ~= marker.texLeft
+        or button.texRight ~= marker.texRight
+        or button.texTop ~= marker.texTop
+        or button.texBottom ~= marker.texBottom
+        or button.colorR ~= marker.colorR
+        or button.colorG ~= marker.colorG
+        or button.colorB ~= marker.colorB
+end
+
+local function BindMarkerArt(button, marker, questSymbol)
+    if marker.texture then
+        button.icon:SetTexture(marker.texture)
+        button.shadow:SetTexture(marker.texture)
+        local left, right = marker.texLeft or FULL_TEX_COORDS.left, marker.texRight or FULL_TEX_COORDS.right
+        local top, bottom = marker.texTop or FULL_TEX_COORDS.top, marker.texBottom or FULL_TEX_COORDS.bottom
+        button.icon:SetTexCoord(left, right, top, bottom)
+        button.shadow:SetTexCoord(left, right, top, bottom)
+        button.icon:SetVertexColor(
+            marker.colorR or ICON_COLOR.r,
+            marker.colorG or ICON_COLOR.g,
+            marker.colorB or ICON_COLOR.b
+        )
+    else
+        button.icon:SetTexCoord(
+            FULL_TEX_COORDS.left,
+            FULL_TEX_COORDS.right,
+            FULL_TEX_COORDS.top,
+            FULL_TEX_COORDS.bottom
+        )
+        button.shadow:SetTexCoord(
+            FULL_TEX_COORDS.left,
+            FULL_TEX_COORDS.right,
+            FULL_TEX_COORDS.top,
+            FULL_TEX_COORDS.bottom
+        )
         local baseAtlas = questSymbol and QUEST_BACKGROUND_ATLAS or marker.atlas
         button.icon:SetAtlas(baseAtlas, questSymbol)
         button.shadow:SetAtlas(baseAtlas)
-        button.symbol:SetShown(questSymbol)
+        button.icon:SetVertexColor(ICON_COLOR.r, ICON_COLOR.g, ICON_COLOR.b)
         if questSymbol then
             button.symbol:SetAtlas(marker.atlas, true)
             local width, height = button.icon:GetSize()
             local symbolWidth, symbolHeight = button.symbol:GetSize()
             button.symbolWidthScale, button.symbolHeightScale = symbolWidth / width, symbolHeight / height
         end
-        button.atlas, button.questSymbol = marker.atlas, questSymbol
-        button.layoutAtlas, button.renderAlpha = nil, nil
     end
+    button.symbol:SetShown(questSymbol)
+    button.atlas, button.sourceTexture, button.questSymbol = marker.atlas, marker.texture, questSymbol
+    button.texLeft, button.texRight, button.texTop, button.texBottom =
+        marker.texLeft, marker.texRight, marker.texTop, marker.texBottom
+    button.colorR, button.colorG, button.colorB = marker.colorR, marker.colorG, marker.colorB
+    button.layoutAtlas, button.renderAlpha = nil, nil
+end
+
+function Plugin:BindCompassMarker(button, marker, interactive)
     local changed = button.marker ~= marker
+    if changed then
+        self:HideCompassHandyNotesTooltip(button)
+        button.handynotesTooltipFailed = nil
+    end
+    if changed and button.marker then
+        button.marker.renderShown = false
+    end
     button.marker = marker
     if changed then
         button.failureReason = nil
@@ -226,25 +313,44 @@ function Plugin:BindCompassMarker(button, marker, interactive)
             LeaveMarker(button)
         end
     end
+    if changed and interactive and self.hoveredCompassMarker == button then
+        ShowMarkerTooltip(button)
+    end
 end
 
 function Plugin:RefreshCompassTooltip()
     local button = self.hoveredCompassMarker
+    if button and button.handynotesTooltip then
+        if button.tooltipMarker ~= button.marker then
+            self:HideCompassHandyNotesTooltip(button)
+            ShowMarkerTooltip(button)
+        end
+        return
+    end
     if button and GameTooltip:IsShown() and GameTooltip:IsOwned(button) then
         local marker = button.marker
         if
             button.tooltipMarker ~= marker
             or button.tooltipDistance ~= self:CompassDisplayDistance(marker.distance)
             or button.tooltipUnits ~= self.distanceUnits
+            or button.tooltipGroupCount ~= #marker.overlapGroup.markers
         then
             ShowMarkerTooltip(button)
         end
     end
 end
 
-function Plugin:RenderCompassMarker(button, marker, interactive, x, alpha, markerY, maxIconSize, outline, scale)
-    if button.marker ~= marker or button.atlas ~= marker.atlas or button.interactive ~= interactive then
+function Plugin:RenderCompassMarker(button, marker, interactive, x, alpha, markerY, outline, scale)
+    local questSymbol = not marker.texture
+        and (marker.kind == "quest" or marker.kind == "worldQuest" or QUEST_SYMBOL_ATLASES[marker.atlas] == true)
+    if MarkerArtChanged(button, marker, questSymbol) then
+        BindMarkerArt(button, marker, questSymbol)
+    end
+    if button.marker ~= marker or button.interactive ~= interactive then
         self:BindCompassMarker(button, marker, interactive)
+    end
+    if #marker.overlapGroup.markers > 1 then
+        button.revealAt = nil
     end
     if button.revealAt and self.markerClock < button.revealAt then
         self.markerRevealPending = true
@@ -255,11 +361,16 @@ function Plugin:RenderCompassMarker(button, marker, interactive, x, alpha, marke
         return false
     end
     button.revealAt = nil
-    local distanceFraction = math.max(0, math.min(1, marker.distance / self.range))
-    local distanceScale =
-        math.min(C.MARKER_NEAR_SCALE, C.MARKER_FAR_SCALE + (1 - distanceFraction) * C.MARKER_DISTANCE_SCALE_SPAN)
-    local markerSize = Pixel:Snap(self.iconSize * marker.sizeScale * distanceScale, scale)
-    local hitSize = maxIconSize + outline
+    local baseLevel = self.frame:GetFrameLevel()
+    local level = baseLevel + marker.depthLevel
+    if button:GetFrameLevel() ~= level then
+        button:SetFrameLevel(level)
+    end
+    local selectionLevel = baseLevel + C.MARKER_BASE_LEVEL + C.MAX_MARKERS
+    if button.selectionFrame:GetFrameLevel() ~= selectionLevel then
+        button.selectionFrame:SetFrameLevel(selectionLevel)
+    end
+    local markerSize, hitSize = marker.projectedIconSize, marker.projectedHitSize
     if
         button.layoutSize ~= markerSize
         or button.layoutOutline ~= outline
@@ -303,7 +414,7 @@ function Plugin:RenderCompassMarker(button, marker, interactive, x, alpha, marke
         button.layoutScale, button.layoutAtlas = scale, marker.atlas
     end
     local centerX, centerY = self.artworkLayout.centerX, self.artworkLayout.centerY
-    local left = Pixel:Snap(centerX + x - hitSize / 2, scale) - centerX
+    local left = marker.projectedLeft - centerX
     local top = Pixel:Snap(centerY + markerY + hitSize / 2, scale) - centerY
     if button.renderLeft ~= left or button.renderTop ~= top then
         button:SetPoint("TOPLEFT", self.frame, "CENTER", left, top)
@@ -326,13 +437,14 @@ function Plugin:RenderCompassMarker(button, marker, interactive, x, alpha, marke
         local progress = math.max(0, math.min(1, (self.range - marker.distance) / fadeWidth))
         alpha = alpha * progress * progress * (3 - 2 * progress)
     end
+    alpha = alpha * (marker.sourceAlpha or 1)
     if button.renderAlpha ~= alpha then
         button:SetAlpha(alpha)
         button.renderAlpha = alpha
     end
     if not button.renderShown then
-        button:Show()
         button.renderShown = true
+        button:Show()
     end
     return true
 end

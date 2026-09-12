@@ -97,34 +97,12 @@ local function ArrowControls()
         },
         Checkbox(C.SYSTEM_INDEX, "FollowTracked", L.PLU_COMPASS_FOLLOW_TRACKED),
         Checkbox(C.SYSTEM_INDEX, "ShowCorpse", L.PLU_COMPASS_CORPSE),
-        Checkbox(C.SYSTEM_INDEX, "FollowTomTom", L.PLU_COMPASS_FOLLOW_TOMTOM, L.PLU_COMPASS_TOMTOM_TT),
     }
 end
 
 function Addon.SettingsTabs(index)
     if index == C.NAVIGATION_SYSTEM_INDEX then
         return { { id = "arrow", label = L.PLU_COMPASS_ARROW, controls = ArrowControls() } }
-    end
-    local points = {}
-    for _, point in ipairs({
-        { "ShowWaypoint", L.PLU_COMPASS_WAYPOINT },
-        { "ShowQuestObjectives", L.PLU_COMPASS_QUEST_OBJECTIVES },
-        { "ShowWorldQuests", L.PLU_COMPASS_WORLD_QUESTS },
-        { "ShowFlightMasters", L.PLU_COMPASS_FLIGHT_MASTERS },
-        { "ShowEvents", L.PLU_COMPASS_EVENTS },
-        { "ShowRaces", L.PLU_COMPASS_RACES },
-        { "ShowQuestHubs", L.PLU_COMPASS_QUEST_HUBS },
-        { "ShowPOIs", L.PLU_COMPASS_ZONE_POIS },
-        { "ShowVignettes", L.PLU_COMPASS_VIGNETTES },
-        { "ShowDirections", L.PLU_COMPASS_DIRECTIONS },
-        { "ShowMapLinks", L.PLU_COMPASS_MAP_LINKS },
-        { "ShowPetTamers", L.PLU_COMPASS_PET_TAMERS },
-        { "ShowDigSites", L.PLU_COMPASS_DIG_SITES },
-        { "ShowTrackedContent", L.PLU_COMPASS_TRACKED_CONTENT },
-        { "ShowQuestOffers", L.PLU_COMPASS_QUEST_OFFERS },
-        { "ShowSavedLocations", L.PLU_COMPASS_SAVED_LOCATIONS },
-    }) do
-        points[#points + 1] = Checkbox(C.SYSTEM_INDEX, point[1], point[2])
     end
     return {
         {
@@ -158,7 +136,7 @@ function Addon.SettingsTabs(index)
                 ),
             },
         },
-        { id = "points", label = L.PLU_COMPASS_POINTS, controls = points },
+        { id = "points", label = L.PLU_COMPASS_POINTS, controls = Addon.PointsSettings() },
     }
 end
 

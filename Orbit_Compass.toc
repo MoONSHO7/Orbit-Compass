@@ -4,7 +4,7 @@
 ## Author: MoONSHO7
 ## Version: @project-version@
 ## X-Curse-Project-ID: 1689597
-## OptionalDeps: Orbit, TomTom
+## OptionalDeps: Orbit, HandyNotes
 ## SavedVariables: OrbitCompassDB
 ## IconTexture: Interface\AddOns\Orbit_Compass\Assets\Orbit.png
 ## Group: Orbit_Compass
@@ -13,37 +13,5 @@
 
 Libs\LibOrbitUI-1.0\LibOrbitUI-1.0.xml
 Core\CompassCompatibility.lua
-Localization\Generated.lua
-Localization\Compass.lua
-Core\Foundation\CompassConstants.lua
-Core\Plugin\CompassDefaults.lua
-Core\Plugin\CompassServices.lua
-Core\Integrations\Orbit\Orbit.lua
-Core\Plugin\CompassController.lua
-Core\Foundation\CompassMath.lua
-Core\Plugin\Compass.lua
-Core\Navigation\CompassWaypoint.lua
-Core\Navigation\CompassCommands.lua
-Core\Discovery\CompassSourceUtils.lua
-Core\Discovery\Sources\CompassTravelSources.lua
-Core\Discovery\Sources\CompassContentSources.lua
-Core\Discovery\Sources\CompassOfferSources.lua
-Core\Navigation\CompassTargets.lua
-Core\Navigation\CompassLocations.lua
-Core\Navigation\CompassPointMenu.lua
-Core\CompassTomTom.lua
-Core\Discovery\Sources\CompassMapSources.lua
-Core\Discovery\Sources\CompassQuestSources.lua
-Core\Discovery\CompassSources.lua
-Core\Discovery\CompassDiscovery.lua
-Core\Navigation\CompassPosition.lua
-Core\Navigation\CompassBearings.lua
-Core\Ribbon\CompassMarkerView.lua
-Core\Ribbon\CompassProjection.lua
-Core\Ribbon\CompassView.lua
-Core\Navigation\CompassNavigation.lua
-Core\Navigation\CompassNavigationView.lua
-Core\Navigation\CompassNavigationSettings.lua
-Core\Integrations\Orbit\OrbitCanvas.lua
-Core\Config\CompassSettings.lua
-Core\CompassBoot.lua
+Localization\Localization.xml
+Core\Core.xml
