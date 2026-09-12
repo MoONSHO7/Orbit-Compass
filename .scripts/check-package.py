@@ -11,8 +11,8 @@ from lupa.lua51 import LuaRuntime
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACTS = {
-    "Orbit_Compass": ("OrbitCompassDB", False, "1689597"),
-    "Orbit_StatusWidget": ("OrbitStatusWidgetDB", True, "1688135"),
+    "Orbit_Compass": ("OrbitCompassDB", False, "1689597", 5),
+    "Orbit_StatusWidget": ("OrbitStatusWidgetDB", True, "1688135", 4),
 }
 UI_DIRECTORY = "Libs/LibOrbitUI-1.0/"
 PICKER_DIRECTORY = "Libs/LibOrbitColorPicker-1.0/"
@@ -49,7 +49,7 @@ def validate(root, release=False):
     if not package or package[1] not in CONTRACTS:
         raise ValueError(".pkgmeta must declare the supported standalone package-as name")
     addon = package[1]
-    saved_variable, needs_picker, curse_project_id = CONTRACTS[addon]
+    saved_variable, needs_picker, curse_project_id, ui_minor = CONTRACTS[addon]
     externals = fetcher.dependencies(ROOT)
     required = {UI_DIRECTORY.rstrip("/")}
     if needs_picker:
@@ -160,11 +160,15 @@ def validate(root, release=False):
     library = "\n".join(code for name, code in loaded.items() if name.startswith(UI_DIRECTORY))
     major = re.search(r"\bVERSION_MAJOR\s*=\s*(\d+)", library)
     minor = re.search(r"\bVERSION_MINOR\s*=\s*(\d+)", library)
-    if not major or not minor or int(major[1]) != 1 or int(minor[1]) < 4:
-        raise ValueError("The loaded LibOrbitUI manifest requires API 1.4; published 1.3 is incompatible")
+    if not major or not minor or int(major[1]) != 1 or int(minor[1]) < ui_minor:
+        raise ValueError(f"{addon} requires loaded LibOrbitUI API 1.{ui_minor} or newer within major 1")
     for api in ("UI.Controller:Create", "UI.Addon:Create", "UI.SettingsStore:Create", "Config.CreateColorProvider"):
         if not re.search(r"\bfunction\s+" + re.escape(api) + r"\s*\(", library):
             raise ValueError(f"Required API is absent from the loaded LibOrbitUI manifest: {api}")
+    if addon == "Orbit_Compass":
+        settings = loaded.get(UI_DIRECTORY + "Addon/AddonSettings.lua", "")
+        if not re.search(r"\bregisterWidgets\s*=\s*options\.registerWidgets\b", settings):
+            raise ValueError("Compass requires Addon settings to forward the consumer registerWidgets hook")
     asset(UI_DIRECTORY + "LICENSE")
     for destination in externals:
         if not any(name.startswith(destination + "/") for name in loaded):
