@@ -2,6 +2,7 @@
     <Script file="CompassWaypoint.lua"/>
     <Script file="CompassCommands.lua"/>
     <Script file="CompassTargets.lua"/>
+    <Script file="CompassAutoAdvance.lua"/>
     <Script file="CompassLocations.lua"/>
     <Script file="CompassPointMenu.lua"/>
     <Script file="CompassPosition.lua"/>

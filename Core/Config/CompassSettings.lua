@@ -63,17 +63,6 @@ end
 
 local function ArrowControls()
     return {
-        Slider(
-            C.NAVIGATION_SYSTEM_INDEX,
-            "NavigationSize",
-            L.CMN_SIZE,
-            C.NAVIGATION_SIZE_MIN,
-            C.NAVIGATION_SIZE_MAX,
-            C.NAVIGATION_SIZE_STEP
-        ),
-        Slider(C.NAVIGATION_SYSTEM_INDEX, "FontSize", L.PLU_COMPASS_FONT_SIZE, C.FONT_MIN, C.FONT_MAX, 1),
-        ComponentToggle("Name", L.CFG_CM_PREVIEW_NAME),
-        ComponentToggle("Distance", L.PLU_COMPASS_DISTANCE),
         {
             type = "dropdown",
             label = L.PLU_COMPASS_UNITS,
@@ -95,14 +84,56 @@ local function ArrowControls()
                 Changed(C.NAVIGATION_SYSTEM_INDEX, "ComponentPositions", positions)
             end,
         },
-        Checkbox(C.SYSTEM_INDEX, "FollowTracked", L.PLU_COMPASS_FOLLOW_TRACKED),
-        Checkbox(C.SYSTEM_INDEX, "ShowCorpse", L.PLU_COMPASS_CORPSE),
+        Slider(
+            C.NAVIGATION_SYSTEM_INDEX,
+            "NavigationSize",
+            L.CMN_SIZE,
+            C.NAVIGATION_SIZE_MIN,
+            C.NAVIGATION_SIZE_MAX,
+            C.NAVIGATION_SIZE_STEP
+        ),
+        Slider(C.NAVIGATION_SYSTEM_INDEX, "FontSize", L.PLU_COMPASS_FONT_SIZE, C.FONT_MIN, C.FONT_MAX, 1),
+        ComponentToggle("Name", L.CFG_CM_PREVIEW_NAME),
+        ComponentToggle("Distance", L.PLU_COMPASS_DISTANCE),
     }
 end
 
-function Addon.SettingsTabs(index)
+local function BehaviourControls(refresh)
+    local sameType =
+        Checkbox(C.SYSTEM_INDEX, "AutoAdvanceSameType", L.PLU_COMPASS_AUTO_SAME_TYPE, L.PLU_COMPASS_AUTO_SAME_TYPE_TT)
+    sameType.visibleIf = function()
+        return Plugin:GetSetting(C.SYSTEM_INDEX, "AutoAdvanceMode") ~= "off"
+    end
+    return {
+        {
+            type = "checkbox",
+            label = L.PLU_COMPASS_AUTO_ADVANCE,
+            tooltip = L.PLU_COMPASS_AUTO_ADVANCE_TT,
+            default = false,
+            getValue = function()
+                return Plugin:GetSetting(C.SYSTEM_INDEX, "AutoAdvanceMode") ~= "off"
+            end,
+            onChange = function(enabled)
+                Changed(C.SYSTEM_INDEX, "AutoAdvanceMode", enabled and "arrival" or "off")
+                if refresh then
+                    refresh()
+                else
+                    Addon.App:ShowSettings(C.NAVIGATION_SYSTEM_INDEX)
+                end
+            end,
+        },
+        sameType,
+        Checkbox(C.SYSTEM_INDEX, "ShowCorpse", L.PLU_COMPASS_CORPSE_RECOVERY, L.PLU_COMPASS_CORPSE_RECOVERY_TT),
+        Checkbox(C.SYSTEM_INDEX, "FollowTracked", L.PLU_COMPASS_FOLLOW_TARGETS, L.PLU_COMPASS_FOLLOW_TARGETS_TT),
+    }
+end
+
+function Addon.SettingsTabs(index, refresh)
     if index == C.NAVIGATION_SYSTEM_INDEX then
-        return { { id = "arrow", label = L.PLU_COMPASS_ARROW, controls = ArrowControls() } }
+        return {
+            { id = "arrow", label = L.PLU_COMPASS_ARROW, controls = ArrowControls() },
+            { id = "behaviour", label = L.PLU_COMPASS_BEHAVIOUR, controls = BehaviourControls(refresh) },
+        }
     end
     return {
         {

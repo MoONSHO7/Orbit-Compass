@@ -3,6 +3,7 @@ local Plugin = Addon.Controller
 local C = Addon.Constants
 local Number = Addon.SourceUtils.Number
 local SOURCES = {
+    { key = "gathermate", collect = "CollectCompassGatherMate", label = "Compass.Discovery.GatherMate", interval = 30 },
     {
         key = "quests",
         collect = "CollectCompassQuests",
@@ -125,6 +126,7 @@ function Plugin:CompassDiscoveryCheckpoint()
 end
 
 function Plugin:InitializeCompassDiscovery()
+    self:ResetCompassAutoAdvance()
     CancelDiscoveryJob(self, "ContextReset")
     self.compassHandyNotesGuide = nil
     self.compassOfferMapID = nil

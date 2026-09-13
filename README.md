@@ -6,6 +6,8 @@ An independently installed navigation ribbon and destination arrow using LibOrbi
 ## Purpose
 Keep native points, saved locations, HandyNotes markers and waypoint commands usable without Orbit. An optional Orbit bridge supplies its existing profile, theme, fade, layering and Canvas integration.
 
+Optional GatherMate2 supplies recorded locations for all its enabled categories through one GatherMate2 row in Points. Choose categories and individual nodes in GatherMate2; import GatherMate2_Data through GatherMate2 for a prebuilt database. These are possible spawn locations, and arrival-based auto-advance can visit them in sequence.
+
 ## Implementation
 `Orbit_Compass.toc` loads the embedded UI library, host compatibility selection, `Localization/Localization.xml` and `Core/Core.xml`. Core follows Orbit’s module conventions: Foundation, Plugin, Config, Discovery, Navigation, Ribbon and Integrations each own a focused directory, XML load bundle and README. [Core/README.md](Core/README.md) maps the data flow and startup phases. The standalone controller stores settings and saved locations in `OrbitCompassDB`; the real Orbit plugin retains `Orbit_Compass` indices 1 and 2 and its profile collection when the host is available. `Assets/` owns the arrow texture.
 

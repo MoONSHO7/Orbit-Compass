@@ -3,6 +3,8 @@ local Plugin = Addon.Controller
 local C = Addon.Constants
 local Readable, Number = Addon.SourceUtils.Readable, Addon.SourceUtils.Number
 local POINTS = {
+    { key = "ShowGatherMate", field = "showGatherMate", source = "gathermate", labelKey = "PLU_COMPASS_GATHERMATE" },
+    { key = "ShowHandyNotes", field = "showHandyNotes", source = "handynotes", labelKey = "PLU_COMPASS_HANDYNOTES" },
     { key = "ShowWaypoint", field = "showWaypoint", labelKey = "PLU_COMPASS_WAYPOINT" },
     {
         key = "ShowQuestObjectives",
@@ -39,7 +41,6 @@ local POINTS = {
         source = "locations",
         labelKey = "PLU_COMPASS_SAVED_LOCATIONS",
     },
-    { key = "ShowHandyNotes", field = "showHandyNotes", source = "handynotes", labelKey = "PLU_COMPASS_HANDYNOTES" },
 }
 Addon.CompassPointTypes = table.freeze(POINTS)
 
@@ -111,6 +112,10 @@ function Plugin:ApplyCompassPointVisibility()
     for _, point in ipairs(POINTS) do
         local shown = area ~= nil and self.compassPointVisibility[area][point.key]
         if self[point.field] ~= shown then
+            if self.compassAutoAdvance then
+                self.compassAutoAdvance.awaitingSource = true
+                self.compassAutoAdvance.missingSince = nil
+            end
             self[point.field] = shown
             if point.source then
                 self:InvalidateCompassSourceSettings(point.source, true)

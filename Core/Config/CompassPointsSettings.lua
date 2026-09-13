@@ -14,6 +14,7 @@ local COLUMNS = {
     { key = "toggle", labelKey = "PLU_COMPASS_TOGGLE", tooltipKey = "PLU_COMPASS_TOGGLE_TT" },
 }
 local POINTS = Addon.CompassPointTypes
+local REQUIRED_ADDONS = { ShowGatherMate = "GatherMate2", ShowHandyNotes = "HandyNotes" }
 
 local function ReleaseRow(_, row)
     row:Hide()
@@ -95,29 +96,40 @@ local function RenderTable(layout, container)
         headingHeight = math.max(headingHeight, heading:GetStringHeight() + textPadding)
     end
     local y = pixel:Snap(headingHeight, scale) + pixel:Multiple(HEADER_GAP, scale)
-    for index, point in ipairs(POINTS) do
-        local row = frame.rows:Acquire()
-        if not row.label then
-            row.label = row:CreateFontString(nil, "ARTWORK", layout.constants.UI.LabelFont)
-            row.label:SetJustifyH("LEFT")
-            row.label:SetWordWrap(true)
-            pixel:Point(row.label, "LEFT", row, "LEFT", TEXT_PADDING, 0)
-            row.shade = row:CreateTexture(nil, "BACKGROUND")
-            row.shade:SetAllPoints()
-            row.shade:SetColorTexture(ROW_SHADE.r, ROW_SHADE.g, ROW_SHADE.b, ROW_SHADE.a)
+    local visibleIndex = 0
+    for _, point in ipairs(POINTS) do
+        local requiredAddon = REQUIRED_ADDONS[point.key]
+        if not requiredAddon or C_AddOns.IsAddOnLoaded(requiredAddon) then
+            visibleIndex = visibleIndex + 1
+            local row = frame.rows:Acquire()
+            if not row.label then
+                row.label = row:CreateFontString(nil, "ARTWORK", layout.constants.UI.LabelFont)
+                row.label:SetJustifyH("LEFT")
+                row.label:SetWordWrap(true)
+                pixel:Point(row.label, "LEFT", row, "LEFT", TEXT_PADDING, 0)
+                row.shade = row:CreateTexture(nil, "BACKGROUND")
+                row.shade:SetAllPoints()
+                row.shade:SetColorTexture(ROW_SHADE.r, ROW_SHADE.g, ROW_SHADE.b, ROW_SHADE.a)
+            end
+            row.label:SetText(L[point.labelKey])
+            row.label:SetWidth(labelWidth - textPadding * 2)
+            local height = pixel:Snap(math.max(ROW_HEIGHT, row.label:GetStringHeight() + textPadding * 2), scale)
+            row:SetSize(width, height)
+            row:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, -y)
+            row.shade:SetShown(visibleIndex % 2 == 0)
+            for columnIndex, column in ipairs(COLUMNS) do
+                local cell = CreateCell(layout, frame, row, point, column)
+                cell:SetPoint(
+                    "CENTER",
+                    row,
+                    "LEFT",
+                    pixel:Snap(labelWidth + (columnIndex - 0.5) * columnWidth, scale),
+                    0
+                )
+            end
+            row:Show()
+            y = y + height
         end
-        row.label:SetText(L[point.labelKey])
-        row.label:SetWidth(labelWidth - textPadding * 2)
-        local height = pixel:Snap(math.max(ROW_HEIGHT, row.label:GetStringHeight() + textPadding * 2), scale)
-        row:SetSize(width, height)
-        row:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, -y)
-        row.shade:SetShown(index % 2 == 0)
-        for columnIndex, column in ipairs(COLUMNS) do
-            local cell = CreateCell(layout, frame, row, point, column)
-            cell:SetPoint("CENTER", row, "LEFT", pixel:Snap(labelWidth + (columnIndex - 0.5) * columnWidth, scale), 0)
-        end
-        row:Show()
-        y = y + height
     end
     frame:SetHeight(y)
     return frame

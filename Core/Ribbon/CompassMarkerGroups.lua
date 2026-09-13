@@ -2,8 +2,12 @@ local _, Addon = ...
 local C = Addon.Constants
 local Pixel = Addon.Services.pixel
 local Plugin = Addon.Controller
+local GATHERMATE_KIND_PREFIX = "gathermate:"
 
 local function LeftBefore(a, b)
+    if a.projectedBelowLine ~= b.projectedBelowLine then
+        return not a.projectedBelowLine
+    end
     if a.projectedLeftPx ~= b.projectedLeftPx then
         return a.projectedLeftPx < b.projectedLeftPx
     end
@@ -54,6 +58,7 @@ function Plugin:LayoutCompassMarkerGroups(selection)
         wipe(group.markers)
     end
     for index, marker in ipairs(selection) do
+        marker.projectedBelowLine = marker.kind:sub(1, #GATHERMATE_KIND_PREFIX) == GATHERMATE_KIND_PREFIX
         local distanceFraction = math.max(0, math.min(1, marker.distance / self.range))
         local distanceScale =
             math.min(C.MARKER_NEAR_SCALE, C.MARKER_FAR_SCALE + (1 - distanceFraction) * C.MARKER_DISTANCE_SCALE_SPAN)
@@ -67,9 +72,9 @@ function Plugin:LayoutCompassMarkerGroups(selection)
         members[marker] = true
     end
     table.sort(leftOrder, LeftBefore)
-    local group, right = 0, nil
+    local group, right, belowLine = 0, nil, nil
     for _, marker in ipairs(leftOrder) do
-        if not right or marker.projectedLeftPx >= right then
+        if belowLine ~= marker.projectedBelowLine or not right or marker.projectedLeftPx >= right then
             group = group + 1
             right = marker.projectedRightPx
             groups[group] = groups[group] or { markers = {} }
@@ -77,6 +82,7 @@ function Plugin:LayoutCompassMarkerGroups(selection)
             right = math.max(right, marker.projectedRightPx)
         end
         marker.overlapGroup = groups[group]
+        belowLine = marker.projectedBelowLine
     end
     local sorted, membershipChanged = RefreshNearOrder(order, members, selection)
     local profiler = Addon.Services.profiler

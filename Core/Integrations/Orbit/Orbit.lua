@@ -161,7 +161,7 @@ end
 function Bridge.RenderSettings(plugin, dialog, frame)
     Addon.RegisterSettingsWidgets(Engine.Layout)
     Engine.SchemaBuilder:SetTabRefreshCallback(dialog, plugin, frame)
-    local tabs = Addon.SettingsTabs(frame.systemIndex)
+    local tabs = Addon.SettingsTabs(frame.systemIndex, dialog.orbitTabCallback)
     local labels, schema = {}, { hideNativeSettings = true, controls = {} }
     local selectedTab
     for index, tab in ipairs(tabs) do

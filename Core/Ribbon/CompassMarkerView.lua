@@ -9,6 +9,10 @@ local TYPE_COLOR = { r = 1, g = 0.82, b = 0 }
 local FAILURE_COLOR = { r = 1, g = 0.2, b = 0.2 }
 local ICON_COLOR = { r = 1, g = 1, b = 1 }
 local FULL_TEX_COORDS = { left = 0, right = 1, top = 0, bottom = 1 }
+local TRACKED_GLOW_Y_OFFSET = -2
+local BELOW_LINE_GAP = 2
+local FLIPPED_SELECTION_ROTATION = math.pi
+local GATHERMATE_KIND_PREFIX = "gathermate:"
 local TYPE_LABELS = {
     quest = "PLU_COMPASS_TYPE_QUEST",
     worldQuest = "PLU_COMPASS_TYPE_WORLD_QUEST",
@@ -78,7 +82,9 @@ local function ShowMarkerTooltip(button)
     end
     GameTooltip:SetText(marker.name, 1, 1, 1)
     GameTooltip:AddLine(Plugin:FormatCompassDistance(marker.distance), 1, 1, 1)
-    GameTooltip:AddLine(L[TYPE_LABELS[marker.kind]], TYPE_COLOR.r, TYPE_COLOR.g, TYPE_COLOR.b)
+    local typeLabel = marker.kind:sub(1, #GATHERMATE_KIND_PREFIX) == GATHERMATE_KIND_PREFIX and L.PLU_COMPASS_GATHERMATE
+        or L[TYPE_LABELS[marker.kind]]
+    GameTooltip:AddLine(typeLabel, TYPE_COLOR.r, TYPE_COLOR.g, TYPE_COLOR.b)
     if button.tooltipGroupCount > 1 then
         GameTooltip:AddLine(L.PLU_COMPASS_OVERLAP_HINT_F:format(button.tooltipGroupCount), 1, 1, 1, true)
     end
@@ -377,6 +383,7 @@ function Plugin:RenderCompassMarker(button, marker, interactive, x, alpha, marke
         or button.layoutHitSize ~= hitSize
         or button.layoutScale ~= scale
         or button.layoutAtlas ~= marker.atlas
+        or button.layoutBelowLine ~= marker.projectedBelowLine
     then
         button:SetSize(hitSize, hitSize)
         button.icon:SetSize(markerSize, markerSize)
@@ -398,13 +405,18 @@ function Plugin:RenderCompassMarker(button, marker, interactive, x, alpha, marke
             )
         end
         local selectionSize = Pixel:Snap(markerSize * C.SELECTION_MARKER_SCALE, scale)
+        local belowLine = marker.projectedBelowLine
+        local rotation = belowLine and FLIPPED_SELECTION_ROTATION or 0
+        button.selection:SetRotation(rotation)
+        button.trackedGlow:SetRotation(rotation)
         button.selection:SetSize(selectionSize, selectionSize)
+        button.selection:ClearAllPoints()
         button.selection:SetPoint(
-            "TOPLEFT",
+            belowLine and "BOTTOMLEFT" or "TOPLEFT",
             button.icon,
-            "BOTTOMLEFT",
+            belowLine and "TOPLEFT" or "BOTTOMLEFT",
             Pixel:Snap((markerSize - selectionSize) / 2, scale),
-            Pixel:Snap(selectionSize / 2, scale)
+            Pixel:Snap(selectionSize / 2, scale) * (belowLine and -1 or 1)
         )
         button.trackedGlow:SetSize(
             Pixel:Snap(markerSize * C.TRACKED_GLOW_WIDTH_SCALE, scale),
@@ -412,8 +424,12 @@ function Plugin:RenderCompassMarker(button, marker, interactive, x, alpha, marke
         )
         button.layoutSize, button.layoutOutline, button.layoutHitSize = markerSize, outline, hitSize
         button.layoutScale, button.layoutAtlas = scale, marker.atlas
+        button.layoutBelowLine = belowLine
     end
     local centerX, centerY = self.artworkLayout.centerX, self.artworkLayout.centerY
+    if marker.projectedBelowLine then
+        markerY = self.lineY - Pixel:Multiple(C.LINE_THICKNESS + BELOW_LINE_GAP, scale) - hitSize / 2
+    end
     local left = marker.projectedLeft - centerX
     local top = Pixel:Snap(centerY + markerY + hitSize / 2, scale) - centerY
     if button.renderLeft ~= left or button.renderTop ~= top then
@@ -428,9 +444,13 @@ function Plugin:RenderCompassMarker(button, marker, interactive, x, alpha, marke
         button.trackedGlow:SetShown(waypoint)
         button.renderWaypoint = waypoint
     end
-    if waypoint and (button.glowX ~= x or button.glowY ~= self.lineY) then
-        button.trackedGlow:SetPoint("BOTTOM", self.frame, "CENTER", x, self.lineY)
-        button.glowX, button.glowY = x, self.lineY
+    local glowY = self.lineY + Pixel:Multiple(TRACKED_GLOW_Y_OFFSET, scale)
+    local glowAnchor = marker.projectedBelowLine and "TOP" or "BOTTOM"
+    if waypoint and (button.glowX ~= x or button.glowY ~= glowY or button.glowAnchor ~= glowAnchor) then
+        button.trackedGlow:ClearAllPoints()
+        button.trackedGlow:SetPoint(glowAnchor, self.frame, "CENTER", x, glowY)
+        button.glowX, button.glowY = x, glowY
+        button.glowAnchor = glowAnchor
     end
     if not waypoint and marker.distance > self.range * (1 - C.MARKER_RANGE_FADE_FRACTION) then
         local fadeWidth = math.min(self.range * C.MARKER_RANGE_FADE_FRACTION, C.MARKER_RANGE_FADE_YARDS)

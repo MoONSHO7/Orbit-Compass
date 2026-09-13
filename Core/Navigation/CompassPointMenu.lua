@@ -4,6 +4,9 @@ local Plugin = Addon.Controller
 local MENU_LIMIT = 12
 local OVERLAP_MENU_HEIGHT = 320
 local CENTER_ANGLE = 15
+local MENU_ICON_SIZE = 18
+local MENU_ICON_PADDING = 8
+local Pixel = Addon.Services.pixel
 
 local function SnapshotPoint(plugin, marker)
     local destination = marker.destination
@@ -16,8 +19,36 @@ local function SnapshotPoint(plugin, marker)
         x = destination.x,
         y = destination.y,
         distance = marker.distance,
+        atlas = marker.atlas,
+        texture = marker.texture,
+        texLeft = marker.texLeft,
+        texRight = marker.texRight,
+        texTop = marker.texTop,
+        texBottom = marker.texBottom,
+        colorR = marker.colorR,
+        colorG = marker.colorG,
+        colorB = marker.colorB,
         label = L.PLU_COMPASS_DETAIL_F:format(marker.name, plugin:FormatCompassDistance(marker.distance)),
     })
+end
+
+local function AddPointIcon(description, point)
+    description:AddInitializer(function(button)
+        local scale = button:GetEffectiveScale()
+        local size = Pixel:Snap(MENU_ICON_SIZE, scale)
+        local padding = Pixel:Multiple(MENU_ICON_PADDING, scale)
+        local icon = button:AttachTexture()
+        icon:SetSize(size, size)
+        icon:SetPoint("RIGHT")
+        if point.texture then
+            icon:SetTexture(point.texture)
+            icon:SetTexCoord(point.texLeft or 0, point.texRight or 1, point.texTop or 0, point.texBottom or 1)
+            icon:SetVertexColor(point.colorR or 1, point.colorG or 1, point.colorB or 1)
+        else
+            icon:SetAtlas(point.atlas)
+        end
+        return button.fontString:GetUnboundedStringWidth() + size + padding, math.max(button:GetHeight(), size)
+    end)
 end
 
 function Plugin:FindCompassPoint(centered, query)
@@ -89,7 +120,7 @@ function Plugin:ShowCompassNearby()
         root:CreateTitle(L.PLU_COMPASS_NEARBY)
         for index = 1, math.min(MENU_LIMIT, #markers) do
             local point = SnapshotPoint(self, markers[index])
-            root:CreateButton(point.label, function()
+            local description = root:CreateButton(point.label, function()
                 local success, reason = self:SetWaypoint(
                     point.mapID,
                     point.x,
@@ -103,6 +134,7 @@ function Plugin:ShowCompassNearby()
                     print(reason)
                 end
             end)
+            AddPointIcon(description, point)
         end
         if #markers == 0 then
             root:CreateTitle(L.CMD_COMPASS_NO_MATCH)
@@ -123,7 +155,7 @@ function Plugin:ShowCompassOverlapMenu(markers)
         root:CreateTitle(L.PLU_COMPASS_CHOOSE_POINT)
         root:SetScrollMode(Addon.Services.pixel:Snap(OVERLAP_MENU_HEIGHT, UIParent:GetEffectiveScale()))
         for _, point in ipairs(points) do
-            root:CreateButton(point.label, function()
+            local description = root:CreateButton(point.label, function()
                 if
                     not self:IsActive()
                     or self:IsProfileSuppressed()
@@ -145,6 +177,7 @@ function Plugin:ShowCompassOverlapMenu(markers)
                     print(reason)
                 end
             end)
+            AddPointIcon(description, point)
         end
     end)
 end

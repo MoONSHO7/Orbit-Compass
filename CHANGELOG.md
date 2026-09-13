@@ -2,13 +2,27 @@
 
 ## Unreleased
 
+- Keep tracked waypoints visible across Points toggles, preserve their artwork and row, and prevent filtered-out points from triggering auto-advance removal.
+
+- Hide GatherMate2 and HandyNotes Points rows unless the corresponding addon is loaded.
+
+- Group Arrow navigation controls in a Behaviour tab with tooltips for Auto Advance, same-type routing, Corpse Recovery and Follow Selected Map Targets. Auto Advance is now an arrival-or-removal checkbox.
+
+- Place GatherMate2 markers below the compass line, with flipped selection artwork and overlap selection separate from the upper row.
+
+- Integrate all enabled GatherMate2 categories through one Points option, following its category and node filters. Show localized names and provider icons at 60% size, with arrival-based auto-advance. The option starts enabled; recorded locations do not indicate live spawns.
+
+- Add optional auto-advance in Arrow settings: choose the nearest enabled point after source removal or arrival, optionally keep the same point type, and skip visited points within the current selection sequence.
+
+- Show each point's icon on the right of overlap and nearby selection menu entries.
+
 - Remove TomTom selection integration and its Follow TomTom setting. Retain /way, /orbitway and /oway; stop claiming /tway and /tomtomway.
 
 - Reduce repeated marker geometry and distance sorting, skip unusable quest and navigation queries, and retain unchanged taxi data across subzone changes. Add profiler phases and discovery job counters while preserving movement and navigation update timing.
 - Organize Core into focused modules with XML load bundles and local READMEs, following Orbit’s directory conventions while preserving Lua behavior and settings.
 - Declare marker and arrow click-through behavior in XML templates to avoid protected `SetPassThroughButtons` calls when buttons are created during combat.
 - Add a Toggle column and a Spotlight-styled hotkey selector to Points; press the assigned key to switch between Cities/World preferences and the alternate selections. Rename Open World to World. Explain each view on column-heading hover, with 2px below the header and extra space above it. Switching views reuses completed HandyNotes provider data without polling.
-- Double the selected POI's gold glow width and height.
+- Double the selected POI's gold glow width and height and move it down 2 physical pixels.
 - Hold Alt to reveal only the nearest visible, untracked POI's name and distance in a callout connected to its icon, using existing marker caches.
 - Selecting a point from any of Zarillion's 12 HandyNotes expansion packs runs its native click action and shows its coloured guide dots on the compass. Each dot uses its own pack's artwork, is trackable and retains the parent's instructions; guide snapshots use existing provider refreshes without additional polling. Overlap and nearby choices preserve provider and node identity.
 - Render arrow note instructions in smaller white PT Sans Narrow text with padding beneath the name, independently of destination-name style customizations. Use HandyNotes' coloured circle textures within steps to avoid missing font glyphs.

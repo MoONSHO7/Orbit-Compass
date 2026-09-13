@@ -21,7 +21,7 @@ completed, changed, unchanged, failed and cancelled jobs, including targeted que
 - Cancelled jobs cannot publish stale results. Changed preferences invalidate only affected sources, and visibility switches retain completed HandyNotes provider data.
 - City ancestry includes child maps; unknown ancestry hides normal points until retry. Unconfigured city/world cells inherit legacy preferences, while Toggle defaults off. Edits copy all three values through the controller.
 - The hotkey uses the cached alternate set independently of area; a second press restores the current area. Disable, profile switch and Points reset clear that temporary mode.
-- Explicit POI selections keep their navigation target when the Waypoints category is hidden. Destination validation clears stale selection identity before that filter; corpse guidance remains independent.
+- Explicit POI selections and supertracked user waypoints bypass the Waypoints filter. Selected POIs retain artwork and row identity while their source is filtered out. Visibility changes suspend auto-advance removal detection until the source point is observed again; arrival behavior remains independent. Destination validation clears stale selection identity before filtering.
 
 ## Secrets
 Native records and coordinates cross secret-first validity gates before arithmetic, indexing or comparisons. Other modules consume only these validated observations.

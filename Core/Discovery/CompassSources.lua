@@ -70,7 +70,7 @@ local function CollectWaypoint(plugin, mapID, x, y, title, description, sourceKe
     if not mapID then
         return
     end
-    if not plugin.showWaypoint and not sourceKey then
+    if not plugin.showWaypoint and not sourceKey and Readable(C_SuperTrack.IsSuperTrackingUserWaypoint()) ~= true then
         return
     end
     local position = plugin:ProjectCompassDestination(mapID, x, y)
@@ -81,16 +81,22 @@ local function CollectWaypoint(plugin, mapID, x, y, title, description, sourceKe
     if sourceKey and match then
         title, description = match.name, match.description
         plugin.waypointLabel.title, plugin.waypointLabel.description = title, description
+        local artwork = { atlas = match.atlas, kind = match.kind }
+        for _, field in ipairs(C.MARKER_ART_FIELDS) do
+            artwork[field] = match[field]
+        end
+        plugin.waypointLabel.artwork = artwork
     end
+    local artwork = match or (sourceKey and plugin.waypointLabel.artwork)
     local marker = AddMarker(
         plugin,
         plugin.markers,
         "waypoint",
         position,
         title,
-        match and match.atlas or C.FALLBACK_ATLAS,
+        artwork and artwork.atlas or C.FALLBACK_ATLAS,
         C.WAYPOINT_PRIORITY,
-        match and match.kind or "waypoint",
+        artwork and artwork.kind or "waypoint",
         { mapID = mapID, x = x, y = y }
     )
     if marker then
@@ -99,8 +105,10 @@ local function CollectWaypoint(plugin, mapID, x, y, title, description, sourceKe
         if match then
             marker.handynotesNode = match.handynotesNode
             marker.handynotesPoint = match.handynotesPoint
+        end
+        if artwork then
             for _, field in ipairs(C.MARKER_ART_FIELDS) do
-                marker[field] = match[field]
+                marker[field] = artwork[field]
             end
         end
     end

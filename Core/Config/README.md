@@ -11,8 +11,11 @@ Keep settings presentation separate from navigation, discovery and controller li
 
 The standalone application and Orbit bridge both consume these schemas and widget registrations. Arrow schemas use the component preferences and distance formatting owned by `../Navigation/`.
 
+Arrow appearance and Behaviour use separate tabs. Behaviour owns four explained checkboxes: auto-advance, same-type routing, corpse recovery and native map tracking. Auto-advance presents the existing mode setting as on/off; enabled modes use arrival-or-removal semantics. Same-type routing is visible only while auto-advance is enabled; toggling refreshes the active tab without changing the saved same-type preference.
+
 ## Gotchas
 - Both settings windows must use the same widget renderer and controller accessors. Standalone changes trigger application through its store callback; hosted changes explicitly request application.
+- Points only renders GatherMate2 and HandyNotes rows when the corresponding addon is loaded. Hidden rows retain saved preferences and occupy no table space.
 - Keybindings belong to the current WoW binding set, not the Compass profile. Capture stops on hide or combat entry, and failed assignment preserves the previous keys.
 - Controls, rows and header hover regions are reused with their table. Hover uses the private layout tooltip; release must retire any visible tooltip and cell callbacks.
 - The hotkey's temporary visibility mode is owned by Discovery. It must not add keyboard polling or settings reads to the render loop.

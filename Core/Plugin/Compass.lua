@@ -272,6 +272,7 @@ function Plugin:UpdateCompass(elapsed)
     if start then
         profiler:End(self, "Compass.Bearings", start, startKB)
     end
+    self:UpdateCompassAutoAdvance()
     local facing = self:GetCompassFacing()
     local geometryReady = self:LayoutCompassArtwork()
     if
@@ -319,6 +320,9 @@ function Plugin:ApplySettings()
     self.showLabel = self:GetSetting(C.SYSTEM_INDEX, "ShowLabel")
     CacheSourceSetting(self, "corpse", "showCorpse", "ShowCorpse")
     self.followTracked = self:GetSetting(C.SYSTEM_INDEX, "FollowTracked")
+    self.autoAdvanceMode = self:GetSetting(C.SYSTEM_INDEX, "AutoAdvanceMode") ~= "off" and "arrival" or "off"
+    self.autoAdvanceSameType = self:GetSetting(C.SYSTEM_INDEX, "AutoAdvanceSameType")
+    self:ResetCompassAutoAdvance()
     self.frame:SetSize(self:GetSetting(C.SYSTEM_INDEX, "Width"), C.RIBBON_HEIGHT)
     Services.RestorePosition(self.frame, C.SYSTEM_INDEX)
     self:StyleCompassView()
