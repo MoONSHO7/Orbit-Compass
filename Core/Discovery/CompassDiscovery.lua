@@ -2,29 +2,105 @@ local _, Addon = ...
 local Plugin = Addon.Controller
 local C = Addon.Constants
 local Number = Addon.SourceUtils.Number
+local SOURCE_RETRY_INTERVAL = 30
 local SOURCES = {
-    { key = "gathermate", collect = "CollectCompassGatherMate", label = "Compass.Discovery.GatherMate", interval = 30 },
+    {
+        key = "gathermate",
+        fields = { "showGatherMate" },
+        collect = "CollectCompassGatherMate",
+        label = "Compass.Discovery.GatherMate",
+        interval = 30,
+    },
     {
         key = "quests",
+        fields = { "showQuestObjectives", "showWorldQuests", "compassQuestSelection" },
         collect = "CollectCompassQuests",
         label = "Compass.Discovery.Quests",
         interval = 30,
         refreshPath = "RefreshCompassQuestPath",
         pathLabel = "Compass.Discovery.QuestPath",
     },
-    { key = "vignettes", collect = "CollectCompassVignettes", label = "Compass.Discovery.Vignettes", interval = 2 },
-    { key = "map", collect = "CollectCompassMapPoints", label = "Compass.Discovery.Map", interval = math.huge },
-    { key = "taxi", collect = "CollectCompassFlightMasters", label = "Compass.Discovery.Taxi", interval = 60 },
-    { key = "directions", collect = "CollectCompassDirections", label = "Compass.Discovery.Directions", interval = 30 },
-    { key = "links", collect = "CollectCompassMapLinks", label = "Compass.Discovery.Links", interval = 60 },
-    { key = "tamers", collect = "CollectCompassPetTamers", label = "Compass.Discovery.Tamers", interval = 60 },
-    { key = "digsites", collect = "CollectCompassDigSites", label = "Compass.Discovery.DigSites", interval = 30 },
-    { key = "content", collect = "CollectCompassTrackedContent", label = "Compass.Discovery.Content", interval = 30 },
-    { key = "offers", collect = "CollectCompassQuestOffers", label = "Compass.Discovery.Offers", interval = 30 },
-    { key = "locations", collect = "CollectCompassLocations", label = "Compass.Discovery.Locations", interval = 60 },
-    { key = "corpse", collect = "CollectCompassCorpse", label = "Compass.Discovery.Corpse", interval = 2 },
+    { key = "route", collect = "CollectCompassRoute", label = "Compass.Discovery.Route", interval = 30 },
+    {
+        key = "vignettes",
+        fields = { "showVignettes" },
+        collect = "CollectCompassVignettes",
+        label = "Compass.Discovery.Vignettes",
+        interval = 2,
+    },
+    {
+        key = "map",
+        fields = { "showPOIs", "showEvents", "showRaces", "showQuestHubs" },
+        collect = "CollectCompassMapPoints",
+        label = "Compass.Discovery.Map",
+        interval = math.huge,
+    },
+    {
+        key = "taxi",
+        fields = { "showFlightMasters" },
+        collect = "CollectCompassFlightMasters",
+        label = "Compass.Discovery.Taxi",
+        interval = 60,
+    },
+    {
+        key = "directions",
+        fields = { "showDirections" },
+        collect = "CollectCompassDirections",
+        label = "Compass.Discovery.Directions",
+        interval = 30,
+    },
+    {
+        key = "links",
+        fields = { "showMapLinks" },
+        collect = "CollectCompassMapLinks",
+        label = "Compass.Discovery.Links",
+        interval = 60,
+    },
+    {
+        key = "tamers",
+        fields = { "showPetTamers" },
+        collect = "CollectCompassPetTamers",
+        label = "Compass.Discovery.Tamers",
+        interval = 60,
+    },
+    {
+        key = "digsites",
+        fields = { "showDigSites" },
+        collect = "CollectCompassDigSites",
+        label = "Compass.Discovery.DigSites",
+        interval = 30,
+    },
+    {
+        key = "content",
+        fields = { "showTrackedContent" },
+        collect = "CollectCompassTrackedContent",
+        label = "Compass.Discovery.Content",
+        interval = 30,
+    },
+    {
+        key = "offers",
+        fields = { "showQuestOffers" },
+        collect = "CollectCompassQuestOffers",
+        label = "Compass.Discovery.Offers",
+        interval = 30,
+    },
+    {
+        key = "locations",
+        fields = { "showSavedLocations" },
+        collect = "CollectCompassLocations",
+        label = "Compass.Discovery.Locations",
+        interval = 60,
+    },
+    {
+        key = "corpse",
+        fields = { "showCorpse" },
+        collect = "CollectCompassCorpse",
+        label = "Compass.Discovery.Corpse",
+        interval = 2,
+    },
     {
         key = "handynotes",
+        fields = { "showHandyNotes" },
         collect = "CollectCompassHandyNotes",
         label = "Compass.Discovery.HandyNotes",
         interval = math.huge,
@@ -38,8 +114,8 @@ local EVENT_SOURCES = {
     QUEST_WATCH_LIST_CHANGED = "quests",
     QUEST_POI_UPDATE = { "quests", "offers" },
     QUEST_DATA_LOAD_RESULT = { "quests", "offers" },
-    SUPER_TRACKING_CHANGED = { "quests", "content" },
-    SUPER_TRACKING_PATH_UPDATED = "content",
+    SUPER_TRACKING_CHANGED = { "quests", "content", "route" },
+    SUPER_TRACKING_PATH_UPDATED = { "content", "route" },
     WORLD_QUEST_COMPLETED_BY_SPELL = "quests",
     TAXI_NODE_STATUS_CHANGED = "taxi",
     DYNAMIC_GOSSIP_POI_UPDATED = "directions",
@@ -118,6 +194,18 @@ local function SourceChanged(plugin, previous, markers)
     return false
 end
 
+local function RetainPendingSnapshot(job)
+    local seen = {}
+    for _, marker in ipairs(job.markers) do
+        seen[marker.key] = true
+    end
+    for _, marker in ipairs(job.source.markers) do
+        if not seen[marker.key] then
+            job.markers[#job.markers + 1] = marker
+        end
+    end
+end
+
 function Plugin:CompassDiscoveryCheckpoint()
     self.discoverySteps = self.discoverySteps + 1
     if self.discoverySteps >= C.DISCOVERY_STEPS or debugprofilestop() >= self.discoveryDeadline then
@@ -166,7 +254,8 @@ function Plugin:InvalidateCompassSource(event)
         profiler:Count(self, "Discovery/Invalidate/" .. event)
     end
     if event == "USER_WAYPOINT_UPDATED" then
-        self.waypointDirty = true
+        self.compassSources.route.dirty = true
+        self.discoveryPending, self.waypointDirty = true, true
     elseif event == "PLAYER_ENTERING_WORLD" or event == "UNIT_PHASE" then
         self.discoveryDirty = true
     elseif event:find("^ZONE_CHANGED") then
@@ -174,7 +263,10 @@ function Plugin:InvalidateCompassSource(event)
         if mapID and mapID == self.mapID and self.mapWidth then
             self:RefreshCompassPointArea(mapID)
             local taxi, job = self.compassSources.taxi, self.discoveryJob
-            local retainTaxi = not taxi.dirty and not taxi.pathDirty and not (job and job.source == taxi)
+            local retainTaxi = taxi.status == "ready"
+                and not taxi.dirty
+                and not taxi.pathDirty
+                and not (job and job.source == taxi)
             if retainTaxi then
                 local mapArtID = Number(C_Map.GetMapArtID(mapID))
                 retainTaxi = mapArtID ~= nil and mapArtID == taxi.mapArtID
@@ -211,16 +303,76 @@ function Plugin:InvalidateCompassSource(event)
     end
 end
 
+local function ReconcileSource(plugin, definition)
+    local source = plugin.compassSources[definition.key]
+    local enabled = definition.fields == nil
+    for _, field in ipairs(definition.fields or {}) do
+        enabled = enabled or not not plugin[field]
+    end
+    local status, reason
+    if not Addon.ClientFeatures.sources[definition.key] then
+        status, reason = "unsupported", "client-contract"
+    elseif not enabled then
+        status, reason = "disabled", "preference"
+    elseif
+        (definition.key == "handynotes" and not C_AddOns.IsAddOnLoaded("HandyNotes"))
+        or (definition.key == "gathermate" and not C_AddOns.IsAddOnLoaded("GatherMate2"))
+    then
+        status, reason = "pending", "provider"
+    end
+    if status then
+        if #source.markers > 0 then
+            wipe(source.markers)
+            plugin.waypointDirty = true
+        end
+        source.status, source.reason, source.enabled = status, reason, false
+        source.dirty, source.pathDirty = false, false
+        source.nextRefresh = reason == "provider" and plugin.discoveryClock + SOURCE_RETRY_INTERVAL or math.huge
+        return false
+    end
+    if not source.enabled then
+        source.status, source.reason = "pending", "observation"
+        source.dirty, source.nextAllowed, source.nextRefresh = true, 0, 0
+    end
+    source.enabled = true
+    return true
+end
+
+function Plugin:MarkCompassSourcePending()
+    self.discoveryJob.pending = true
+end
+
+function Plugin:RegisterCompassDiscoveryEvents()
+    local excluded = {
+        WORLD_QUEST_COMPLETED_BY_SPELL = not Addon.ClientFeatures.worldQuests,
+    }
+    for event, keys in pairs(EVENT_SOURCES) do
+        if event:sub(1, 6) ~= "ORBIT_" and not excluded[event] then
+            local supported = false
+            for _, key in ipairs(type(keys) == "table" and keys or { keys }) do
+                supported = supported or Addon.ClientFeatures.sources[key]
+            end
+            if supported and C_EventUtils.IsEventValid(event) then
+                self.events:RegisterEvent(event)
+            end
+        end
+    end
+end
+
 local function NextSource(plugin)
     local nextRefresh = math.huge
     for _, definition in ipairs(SOURCES) do
         local source = plugin.compassSources[definition.key]
-        local due = (source.dirty or source.pathDirty) and math.min(source.nextAllowed, source.nextRefresh)
-            or source.nextRefresh
-        if plugin.discoveryClock >= due then
-            return source, definition
+        if ReconcileSource(plugin, definition) then
+            local due = (source.dirty or source.pathDirty) and math.min(source.nextAllowed, source.nextRefresh)
+                or source.nextRefresh
+            if plugin.discoveryClock >= due then
+                return source, definition
+            end
+            nextRefresh = math.min(nextRefresh, due)
+        elseif source.reason == "provider" then
+            nextRefresh = math.min(nextRefresh, source.nextRefresh)
         end
-        nextRefresh = math.min(nextRefresh, due)
     end
     plugin.discoveryNext, plugin.discoveryPending = nextRefresh, false
 end
@@ -271,6 +423,12 @@ function Plugin:DiscoverCompassMarkers()
                 thread = coroutine.create(function()
                     local refreshInterval = self[collect](self, markers)
                     job.nextRefresh = refreshInterval and self.discoveryClock + refreshInterval
+                    for _, marker in ipairs(markers) do
+                        marker.source = definition.key
+                    end
+                    if job.pending then
+                        RetainPendingSnapshot(job)
+                    end
                     return SourceChanged(self, source.markers, markers)
                 end),
             }
@@ -297,11 +455,12 @@ function Plugin:DiscoverCompassMarkers()
         end
         if not ok then
             self.discoveryJob = nil
+            job.source.status, job.source.reason = "failed", "collector"
             if profiler and profiler.active then
                 profiler:Count(self, "Discovery/Failed/" .. job.countKey)
             end
             if not job.pathOnly then
-                job.source.nextRefresh = self.discoveryClock + job.definition.interval
+                job.source.nextRefresh = self.discoveryClock + SOURCE_RETRY_INTERVAL
             end
             error(result, 0)
         end
@@ -312,9 +471,13 @@ function Plugin:DiscoverCompassMarkers()
             profiler:Count(self, "Discovery/Completed/" .. job.countKey)
             profiler:Count(self, "Discovery/" .. (result and "Changed/" or "Unchanged/") .. job.countKey)
         end
+        job.source.status, job.source.reason = job.pending and "pending" or "ready", job.pending and "data" or nil
         if result then
             job.source.markers = job.markers
             changed = true
+        end
+        if job.pending then
+            job.nextRefresh = self.discoveryClock + SOURCE_RETRY_INTERVAL
         end
         job.source.nextAllowed = self.discoveryClock + C.DISCOVERY_MIN_INTERVAL
         job.source.mapArtID = job.mapArtID
@@ -323,7 +486,8 @@ function Plugin:DiscoverCompassMarkers()
         end
         self.discoveryJob = nil
     until self.discoverySteps >= C.DISCOVERY_STEPS or debugprofilestop() >= self.discoveryDeadline
-    if changed then
+    if changed or self.waypointDirty then
+        self.waypointDirty = false
         self:RebuildCompassMarkers()
     end
 end

@@ -1,5 +1,7 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
     <Script file="CompassConstants.lua"/>
+    <Script file="CompassArtwork.lua"/>
     <Script file="CompassMath.lua"/>
+    <Script file="CompassText.lua"/>
     <Include file="CompassTemplates.xml"/>
 </Ui>

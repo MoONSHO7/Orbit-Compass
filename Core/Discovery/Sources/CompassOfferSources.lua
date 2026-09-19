@@ -1,18 +1,25 @@
 local _, Addon = ...
 local C = Addon.Constants
 local Plugin = Addon.Controller
+local F = Addon.ClientFeatures
 local Utils = Addon.SourceUtils
 local Readable, Number, AddMarker = Utils.Readable, Utils.Number, Utils.AddMarker
-local OFFER_ATLASES = {
-    [Enum.QuestClassification.Normal] = "QuestNormal",
-    [Enum.QuestClassification.Questline] = "QuestNormal",
-    [Enum.QuestClassification.Recurring] = "UI-QuestPoiRecurring-QuestBang",
-    [Enum.QuestClassification.Meta] = "quest-wrapper-available",
-    [Enum.QuestClassification.Calling] = "Quest-DailyCampaign-Available",
-    [Enum.QuestClassification.Campaign] = "Quest-Campaign-Available",
-    [Enum.QuestClassification.Legendary] = "UI-QuestPoiLegendary-QuestBang",
-    [Enum.QuestClassification.Important] = "importantavailablequesticon",
-}
+local OFFER_ATLASES = {}
+for name, atlas in pairs({
+    Normal = "QuestNormal",
+    Questline = "QuestNormal",
+    Recurring = "UI-QuestPoiRecurring-QuestBang",
+    Meta = "quest-wrapper-available",
+    Calling = "Quest-DailyCampaign-Available",
+    Campaign = "Quest-Campaign-Available",
+    Legendary = "UI-QuestPoiLegendary-QuestBang",
+    Important = "importantavailablequesticon",
+}) do
+    local classification = Enum.QuestClassification[name]
+    if F.questOfferClasses[name] and classification ~= nil then
+        OFFER_ATLASES[classification] = atlas
+    end
+end
 
 local function StartsOnMap(plugin, startMapID, cache)
     if cache[startMapID] ~= nil then
@@ -66,7 +73,7 @@ local function AddOffer(plugin, markers, info, seen, mapCache, showHidden, showC
 end
 
 function Plugin:CollectCompassQuestOffers(markers)
-    if not self.showQuestOffers then
+    if not F.offers or not self.showQuestOffers then
         return
     end
     if self.compassOfferMapID ~= self.mapID or self.compassOfferRequestRequired then
@@ -77,13 +84,13 @@ function Plugin:CollectCompassQuestOffers(markers)
     local showHidden = Readable(C_Minimap.IsTrackingHiddenQuests()) == true
     local showCompleted = Readable(C_Minimap.IsTrackingAccountCompletedQuests()) == true
     local seen, mapCache = {}, {}
-    local offers = Readable(C_QuestLine.GetAvailableQuestLines(self.mapID))
+    local offers = Utils.ReadList(self, C_QuestLine.GetAvailableQuestLines(self.mapID))
     self:CompassDiscoveryCheckpoint()
     for _, info in ipairs(offers or {}) do
         AddOffer(self, markers, info, seen, mapCache, showHidden, showCompleted)
         self:CompassDiscoveryCheckpoint()
     end
-    local forced = Readable(C_QuestLine.GetForceVisibleQuests(self.mapID))
+    local forced = Utils.ReadList(self, C_QuestLine.GetForceVisibleQuests(self.mapID))
     self:CompassDiscoveryCheckpoint()
     for _, id in ipairs(forced or {}) do
         id = Number(id)
@@ -100,7 +107,10 @@ function Plugin:CollectCompassQuestOffers(markers)
         end
         self:CompassDiscoveryCheckpoint()
     end
-    local tasks = Readable(C_TaskQuest.GetQuestsOnMap(self.mapID))
+    if not F.tasks then
+        return
+    end
+    local tasks = Utils.ReadList(self, C_TaskQuest.GetQuestsOnMap(self.mapID))
     self:CompassDiscoveryCheckpoint()
     for _, info in ipairs(tasks or {}) do
         info = Readable(info)

@@ -28,7 +28,41 @@ function Utils.IsMapPosition(position)
     return x ~= nil and y ~= nil and x >= 0 and x <= 1 and y >= 0 and y <= 1
 end
 
+function Utils.ReadList(plugin, value)
+    value = Utils.Readable(value)
+    if type(value) == "table" then
+        return value
+    end
+    plugin:MarkCompassSourcePending()
+    return {}
+end
+
+function Utils.AllowsQuest(questID)
+    local features = Addon.ClientFeatures
+    if not features.quests then
+        return false
+    end
+    local world = Utils.Readable(C_QuestLog.IsWorldQuest(questID))
+    if world ~= false then
+        return world == true and features.worldQuests
+    end
+    local classification = Utils.Number(C_QuestInfoSystem.GetQuestClassification(questID))
+    if not classification then
+        return false
+    end
+    if
+        classification == Enum.QuestClassification.BonusObjective
+        or classification == Enum.QuestClassification.Threat
+    then
+        return features.tasks
+    end
+    return true
+end
+
 function Utils.AddMarker(plugin, markers, key, position, name, atlas, priority, kind, destination)
+    if not Addon.ClientFeatures.AllowsKind(kind) then
+        return
+    end
     local x, y = Utils.ReadPosition(position)
     name, atlas = Utils.Readable(name), Utils.Readable(atlas)
     if not x or not y or type(name) ~= "string" or name == "" then
@@ -37,6 +71,7 @@ function Utils.AddMarker(plugin, markers, key, position, name, atlas, priority, 
     if type(atlas) ~= "string" or atlas == "" then
         atlas = C.FALLBACK_ATLAS
     end
+    atlas = Addon.Artwork.Resolve(atlas)
     local marker = {
         key = key,
         x = x,

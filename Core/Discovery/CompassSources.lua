@@ -87,7 +87,7 @@ local function CollectWaypoint(plugin, mapID, x, y, title, description, sourceKe
         end
         plugin.waypointLabel.artwork = artwork
     end
-    local artwork = match or (sourceKey and plugin.waypointLabel.artwork)
+    local artwork = match or (plugin.waypointLabel and plugin.waypointLabel.artwork)
     local marker = AddMarker(
         plugin,
         plugin.markers,
@@ -111,6 +111,75 @@ local function CollectWaypoint(plugin, mapID, x, y, title, description, sourceKe
                 marker[field] = artwork[field]
             end
         end
+    end
+end
+
+local function HasMarker(markers, key)
+    for _, marker in ipairs(markers) do
+        if marker.key == key then
+            return true
+        end
+    end
+    return false
+end
+
+local function CollectVignetteDestination(plugin)
+    if not Addon.ClientFeatures.vignettes then
+        return
+    end
+    local guid = plugin.followTracked and Readable(C_SuperTrack.GetSuperTrackedVignette())
+    if type(guid) ~= "string" or HasMarker(plugin.markers, "vignette:" .. guid) then
+        return
+    end
+    local info = Readable(C_VignetteInfo.GetVignetteInfo(guid))
+    if type(info) == "table" then
+        AddMarker(
+            plugin,
+            plugin.markers,
+            "vignette:" .. guid,
+            C_VignetteInfo.GetVignettePosition(guid, plugin.mapID),
+            info.name,
+            info.atlasName,
+            C.WAYPOINT_PRIORITY,
+            "poi"
+        )
+    end
+end
+
+local function CollectPinDestination(plugin)
+    local pinType, id = plugin:GetCompassTrackedPin()
+    if not pinType then
+        local tracking = C_SuperTrack.GetHighestPrioritySuperTrackingType()
+        if not Addon.Services.IsSecret(tracking) and Number(tracking) == Enum.SuperTrackingType.Vignette then
+            CollectVignetteDestination(plugin)
+        end
+        return
+    elseif not plugin:FollowsCompassPin(pinType, id) then
+        return
+    end
+    local prefixes = C.PIN_KEY_PREFIXES[pinType]
+    for _, prefix in ipairs(prefixes) do
+        if HasMarker(plugin.markers, prefix .. id) then
+            return
+        end
+    end
+    local destination = plugin:ResolveCompassPinDestination(pinType, id)
+    if not destination then
+        return
+    end
+    local position = plugin:ProjectCompassDestination(destination.mapID, destination.x, destination.y)
+    if position then
+        AddMarker(
+            plugin,
+            plugin.markers,
+            prefixes[1] .. id,
+            position,
+            destination.name,
+            destination.atlas,
+            C.WAYPOINT_PRIORITY,
+            destination.kind,
+            { mapID = destination.mapID, x = destination.x, y = destination.y }
+        )
     end
 end
 
@@ -139,11 +208,13 @@ function Plugin:RebuildCompassMarkers()
         return
     end
     local mapID, x, y, title, description, sourceKey = ReadWaypoint(self)
+    self:AdoptCompassUserWaypoint(mapID, x, y)
     for _, source in pairs(self.compassSources) do
         for _, marker in ipairs(source.markers) do
             self.markers[#self.markers + 1] = marker
         end
     end
     CollectWaypoint(self, mapID, x, y, title, description, sourceKey)
+    CollectPinDestination(self)
     self:SelectCompassNavigation()
 end

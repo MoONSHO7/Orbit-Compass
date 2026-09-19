@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Restore the original gold selection glow atlas on Retail and Forever after an unnecessary gradient replacement.
+
+- Prepare standalone Forever Compass with shared client policy, gated nested activities, validated Search ancestry, independent dungeon entrances, client-qualified saved destinations and native/bundled artwork fallbacks. Preserve hidden Retail choices through Points reset. Pending observations cannot trigger auto-advance removal; stale Search selections are refused. Library delivery and in-game verification remain pending.
+
+- Search releases background demand when an empty field loses focus or Orbit takes over. Clearing text discards old results, and hidden updates avoid repeated cleanup. Typo matching reuses repeated word comparisons within each query; profiler spans cover inline search and catalog work with the ribbon hidden.
+
+- Compass places now reach Orbit's search through the shared LibOrbitSearch library. The ribbon's own search field hides only while Orbit's search includes Locations, so turning that category off in Orbit's Search Bar settings brings the field back.
+
+- With a compatible Orbit, Compass places appear in Orbit's search (in the chat input when Orbit Chat is active) and the ribbon hides its own magnifier and field. Choosing one tracks it through the same route as the inline search. Standalone Compass keeps its inline field. The place index now keeps building while the ribbon is hidden or you are inside an instance whenever a search is open.
+
+- Add a landmark search beside the compass: click the magnifier at its bottom-left and type to list everything the world map lets you click. That covers dungeons, raids, delves, zones, cities, continents, flight masters, portals, teleports, caves, events, skyriding races, quest hubs, pet tamers, dig sites, world quests, world bosses, bonus objectives, graveyards and your quests, plus nearby rares, treasures, quest offers and notes, and your saved locations. Category words ("raids", "pet trainers", "sky riding", Blizzard's own map legend names) and place names ("Khaz Algar") narrow the list; choosing a continent filters to it. Matching is fuzzy: partial words ("dung" lists dungeons), any word order, small typos ("rokery") and letters in order ("nerpal"), with the closest matches first. Results use PT Sans Narrow with icon, name and place, turn gold on hover or arrow keys, and scroll with the mouse wheel.
+
+- Follow the game's own route to map pins, world-map points, search choices, tracked content and vignettes: the arrow points at the next portal or zone exit with its travel instruction, and a destination on another continent shows its icon at that step. Tracked destinations show on the compass at any range even when their category is hidden. Newly placed map pins are tracked automatically so they receive routes. Dismissing a routed destination hides the whole trip; route steps cannot be chosen as destinations.
+
 - Keep tracked waypoints visible across Points toggles, preserve their artwork and row, and prevent filtered-out points from triggering auto-advance removal.
 
 - Hide GatherMate2 and HandyNotes Points rows unless the corresponding addon is loaded.

@@ -1,4 +1,4 @@
-## Interface: 120100
+## Interface: 120100, 120105, 16001
 ## Title: Orbit: Compass
 ## Notes: Navigation ribbon, native map points and destination guidance.
 ## Author: MoONSHO7
@@ -14,6 +14,7 @@
 Libs\LibOrbitUI-1.0\LibOrbitUI-1.0.xml
 Libs\LibStub\LibStub.lua
 Libs\LibOrbitSearch-1.0\LibOrbitSearch-1.0.xml
+Core\Foundation\CompassClientFeatures.lua
 Core\CompassCompatibility.lua
 Localization\Localization.xml
 Core\Core.xml

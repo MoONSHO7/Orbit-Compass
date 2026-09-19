@@ -1,4 +1,19 @@
 local _, Addon = ...
+local pinPrefixes = {}
+local pinTypes = Enum.SuperTrackingMapPinType
+for name, prefixes in pairs({
+    AreaPOI = { "poi:", "mapLink:", "petTamer:" },
+    QuestOffer = { "offer:" },
+    TaxiNode = { "taxi:" },
+    DigSite = { "digSite:" },
+    HousingPlot = { "housingPlot:" },
+}) do
+    local allowed = (name ~= "DigSite" or Addon.ClientFeatures.digSites)
+        and (name ~= "HousingPlot" or Addon.ClientFeatures.housingPins)
+    if allowed and pinTypes[name] ~= nil then
+        pinPrefixes[pinTypes[name]] = prefixes
+    end
+end
 
 Addon.Constants = table.freeze({
     SYSTEM_ID = "Orbit_Compass",
@@ -109,4 +124,43 @@ Addon.Constants = table.freeze({
     WORLD_QUEST_PRIORITY = 5,
     POI_PRIORITY = 6,
     FALLBACK_ATLAS = "Waypoint-MapPin-Untracked",
+    DIRECTIONS_ATLAS = "poi-traveldirections-arrow",
+    POINT_TYPE_LABELS = {
+        quest = "PLU_COMPASS_TYPE_QUEST",
+        worldQuest = "PLU_COMPASS_TYPE_WORLD_QUEST",
+        treasure = "PLU_COMPASS_TYPE_TREASURE",
+        rare = "PLU_COMPASS_TYPE_RARE",
+        rareElite = "PLU_COMPASS_TYPE_RARE_ELITE",
+        worldBoss = "PLU_COMPASS_TYPE_WORLD_BOSS",
+        flightMaster = "PLU_COMPASS_TYPE_FLIGHT_MASTER",
+        event = "PLU_COMPASS_TYPE_EVENT",
+        race = "PLU_COMPASS_TYPE_RACE",
+        questHub = "PLU_COMPASS_TYPE_QUEST_HUB",
+        delve = "PLU_COMPASS_TYPE_DELVE",
+        poi = "PLU_COMPASS_TYPE_POI",
+        dungeon = "PLU_COMPASS_TYPE_DUNGEON",
+        instance = "PLU_COMPASS_TYPE_INSTANCE",
+        raid = "PLU_COMPASS_TYPE_RAID",
+        zone = "PLU_COMPASS_TYPE_ZONE",
+        city = "PLU_COMPASS_TYPE_CITY",
+        area = "PLU_COMPASS_TYPE_AREA",
+        continent = "PLU_COMPASS_TYPE_CONTINENT",
+        teleport = "PLU_COMPASS_TYPE_TELEPORT",
+        cave = "PLU_COMPASS_TYPE_CAVE",
+        bonusObjective = "PLU_COMPASS_TYPE_BONUS_OBJECTIVE",
+        invasion = "PLU_COMPASS_TYPE_INVASION",
+        graveyard = "PLU_COMPASS_TYPE_GRAVEYARD",
+        waypoint = "PLU_COMPASS_WAYPOINT",
+        directions = "PLU_COMPASS_DIRECTIONS",
+        route = "PLU_COMPASS_DIRECTIONS",
+        mapLink = "PLU_COMPASS_MAP_LINKS",
+        petTamer = "PLU_COMPASS_PET_TAMERS",
+        digSite = "PLU_COMPASS_DIG_SITES",
+        content = "PLU_COMPASS_TRACKED_CONTENT",
+        questOffer = "PLU_COMPASS_QUEST_OFFERS",
+        corpse = "PLU_COMPASS_CORPSE",
+        saved = "PLU_COMPASS_SAVED_LOCATIONS",
+        handynotes = "PLU_COMPASS_HANDYNOTES",
+    },
+    PIN_KEY_PREFIXES = table.freeze(pinPrefixes),
 })

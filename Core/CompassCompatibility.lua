@@ -2,12 +2,13 @@ local _, Addon = ...
 local Orbit = _G.Orbit
 local LEGACY_PLUGIN_VERSION = 1
 
-if Orbit == nil then
+if Orbit == nil or not Addon.ClientFeatures.supported then
     return
 end
 
 if
-    type(Orbit) ~= "table"
+    Addon.ClientFeatures.family ~= "retail"
+    or type(Orbit) ~= "table"
     or not Orbit.Engine
     or type(Orbit.ExternalUIHost) ~= "table"
     or Orbit.ExternalUIHost.legacyPluginVersion ~= LEGACY_PLUGIN_VERSION

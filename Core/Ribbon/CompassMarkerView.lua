@@ -13,30 +13,7 @@ local TRACKED_GLOW_Y_OFFSET = -2
 local BELOW_LINE_GAP = 2
 local FLIPPED_SELECTION_ROTATION = math.pi
 local GATHERMATE_KIND_PREFIX = "gathermate:"
-local TYPE_LABELS = {
-    quest = "PLU_COMPASS_TYPE_QUEST",
-    worldQuest = "PLU_COMPASS_TYPE_WORLD_QUEST",
-    treasure = "PLU_COMPASS_TYPE_TREASURE",
-    rare = "PLU_COMPASS_TYPE_RARE",
-    rareElite = "PLU_COMPASS_TYPE_RARE_ELITE",
-    worldBoss = "PLU_COMPASS_TYPE_WORLD_BOSS",
-    flightMaster = "PLU_COMPASS_TYPE_FLIGHT_MASTER",
-    event = "PLU_COMPASS_TYPE_EVENT",
-    race = "PLU_COMPASS_TYPE_RACE",
-    questHub = "PLU_COMPASS_TYPE_QUEST_HUB",
-    delve = "PLU_COMPASS_TYPE_DELVE",
-    poi = "PLU_COMPASS_TYPE_POI",
-    waypoint = "PLU_COMPASS_WAYPOINT",
-    directions = "PLU_COMPASS_DIRECTIONS",
-    mapLink = "PLU_COMPASS_MAP_LINKS",
-    petTamer = "PLU_COMPASS_PET_TAMERS",
-    digSite = "PLU_COMPASS_DIG_SITES",
-    content = "PLU_COMPASS_TRACKED_CONTENT",
-    questOffer = "PLU_COMPASS_QUEST_OFFERS",
-    corpse = "PLU_COMPASS_CORPSE",
-    saved = "PLU_COMPASS_SAVED_LOCATIONS",
-    handynotes = "PLU_COMPASS_HANDYNOTES",
-}
+local TYPE_LABELS = C.POINT_TYPE_LABELS
 local QUEST_BACKGROUND_ATLAS = "UI-QuestPoi-QuestNumber"
 local QUEST_SYMBOL_ATLASES = {
     ["Quest-In-Progress-Icon-yellow"] = true,
@@ -114,6 +91,9 @@ local function ClickMarker(button)
         Plugin:ShowCompassOverlapMenu(markers)
         return
     end
+    if marker.kind == "route" then
+        return
+    end
     local destination = marker.destination
     local success, reason = Plugin:SetWaypoint(
         destination.mapID,
@@ -150,7 +130,7 @@ function Plugin:CreateCompassMarkerPool()
         button.selectionFrame:SetAllPoints(button)
         button.selectionFrame:EnableMouse(false)
         button.selection = button.selectionFrame:CreateTexture(nil, "OVERLAY", nil, C.SELECTION_MARKER_SUBLEVEL)
-        button.selection:SetAtlas(C.SELECTION_MARKER_ATLAS)
+        Addon.Artwork.Apply(button.selection, C.SELECTION_MARKER_ATLAS)
         button.selection:SetRotation(0)
         button.selection:Hide()
         for _, texture in ipairs({ button.icon, button.shadow, button.symbol, button.selection }) do
@@ -256,12 +236,14 @@ end
 
 local function BindMarkerArt(button, marker, questSymbol)
     if marker.texture then
-        button.icon:SetTexture(marker.texture)
-        button.shadow:SetTexture(marker.texture)
-        local left, right = marker.texLeft or FULL_TEX_COORDS.left, marker.texRight or FULL_TEX_COORDS.right
-        local top, bottom = marker.texTop or FULL_TEX_COORDS.top, marker.texBottom or FULL_TEX_COORDS.bottom
-        button.icon:SetTexCoord(left, right, top, bottom)
-        button.shadow:SetTexCoord(left, right, top, bottom)
+        local valid = Addon.Artwork.ApplyTexture(button.icon, marker.texture)
+        Addon.Artwork.ApplyTexture(button.shadow, marker.texture)
+        if valid then
+            local left, right = marker.texLeft or FULL_TEX_COORDS.left, marker.texRight or FULL_TEX_COORDS.right
+            local top, bottom = marker.texTop or FULL_TEX_COORDS.top, marker.texBottom or FULL_TEX_COORDS.bottom
+            button.icon:SetTexCoord(left, right, top, bottom)
+            button.shadow:SetTexCoord(left, right, top, bottom)
+        end
         button.icon:SetVertexColor(
             marker.colorR or ICON_COLOR.r,
             marker.colorG or ICON_COLOR.g,
@@ -281,11 +263,11 @@ local function BindMarkerArt(button, marker, questSymbol)
             FULL_TEX_COORDS.bottom
         )
         local baseAtlas = questSymbol and QUEST_BACKGROUND_ATLAS or marker.atlas
-        button.icon:SetAtlas(baseAtlas, questSymbol)
-        button.shadow:SetAtlas(baseAtlas)
+        Addon.Artwork.Apply(button.icon, baseAtlas, questSymbol)
+        Addon.Artwork.Apply(button.shadow, baseAtlas)
         button.icon:SetVertexColor(ICON_COLOR.r, ICON_COLOR.g, ICON_COLOR.b)
         if questSymbol then
-            button.symbol:SetAtlas(marker.atlas, true)
+            Addon.Artwork.Apply(button.symbol, marker.atlas, true)
             local width, height = button.icon:GetSize()
             local symbolWidth, symbolHeight = button.symbol:GetSize()
             button.symbolWidthScale, button.symbolHeightScale = symbolWidth / width, symbolHeight / height
@@ -349,6 +331,8 @@ end
 function Plugin:RenderCompassMarker(button, marker, interactive, x, alpha, markerY, outline, scale)
     local questSymbol = not marker.texture
         and (marker.kind == "quest" or marker.kind == "worldQuest" or QUEST_SYMBOL_ATLASES[marker.atlas] == true)
+        and Addon.Artwork.Exists(QUEST_BACKGROUND_ATLAS)
+        and Addon.Artwork.Exists(marker.atlas)
     if MarkerArtChanged(button, marker, questSymbol) then
         BindMarkerArt(button, marker, questSymbol)
     end

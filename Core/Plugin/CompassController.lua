@@ -17,11 +17,12 @@ else
         events = Addon.Events,
         store = Addon.Store,
         shouldApplyVisibility = function(controller)
-            local hidden = C_PetBattles.IsInBattle() or UnitHasVehicleUI("player")
+            local hidden = (C_PetBattles and C_PetBattles.IsInBattle and C_PetBattles.IsInBattle())
+                or UnitHasVehicleUI("player")
             return hidden ~= controller.hiddenByGame
         end,
     })
 end
-if not Addon.incompatibleOrbit then
+if not Addon.incompatibleOrbit and Addon.ClientFeatures.supported then
     _G.OrbitCompass = Addon.Controller
 end

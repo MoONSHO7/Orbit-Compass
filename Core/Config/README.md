@@ -15,7 +15,7 @@ Arrow appearance and Behaviour use separate tabs. Behaviour owns four explained 
 
 ## Gotchas
 - Both settings windows must use the same widget renderer and controller accessors. Standalone changes trigger application through its store callback; hosted changes explicitly request application.
-- Points only renders GatherMate2 and HandyNotes rows when the corresponding addon is loaded. Hidden rows retain saved preferences and occupy no table space.
+- Points intersects all 18 definitions with the same client policy as Discovery/Search. GatherMate2 and HandyNotes also require their addon to be loaded. Hidden rows retain saved preferences and occupy no space; Forever Points reset preserves unsupported Retail rows. Filtering never persists false merely because the client lacks a feature.
 - Keybindings belong to the current WoW binding set, not the Compass profile. Capture stops on hide or combat entry, and failed assignment preserves the previous keys.
 - Controls, rows and header hover regions are reused with their table. Hover uses the private layout tooltip; release must retire any visible tooltip and cell callbacks.
 - The hotkey's temporary visibility mode is owned by Discovery. It must not add keyboard polling or settings reads to the render loop.

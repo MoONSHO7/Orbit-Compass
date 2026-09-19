@@ -7,7 +7,7 @@ Compass runtime modules, composed into one standalone or Orbit-hosted controller
 Keep startup, settings, discovery, navigation, ribbon rendering and external integrations easy to locate and change independently.
 
 ## Implementation
-`CompassCompatibility.lua` selects the optional host before localization. `Core.xml` then loads the feature bundles below, ending with `CompassBoot.lua`, which constructs the application after all controller methods and settings widgets exist.
+`Foundation/CompassClientFeatures.lua` consumes `LibOrbitUI.Client` before compatibility/localization. Its immutable policy is shared by settings, collectors, Search and navigation; Discovery owns data readiness. `CompassCompatibility.lua` selects the optional Retail host; Forever host integration remains withheld. `Core.xml` loads the bundles below, ending with `CompassBoot.lua`, which constructs the application after all declarations exist.
 
 | Module | Owns |
 |---|---|
@@ -17,10 +17,11 @@ Keep startup, settings, discovery, navigation, ribbon rendering and external int
 | [Native sources](Discovery/Sources/README.md) | Blizzard map, quest, travel and tracked-content collectors |
 | [Navigation](Navigation/README.md) | Destinations, commands, saved locations, player positioning and the detached arrow |
 | [Ribbon](Ribbon/README.md) | Visible-point selection, overlap groups, pooled icons, headings and the Alt callout |
+| [Search](Search/README.md) | World landmark index, category/place ranking and the inline search field |
 | [Config](Config/README.md) | Appearance schemas, Points matrix and native hotkey capture |
 | [Integrations](Integrations/README.md) | Optional-addon lifecycle, HandyNotes and the Orbit host bridge |
 
-Bundle order is Foundation → Plugin → Discovery → Navigation → Integrations → Ribbon → Config → boot. Discovery supplies records to Navigation and Ribbon; Config updates the selected controller's preferences, and external adapters feed the existing source caches. Each directory's XML defines its local load order.
+Bundle order is Foundation → Plugin → Discovery → Navigation → Integrations → Ribbon → Search → Config → boot. Discovery supplies records to Navigation and Ribbon; Config updates the selected controller's preferences, and external adapters feed the existing source caches. Each directory's XML defines its local load order.
 
 ## Gotchas
 - All modules compose the same controller. LibOrbitUI supplies common UI/runtime infrastructure; an available Orbit host supplies its profile, theme, fade, layering and Canvas services.

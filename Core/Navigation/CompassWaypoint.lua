@@ -2,6 +2,7 @@ local _, Addon = ...
 local L = Addon.L
 local Plugin = Addon.Controller
 local IsSecret = Addon.Services.IsSecret
+local Readable = Addon.SourceUtils.Readable
 local COORDINATE_SCALE = 100
 local COORDINATE_EPSILON = 0.00001
 local MAX_INPUT_LENGTH = 1024
@@ -25,6 +26,9 @@ local function Text(value)
 end
 
 function Plugin:SetWaypoint(mapID, x, y, title, description, sourceKey, handynotesPoint)
+    if not Addon.ClientFeatures.supported or not self:IsActive() or self:IsProfileSuppressed() then
+        return false, L.CMD_COMPASS_DISABLED
+    end
     mapID, x, y = Number(mapID), Number(x), Number(y)
     if not mapID or mapID <= 0 or mapID % 1 ~= 0 or not x or not y or x < 0 or x > 1 or y < 0 or y > 1 then
         return false, L.CMD_COMPASS_INVALID
@@ -59,6 +63,81 @@ function Plugin:SetWaypoint(mapID, x, y, title, description, sourceKey, handynot
         self:ActivateCompassHandyNotesPoint(handynotesPoint)
     end
     return true
+end
+
+local function TrackQuest(plugin, questID)
+    if not Addon.ClientFeatures.quests then
+        return false, L.CMD_COMPASS_UNAVAILABLE
+    end
+    if Readable(C_QuestLog.IsWorldQuest(questID)) == true then
+        if not Addon.ClientFeatures.worldQuests then
+            return false
+        end
+        C_QuestLog.AddWorldQuestWatch(questID, Enum.QuestWatchType.Manual)
+    elseif Readable(C_QuestLog.IsOnQuest(questID)) == true then
+        C_QuestLog.AddQuestWatch(questID)
+    end
+    C_SuperTrack.SetSuperTrackedQuestID(questID)
+    local tracked = C_SuperTrack.GetSuperTrackedQuestID()
+    if IsSecret(tracked, "Compass.Waypoint") or tracked ~= questID then
+        return false
+    end
+    plugin.compassQuestSelection = questID
+    plugin.dismissedNavigationKey = nil
+    plugin.waypointDirty = true
+    return true
+end
+
+function Plugin:TrackCompassLandmark(landmark)
+    if
+        not self:IsActive()
+        or self:IsProfileSuppressed()
+        or not Addon.ClientFeatures.AllowsKind(landmark.kind)
+        or (landmark.questID and not Addon.SourceUtils.AllowsQuest(landmark.questID))
+    then
+        return false, L.CMD_COMPASS_UNAVAILABLE
+    end
+    if landmark.questID and TrackQuest(self, landmark.questID) then
+        return true
+    elseif not landmark.mapID then
+        return false, L.CMD_COMPASS_UNAVAILABLE
+    end
+    if landmark.pinType and Addon.Constants.PIN_KEY_PREFIXES[landmark.pinType] then
+        C_SuperTrack.SetSuperTrackedMapPin(landmark.pinType, landmark.id)
+        local pinType, id = C_SuperTrack.GetSuperTrackedMapPin()
+        if
+            not IsSecret(pinType, "Compass.Waypoint")
+            and not IsSecret(id, "Compass.Waypoint")
+            and pinType == landmark.pinType
+            and id == landmark.id
+        then
+            self:SelectCompassPin(landmark)
+            self.dismissedNavigationKey = nil
+            self.waypointDirty = true
+            return true
+        end
+    end
+    local success, reason = self:SetWaypoint(landmark.mapID, landmark.x, landmark.y, landmark.name)
+    if success then
+        self.waypointLabel.artwork = { atlas = landmark.atlas, kind = landmark.kind }
+    end
+    return success, reason
+end
+
+function Plugin:AdoptCompassUserWaypoint(mapID, x, y)
+    local previousMapID, previousX, previousY = self.userWaypointMapID, self.userWaypointX, self.userWaypointY
+    local observed = self.userWaypointObserved
+    self.userWaypointMapID, self.userWaypointX, self.userWaypointY = mapID or false, x, y
+    self.userWaypointObserved = true
+    if
+        observed
+        and mapID
+        and (mapID ~= previousMapID or x ~= previousX or y ~= previousY)
+        and Readable(C_SuperTrack.IsSuperTrackingUserWaypoint()) ~= true
+    then
+        -- World-map placement deliberately leaves new pins untracked, and only tracked pins receive native routes.
+        C_SuperTrack.SetSuperTrackedUserWaypoint(true)
+    end
 end
 
 function Plugin:ClearWaypoint()

@@ -1,6 +1,7 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
     <Script file="CompassWaypoint.lua"/>
     <Script file="CompassCommands.lua"/>
+    <Script file="CompassTrackedPin.lua"/>
     <Script file="CompassTargets.lua"/>
     <Script file="CompassAutoAdvance.lua"/>
     <Script file="CompassLocations.lua"/>

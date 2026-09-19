@@ -1,19 +1,15 @@
 local _, Addon = ...
 local L = Addon.L
 local C = Addon.Constants
+local F = Addon.ClientFeatures
 local Plugin = Addon.Controller
 local Utils = Addon.SourceUtils
 local Readable, Number = Utils.Readable, Utils.Number
-local NAVIGATION_RANK = { corpse = 1, selected = 2, directions = 3 }
-local MAP_PIN_PREFIXES = {
-    [Enum.SuperTrackingMapPinType.AreaPOI] = { "poi:", "mapLink:", "petTamer:" },
-    [Enum.SuperTrackingMapPinType.QuestOffer] = { "offer:" },
-    [Enum.SuperTrackingMapPinType.TaxiNode] = { "taxi:" },
-    [Enum.SuperTrackingMapPinType.DigSite] = { "digSite:" },
-}
+local NAVIGATION_RANK = { corpse = 1, route = 2, selected = 3, directions = 4 }
+local ROUTE_DISMISSAL = "route"
 
 function Plugin:CollectCompassCorpse(markers)
-    if self.showCorpse and Readable(UnitIsGhost("player")) == true then
+    if F.corpse and self.showCorpse and Readable(UnitIsGhost("player")) == true then
         local position = Readable(C_DeathInfo.GetCorpseMapPosition(self.mapID))
         if Utils.IsMapPosition(position) then
             Utils.AddMarker(
@@ -36,17 +32,17 @@ local function NativeSelection()
         return {}
     end
     tracking = Number(tracking)
-    if tracking == Enum.SuperTrackingType.Quest then
+    if F.quests and tracking == Enum.SuperTrackingType.Quest then
         local id = Number(C_SuperTrack.GetSuperTrackedQuestID())
         return id and { "quest:" .. id } or {}
-    elseif tracking == Enum.SuperTrackingType.Content then
+    elseif F.content and tracking == Enum.SuperTrackingType.Content then
         local contentType, id = C_SuperTrack.GetSuperTrackedContent()
         contentType, id = Number(contentType), Number(id)
         return contentType and id and { "content:" .. contentType .. ":" .. id .. ":" } or {}, true
     elseif tracking == Enum.SuperTrackingType.MapPin then
         local pinType, id = C_SuperTrack.GetSuperTrackedMapPin()
         pinType, id = Number(pinType), Number(id)
-        local prefixes = pinType and MAP_PIN_PREFIXES[pinType]
+        local prefixes = pinType and C.PIN_KEY_PREFIXES[pinType]
         if prefixes and id then
             local keys = {}
             for _, prefix in ipairs(prefixes) do
@@ -55,7 +51,7 @@ local function NativeSelection()
             return keys
         end
         return {}
-    elseif tracking == Enum.SuperTrackingType.Vignette then
+    elseif F.vignettes and tracking == Enum.SuperTrackingType.Vignette then
         local guid = Readable(C_SuperTrack.GetSuperTrackedVignette())
         if type(guid) == "string" then
             return { "vignette:" .. guid }
@@ -68,7 +64,7 @@ end
 
 function Plugin:SelectCompassNavigation()
     local keys, prefix
-    if self.followTracked then
+    if self:FollowsCompassPin(self:GetCompassTrackedPin()) then
         keys, prefix = NativeSelection()
     end
     local selectionID = keys and (keys[1] or "unavailable")
@@ -77,12 +73,14 @@ function Plugin:SelectCompassNavigation()
         self.dismissedNavigationKey = nil
     end
     local x, y, positionRead
-    local target, bestRank, bestDistance
+    local target, bestRank, bestDistance, selected, selectedDistance
     for _, marker in ipairs(self.markers) do
         marker.navigation = false
         local rank
         if marker.kind == "corpse" then
             rank = NAVIGATION_RANK.corpse
+        elseif marker.kind == "route" then
+            rank = NAVIGATION_RANK.route
         elseif marker.key == "waypoint" and not keys then
             rank = NAVIGATION_RANK.selected
         elseif keys then
@@ -96,13 +94,18 @@ function Plugin:SelectCompassNavigation()
         if not rank and not keys and self.followTracked and marker.kind == "directions" then
             rank = NAVIGATION_RANK.directions
         end
-        if rank and marker.key ~= self.dismissedNavigationKey then
+        local dismissed = marker.key == self.dismissedNavigationKey
+            or (self.dismissedNavigationKey == ROUTE_DISMISSAL and rank ~= NAVIGATION_RANK.corpse)
+        if rank and not dismissed then
             if not positionRead then
                 x, y = Utils.ReadPosition(C_Map.GetPlayerMapPosition(self.mapID, "player"))
                 positionRead = true
             end
             local distance = x and y and ((marker.x - x) * self.mapWidth) ^ 2 + ((marker.y - y) * self.mapHeight) ^ 2
                 or 0
+            if rank == NAVIGATION_RANK.selected and (not selected or distance < selectedDistance) then
+                selected, selectedDistance = marker, distance
+            end
             if
                 not target
                 or rank < bestRank
@@ -113,6 +116,13 @@ function Plugin:SelectCompassNavigation()
             then
                 target, bestRank, bestDistance = marker, rank, distance
             end
+        end
+    end
+    if target and target.kind == "route" and selected then
+        local east, north = (selected.x - target.x) * self.mapWidth, (selected.y - target.y) * self.mapHeight
+        -- Native routing may place its step on the destination; keep the destination's identity for auto-advance.
+        if east * east + north * north <= C.ARRIVAL_DISTANCE * C.ARRIVAL_DISTANCE then
+            target = selected
         end
     end
     self.navigationKey = target and target.key
@@ -127,8 +137,11 @@ end
 
 function Plugin:DismissCompassNavigation()
     local target = self.navigationTarget
-    if target and target.key == "waypoint" then
+    if target and (target.key == "waypoint" or target.routeTracking == Enum.SuperTrackingType.UserWaypoint) then
         self:ClearWaypoint()
+    elseif target and target.kind == "route" then
+        self.dismissedNavigationKey = ROUTE_DISMISSAL
+        self.waypointDirty = true
     elseif target then
         self.dismissedNavigationKey = target.key
         self.waypointDirty = true

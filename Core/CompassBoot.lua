@@ -4,14 +4,14 @@ local C = Addon.Constants
 local L = Addon.L
 local Plugin = Addon.Controller
 
-if Addon.incompatibleOrbit then
+if Addon.incompatibleOrbit or not Addon.ClientFeatures.supported then
     Addon.Services.context:Destroy()
     local warning = CreateFrame("Frame")
     warning:RegisterEvent("ADDON_LOADED")
     warning:SetScript("OnEvent", function(self, _, name)
         if name == addonName then
             self:UnregisterAllEvents()
-            print(L.MSG_COMPASS_INCOMPATIBLE_ORBIT)
+            print(Addon.incompatibleOrbit and L.MSG_COMPASS_INCOMPATIBLE_ORBIT or L.MSG_COMPASS_UNSUPPORTED_CLIENT)
         end
     end)
     return

@@ -1,15 +1,41 @@
 local _, Addon = ...
 local C = Addon.Constants
 local Plugin = Addon.Controller
+local F = Addon.ClientFeatures
 local Utils = Addon.SourceUtils
 local Readable, Number, AddMarker = Utils.Readable, Utils.Number, Utils.AddMarker
 local POI_RETRY_INTERVAL = 30
 local POI_GROUPS = {
-    { setting = "showEvents", query = C_AreaPoiInfo.GetEventsForMap, kind = "event" },
-    { setting = "showRaces", query = C_AreaPoiInfo.GetDragonridingRacesForMap, kind = "race" },
-    { setting = "showQuestHubs", query = C_AreaPoiInfo.GetQuestHubsForMap, kind = "questHub" },
-    { setting = "showPOIs", query = C_AreaPoiInfo.GetDelvesForMap, kind = "delve" },
-    { setting = "showPOIs", query = C_AreaPoiInfo.GetAreaPOIForMap, kind = "poi" },
+    {
+        enabled = F.events,
+        setting = "showEvents",
+        query = C_AreaPoiInfo and C_AreaPoiInfo.GetEventsForMap,
+        kind = "event",
+    },
+    {
+        enabled = F.races,
+        setting = "showRaces",
+        query = C_AreaPoiInfo and C_AreaPoiInfo.GetDragonridingRacesForMap,
+        kind = "race",
+    },
+    {
+        enabled = F.questHubs,
+        setting = "showQuestHubs",
+        query = C_AreaPoiInfo and C_AreaPoiInfo.GetQuestHubsForMap,
+        kind = "questHub",
+    },
+    {
+        enabled = F.delves,
+        setting = "showPOIs",
+        query = C_AreaPoiInfo and C_AreaPoiInfo.GetDelvesForMap,
+        kind = "delve",
+    },
+    {
+        enabled = F.genericPOIs,
+        setting = "showPOIs",
+        query = C_AreaPoiInfo and C_AreaPoiInfo.GetAreaPOIForMap,
+        kind = "poi",
+    },
 }
 local VIGNETTE_KINDS = { vignettekill = "rare", vignettekillelite = "rareElite", vignettekillboss = "worldBoss" }
 
@@ -37,9 +63,13 @@ function Plugin:CollectCompassMapPoints(markers)
     end
     local seen, refreshAt = {}, math.huge
     for _, group in ipairs(POI_GROUPS) do
-        local ids = Readable(group.query(self.mapID))
+        local ids = {}
+        if group.enabled then
+            ids = Readable(group.query(self.mapID))
+        end
         if type(ids) ~= "table" then
             ids = nil
+            self:MarkCompassSourcePending()
             refreshAt = math.min(refreshAt, self.discoveryClock + POI_RETRY_INTERVAL)
         end
         self:CompassDiscoveryCheckpoint()
@@ -72,10 +102,11 @@ function Plugin:CollectCompassMapPoints(markers)
             self:CompassDiscoveryCheckpoint()
         end
     end
-    if self.showPOIs then
+    if self.showPOIs and F.dungeonEntrances then
         local entrances = Readable(C_EncounterJournal.GetDungeonEntrancesForMap(self.mapID))
         if type(entrances) ~= "table" then
             entrances = nil
+            self:MarkCompassSourcePending()
             refreshAt = math.min(refreshAt, self.discoveryClock + POI_RETRY_INTERVAL)
         end
         self:CompassDiscoveryCheckpoint()
@@ -110,9 +141,9 @@ function Plugin:CollectCompassMapPoints(markers)
 end
 
 function Plugin:CollectCompassFlightMasters(markers)
-    if self.showFlightMasters then
+    if self.showFlightMasters and F.taxi then
         local faction = Readable(UnitFactionGroup("player"))
-        local nodes = Readable(C_TaxiMap.GetTaxiNodesForMap(self.mapID))
+        local nodes = Utils.ReadList(self, C_TaxiMap.GetTaxiNodesForMap(self.mapID))
         self:CompassDiscoveryCheckpoint()
         for _, node in ipairs(nodes or {}) do
             node = Readable(node)
@@ -140,10 +171,10 @@ function Plugin:CollectCompassFlightMasters(markers)
 end
 
 function Plugin:CollectCompassVignettes(markers)
-    if not self.showVignettes then
+    if not self.showVignettes or not F.vignettes then
         return
     end
-    local ids = Readable(C_VignetteInfo.GetVignettes())
+    local ids = Utils.ReadList(self, C_VignetteInfo.GetVignettes())
     self:CompassDiscoveryCheckpoint()
     for _, id in ipairs(ids or {}) do
         id = Readable(id)

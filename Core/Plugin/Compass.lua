@@ -9,38 +9,9 @@ local EVENTS = {
     "ZONE_CHANGED",
     "ZONE_CHANGED_INDOORS",
     "ZONE_CHANGED_NEW_AREA",
-    "AREA_POIS_UPDATED",
     "USER_WAYPOINT_UPDATED",
-    "VIGNETTES_UPDATED",
-    "VIGNETTE_MINIMAP_UPDATED",
-    "QUEST_LOG_UPDATE",
-    "QUEST_WATCH_LIST_CHANGED",
-    "QUEST_POI_UPDATE",
-    "QUEST_DATA_LOAD_RESULT",
-    "SUPER_TRACKING_CHANGED",
-    "WORLD_QUEST_COMPLETED_BY_SPELL",
-    "TAXI_NODE_STATUS_CHANGED",
     "UI_SCALE_CHANGED",
     "DISPLAY_SIZE_CHANGED",
-    "DYNAMIC_GOSSIP_POI_UPDATED",
-    "SPELLS_CHANGED",
-    "RESEARCH_ARTIFACT_DIG_SITE_UPDATED",
-    "ARTIFACT_DIGSITE_COMPLETE",
-    "CONTENT_TRACKING_UPDATE",
-    "CONTENT_TRACKING_LIST_UPDATE",
-    "CONTENT_TRACKING_IS_ENABLED_UPDATE",
-    "TRACKABLE_INFO_UPDATE",
-    "TRACKING_TARGET_INFO_UPDATE",
-    "QUESTLINE_UPDATE",
-    "MINIMAP_UPDATE_TRACKING",
-    "QUEST_ACCEPTED",
-    "QUEST_TURNED_IN",
-    "PLAYER_DEAD",
-    "PLAYER_ALIVE",
-    "PLAYER_UNGHOST",
-    "CORPSE_IN_RANGE",
-    "CORPSE_OUT_OF_RANGE",
-    "SUPER_TRACKING_PATH_UPDATED",
     "MODIFIER_STATE_CHANGED",
 }
 
@@ -81,9 +52,12 @@ function Plugin:OnLoad()
     self:InitializeCompassDiscovery()
     self:CreateCompassView()
     self:CreateNavigationView()
+    self:InitializeCompassLandmarks()
+    self:CreateCompassSearch()
     frame:SetScript("OnHide", function()
         self:HideCompassPeek()
         self:HideNavigationView()
+        self:CloseCompassSearch()
     end)
     frame:SetScript("OnShow", function()
         if self.inInstance or self.hiddenByGame then
@@ -124,6 +98,7 @@ function Plugin:OnLoad()
             self.dismissedNavigationKey = nil
         end
         if event == "PLAYER_ENTERING_WORLD" then
+            self:InvalidateCompassLandmarkScope()
             self:RefreshCompassInstanceState()
         end
         if event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then
@@ -155,6 +130,7 @@ function Plugin:OnEnable()
         self.events:RegisterEvent(event)
     end
     self.events:RegisterUnitEvent("UNIT_PHASE", "player")
+    self:RegisterCompassDiscoveryEvents()
     self:RegisterStandardEvents()
     self:RegisterVisibilityEvents()
     if Bridge then
@@ -185,6 +161,7 @@ function Plugin:OnDisable()
     self.dismissedNavigationKey, self.nativeNavigationID = nil, nil
     self:DisableWaypointCommands()
     self:DisableCompassIntegrations()
+    self:StopCompassLandmarks()
     self.events:UnregisterAllEvents()
     self:ClearCompassMarkers()
     self:HideNavigationView()
@@ -205,7 +182,8 @@ end
 
 function Plugin:RefreshCompassInstanceState()
     self.inInstance = IsInInstance()
-    self.hiddenByGame = not Bridge and (C_PetBattles.IsInBattle() or UnitHasVehicleUI("player"))
+    self.hiddenByGame = not Bridge
+        and ((C_PetBattles and C_PetBattles.IsInBattle and C_PetBattles.IsInBattle()) or UnitHasVehicleUI("player"))
     if self.inInstance or self.hiddenByGame then
         self.events:SetScript("OnUpdate", nil)
         self.compassUpdating = false
@@ -264,6 +242,9 @@ function Plugin:UpdateCompass(elapsed)
             profiler:End(self, "Compass.Discovery", start, startKB)
         end
     end
+    if self:IsCompassLandmarkCatalogBuilding() then
+        self:StepCompassLandmarkCatalog()
+    end
     start, startKB = nil, nil
     if profiler and profiler.active then
         start, startKB = profiler:Begin()
@@ -319,7 +300,7 @@ function Plugin:ApplySettings()
     self:CacheNavigationComponents()
     self.showLabel = self:GetSetting(C.SYSTEM_INDEX, "ShowLabel")
     CacheSourceSetting(self, "corpse", "showCorpse", "ShowCorpse")
-    self.followTracked = self:GetSetting(C.SYSTEM_INDEX, "FollowTracked")
+    CacheSourceSetting(self, "route", "followTracked", "FollowTracked")
     self.autoAdvanceMode = self:GetSetting(C.SYSTEM_INDEX, "AutoAdvanceMode") ~= "off" and "arrival" or "off"
     self.autoAdvanceSameType = self:GetSetting(C.SYSTEM_INDEX, "AutoAdvanceSameType")
     self:ResetCompassAutoAdvance()

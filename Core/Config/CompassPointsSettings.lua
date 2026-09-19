@@ -99,7 +99,9 @@ local function RenderTable(layout, container)
     local visibleIndex = 0
     for _, point in ipairs(POINTS) do
         local requiredAddon = REQUIRED_ADDONS[point.key]
-        if not requiredAddon or C_AddOns.IsAddOnLoaded(requiredAddon) then
+        if
+            Addon.ClientFeatures.AllowsPoint(point.key) and (not requiredAddon or C_AddOns.IsAddOnLoaded(requiredAddon))
+        then
             visibleIndex = visibleIndex + 1
             local row = frame.rows:Acquire()
             if not row.label then

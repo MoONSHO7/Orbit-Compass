@@ -73,10 +73,14 @@ end
 
 function Plugin:ResetCompassPointVisibility()
     self.compassPointsToggled = false
+    local visibility = CopyTable(self:GetSetting(C.SYSTEM_INDEX, "PointVisibility"))
     for _, point in ipairs(POINTS) do
-        self:SetSetting(C.SYSTEM_INDEX, point.key, Addon.Definition.defaults[point.key])
+        if Addon.ClientFeatures.AllowsPoint(point.key) then
+            self:SetSetting(C.SYSTEM_INDEX, point.key, Addon.Definition.defaults[point.key])
+            visibility[point.key] = nil
+        end
     end
-    self:SetSetting(C.SYSTEM_INDEX, "PointVisibility", {})
+    self:SetSetting(C.SYSTEM_INDEX, "PointVisibility", visibility)
 end
 
 local function PlayerArea(mapID)
@@ -110,7 +114,9 @@ end
 function Plugin:ApplyCompassPointVisibility()
     local area = self.compassPointsToggled and "toggle" or self.compassPointArea
     for _, point in ipairs(POINTS) do
-        local shown = area ~= nil and self.compassPointVisibility[area][point.key]
+        local shown = Addon.ClientFeatures.AllowsPoint(point.key)
+            and area ~= nil
+            and self.compassPointVisibility[area][point.key]
         if self[point.field] ~= shown then
             if self.compassAutoAdvance then
                 self.compassAutoAdvance.awaitingSource = true

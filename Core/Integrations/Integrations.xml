@@ -2,5 +2,6 @@
     <Include file="HandyNotes\HandyNotes.xml"/>
     <Script file="CompassIntegrations.lua"/>
     <Script file="CompassGatherMate.lua"/>
+    <Script file="CompassSearchProvider.lua"/>
     <Script file="Orbit\OrbitCanvas.lua"/>
 </Ui>

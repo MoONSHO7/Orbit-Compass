@@ -17,7 +17,7 @@ local function SourcesReady(plugin)
         return false
     end
     for _, source in pairs(plugin.compassSources) do
-        if source.dirty or source.pathDirty then
+        if source.enabled and (source.dirty or source.pathDirty) then
             return false
         end
     end
@@ -27,9 +27,13 @@ end
 local function FindNext(plugin, route)
     local best, bestDistance
     for _, marker in ipairs(plugin.markers) do
+        local source = marker.source and plugin.compassSources[marker.source]
         if
             marker.key ~= "waypoint"
             and marker.kind ~= "corpse"
+            and marker.kind ~= "route"
+            and source
+            and source.status == "ready"
             and not route.visited[marker.key]
             and (not plugin.autoAdvanceSameType or marker.kind == route.kind)
         then
@@ -77,12 +81,15 @@ function Plugin:UpdateCompassAutoAdvance()
         if not source then
             return
         end
-        route = { label = label, kind = source.kind, mapID = self.mapID, visited = {} }
+        route = { label = label, kind = source.kind, source = source.source, mapID = self.mapID, visited = {} }
         self.compassAutoAdvance = route
     end
-    if source then
+    local observed = route.source and self.compassSources[route.source].status == "ready"
+    if source or not observed then
         route.missingSince = nil
-        route.awaitingSource = nil
+        if source then
+            route.awaitingSource = nil
+        end
     elseif not route.awaitingSource then
         route.missingSince = route.missingSince or self.discoveryClock
     end
@@ -91,7 +98,7 @@ function Plugin:UpdateCompassAutoAdvance()
         and target
         and target.distance
         and target.distance <= C.ARRIVAL_DISTANCE
-    local removed = route.missingSince and self.discoveryClock - route.missingSince >= REMOVAL_DELAY
+    local removed = observed and route.missingSince and self.discoveryClock - route.missingSince >= REMOVAL_DELAY
     if not arrived and not removed then
         return
     end
@@ -114,6 +121,7 @@ function Plugin:UpdateCompassAutoAdvance()
     )
     if success then
         route.label, route.missingSince = self.waypointLabel, nil
+        route.source = nextPoint.source
     else
         self.compassAutoAdvanceBlockedLabel = label
         print(reason)

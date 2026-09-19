@@ -1,6 +1,7 @@
 local _, Addon = ...
 local C = Addon.Constants
 local Plugin = Addon.Controller
+local F = Addon.ClientFeatures
 local Utils = Addon.SourceUtils
 local Readable, Number, ReadPosition, AddMarker = Utils.Readable, Utils.Number, Utils.ReadPosition, Utils.AddMarker
 local QUEST_PROGRESS_ATLAS = "Quest-In-Progress-Icon-yellow"
@@ -25,18 +26,22 @@ local function AddQuest(plugin, markers, questID, position, watched, seen, taskO
         profiler:Count(plugin, "Discovery/Quest/PositionAccepted")
     end
     local isWorld = Readable(C_QuestLog.IsWorldQuest(questID))
+    if isWorld == true and not F.worldQuests then
+        return
+    end
+    local selected = questID == plugin.compassQuestSelection
     local title, atlas, priority, kind
-    if isWorld == true and plugin.showWorldQuests and Readable(C_TaskQuest.IsActive(questID)) == true then
+    if isWorld == true and (plugin.showWorldQuests or selected) and Readable(C_TaskQuest.IsActive(questID)) == true then
         title = C_TaskQuest.GetQuestInfoByQuestID(questID)
         atlas, priority = WORLD_QUEST_ATLAS, C.WORLD_QUEST_PRIORITY
         kind = "worldQuest"
-    elseif isWorld == false and plugin.showQuestObjectives then
+    elseif isWorld == false and (plugin.showQuestObjectives or selected) then
         local classification = Number(C_QuestInfoSystem.GetQuestClassification(questID))
         if
             classification == Enum.QuestClassification.BonusObjective
             or classification == Enum.QuestClassification.Threat
         then
-            if Readable(C_TaskQuest.IsActive(questID)) ~= true then
+            if not F.tasks or Readable(C_TaskQuest.IsActive(questID)) ~= true then
                 return
             end
             if
@@ -88,7 +93,9 @@ local function AddQuestWaypoint(plugin, markers, questID, watched, seen)
 end
 
 function Plugin:CollectCompassQuests(markers)
-    if not self.showQuestObjectives and not self.showWorldQuests then
+    if
+        not F.quests or (not self.showQuestObjectives and not self.showWorldQuests and not self.compassQuestSelection)
+    then
         return
     end
     local watched, seen = {}, {}
@@ -99,7 +106,7 @@ function Plugin:CollectCompassQuests(markers)
         end
         self:CompassDiscoveryCheckpoint()
     end
-    for index = 1, Number(C_QuestLog.GetNumWorldQuestWatches()) or 0 do
+    for index = 1, F.worldQuests and Number(C_QuestLog.GetNumWorldQuestWatches()) or 0 do
         local id = Number(C_QuestLog.GetQuestIDForWorldQuestWatchIndex(index))
         if id then
             watched[id] = true
@@ -115,7 +122,7 @@ function Plugin:CollectCompassQuests(markers)
         self:CompassDiscoveryCheckpoint()
     end
     if self.showQuestObjectives then
-        local quests = Readable(C_QuestLog.GetQuestsOnMap(self.mapID))
+        local quests = Utils.ReadList(self, C_QuestLog.GetQuestsOnMap(self.mapID))
         self:CompassDiscoveryCheckpoint()
         for _, info in ipairs(quests or {}) do
             info = Readable(info)
@@ -125,7 +132,10 @@ function Plugin:CollectCompassQuests(markers)
             self:CompassDiscoveryCheckpoint()
         end
     end
-    local quests = Readable(C_TaskQuest.GetQuestsOnMap(self.mapID))
+    if not F.tasks then
+        return
+    end
+    local quests = Utils.ReadList(self, C_TaskQuest.GetQuestsOnMap(self.mapID))
     self:CompassDiscoveryCheckpoint()
     for _, info in ipairs(quests or {}) do
         info = Readable(info)
@@ -137,8 +147,8 @@ function Plugin:CollectCompassQuests(markers)
 end
 
 local function CollectQuestPathFallback(plugin, markers, questID, watched, seen)
-    if plugin.showQuestObjectives then
-        local quests = Readable(C_QuestLog.GetQuestsOnMap(plugin.mapID))
+    if plugin.showQuestObjectives or questID == plugin.compassQuestSelection then
+        local quests = Utils.ReadList(plugin, C_QuestLog.GetQuestsOnMap(plugin.mapID))
         plugin:CompassDiscoveryCheckpoint()
         for _, info in ipairs(quests or {}) do
             info = Readable(info)
@@ -156,7 +166,10 @@ local function CollectQuestPathFallback(plugin, markers, questID, watched, seen)
             plugin:CompassDiscoveryCheckpoint()
         end
     end
-    local quests = Readable(C_TaskQuest.GetQuestsOnMap(plugin.mapID))
+    if not F.tasks then
+        return
+    end
+    local quests = Utils.ReadList(plugin, C_TaskQuest.GetQuestsOnMap(plugin.mapID))
     plugin:CompassDiscoveryCheckpoint()
     for _, info in ipairs(quests or {}) do
         info = Readable(info)
@@ -174,7 +187,8 @@ function Plugin:RefreshCompassQuestPath(markers)
     local tracking = Number(C_SuperTrack.GetHighestPrioritySuperTrackingType())
     local questID = tracking == Enum.SuperTrackingType.Quest and Number(C_SuperTrack.GetSuperTrackedQuestID())
     local key, replacement
-    if questID and questID > 0 and (self.showQuestObjectives or self.showWorldQuests) then
+    local selected = questID and questID == self.compassQuestSelection
+    if questID and questID > 0 and (self.showQuestObjectives or self.showWorldQuests or selected) then
         key = "quest:" .. questID
         local candidates, watched, seen = {}, { [questID] = true }, {}
         AddQuestWaypoint(self, candidates, questID, watched, seen)

@@ -6,17 +6,21 @@ local Readable, Number, AddMarker = Utils.Readable, Utils.Number, Utils.AddMarke
 local CONTENT_ATLAS = "waypoint-mappin-minimap-untracked"
 
 function Plugin:CollectCompassTrackedContent(markers)
-    if not self.showTrackedContent or Readable(C_ContentTracking.GetCollectableSourceTrackingEnabled()) ~= true then
+    if
+        not Addon.ClientFeatures.content
+        or not self.showTrackedContent
+        or Readable(C_ContentTracking.GetCollectableSourceTrackingEnabled()) ~= true
+    then
         return
     end
-    local types = Readable(C_ContentTracking.GetCollectableSourceTypes())
+    local types = Utils.ReadList(self, C_ContentTracking.GetCollectableSourceTypes())
     self:CompassDiscoveryCheckpoint()
     local seen, titles = {}, {}
     for _, trackableType in ipairs(types or {}) do
         trackableType = Number(trackableType)
         if trackableType then
             local _, records = C_ContentTracking.GetTrackablesOnMap(trackableType, self.mapID)
-            records = Readable(records)
+            records = Utils.ReadList(self, records)
             self:CompassDiscoveryCheckpoint()
             for _, info in ipairs(records or {}) do
                 info = Readable(info)

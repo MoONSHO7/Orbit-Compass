@@ -41,11 +41,12 @@ local function AddPointIcon(description, point)
         icon:SetSize(size, size)
         icon:SetPoint("RIGHT")
         if point.texture then
-            icon:SetTexture(point.texture)
-            icon:SetTexCoord(point.texLeft or 0, point.texRight or 1, point.texTop or 0, point.texBottom or 1)
+            if Addon.Artwork.ApplyTexture(icon, point.texture) then
+                icon:SetTexCoord(point.texLeft or 0, point.texRight or 1, point.texTop or 0, point.texBottom or 1)
+            end
             icon:SetVertexColor(point.colorR or 1, point.colorG or 1, point.colorB or 1)
         else
-            icon:SetAtlas(point.atlas)
+            Addon.Artwork.Apply(icon, point.atlas)
         end
         return button.fontString:GetUnboundedStringWidth() + size + padding, math.max(button:GetHeight(), size)
     end)
@@ -63,6 +64,7 @@ function Plugin:FindCompassPoint(centered, query)
             marker.bearing
             and marker.distance
             and marker.key ~= self.navigationKey
+            and marker.kind ~= "route"
             and (not query or marker.name:lower():find(query, 1, true))
             and marker.distance <= self.range
             and (not centered or (marker.renderShown and angle <= CENTER_ANGLE))
@@ -106,7 +108,12 @@ function Plugin:ShowCompassNearby()
     end
     local markers = {}
     for _, marker in ipairs(self.markers) do
-        if marker.distance and marker.distance <= self.range and marker.key ~= self.navigationKey then
+        if
+            marker.distance
+            and marker.distance <= self.range
+            and marker.key ~= self.navigationKey
+            and marker.kind ~= "route"
+        then
             markers[#markers + 1] = marker
         end
     end
@@ -147,8 +154,10 @@ function Plugin:ShowCompassOverlapMenu(markers)
         return
     end
     local points = {}
-    for index, marker in ipairs(markers) do
-        points[index] = SnapshotPoint(self, marker)
+    for _, marker in ipairs(markers) do
+        if marker.kind ~= "route" then
+            points[#points + 1] = SnapshotPoint(self, marker)
+        end
     end
     table.freeze(points)
     MenuUtil.CreateContextMenu(self.frame, function(_, root)

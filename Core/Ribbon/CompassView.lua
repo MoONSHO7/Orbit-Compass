@@ -197,6 +197,7 @@ function Plugin:StyleCompassView()
     Services.StyleText(self.detail, { font = font, textSize = fontSize, textColor = WHITE })
     self:StyleCompassPeek(font, fontSize, true)
     self:StyleNavigationView(font)
+    self:StyleCompassSearch()
     for _, texture in ipairs(self.artwork) do
         texture:SetAlpha(1)
     end
@@ -328,6 +329,7 @@ function Plugin:RenderCompass(facing, live)
         profiler:End(self, "Compass.Markers", start, startKB)
     end
     self:RefreshCompassTooltip()
+    self:RefreshCompassSearchButton(interactive)
     local navigating = self:RenderNavigation(facing)
     if self.peekAltHeld and interactive then
         local marker, slot = self:FindCompassPeekMarker()

@@ -133,8 +133,11 @@ def validate(root, release=False):
             headers[key] = value.strip()
         elif line and not line.startswith("#"):
             visit(line)
-    if headers.get("interface") != "120100":
-        raise ValueError("The addon must target Interface 120100")
+    interfaces = [value.strip() for value in headers.get("interface", "").split(",")]
+    if "120100" not in interfaces or any(not value.isdecimal() or int(value) <= 0 for value in interfaces):
+        raise ValueError("Interface must contain 120100 and only positive numeric client versions")
+    if len(interfaces) != len(set(interfaces)):
+        raise ValueError("Duplicate Interface version")
     if headers.get("x-curse-project-id") != curse_project_id:
         raise ValueError(f"{addon} must declare X-Curse-Project-ID: {curse_project_id}")
     if headers.get("savedvariables") != saved_variable:
