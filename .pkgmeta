@@ -1,11 +1,19 @@
 package-as: Orbit_Compass
 
 externals:
-  # LibOrbitUI release 1.2 provides API 1.5; pin its immutable monorepo commit.
+  Libs/LibStub:
+    url: https://github.com/wowace-clone/LibStub
+    commit: d0d26a9a58eade74964ea95114ca0ab593271b1b
+  # LibOrbitUI release 1.3 provides API 1.8; pin its verified release commit.
   Libs/LibOrbitUI-1.0:
     url: https://github.com/MoONSHO7/Orbit-Libs
-    commit: d14b9a5ba3ebb89f25f7b87685754f5ab2c2b290
+    commit: 6c5fca4c663272a8b9123bdfad087c66750e4c1a
     path: LibOrbitUI/LibOrbitUI-1.0
+  # LibOrbitSearch release 1.0 provides revision 3 and provider contract 1.
+  Libs/LibOrbitSearch-1.0:
+    url: https://github.com/MoONSHO7/Orbit-Libs
+    commit: 6c5fca4c663272a8b9123bdfad087c66750e4c1a
+    path: LibOrbitSearch/LibOrbitSearch-1.0
 
 ignore:
   - .git

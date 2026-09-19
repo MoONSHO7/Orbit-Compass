@@ -11,8 +11,8 @@ from lupa.lua51 import LuaRuntime
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACTS = {
-    "Orbit_Compass": ("OrbitCompassDB", False, "1689597", 5),
-    "Orbit_StatusWidget": ("OrbitStatusWidgetDB", True, "1688135", 4),
+    "Orbit_Compass": ("OrbitCompassDB", False, "1689597", 8),
+    "Orbit_StatusWidget": ("OrbitStatusWidgetDB", True, "1688135", 6),
 }
 UI_DIRECTORY = "Libs/LibOrbitUI-1.0/"
 PICKER_DIRECTORY = "Libs/LibOrbitColorPicker-1.0/"
@@ -52,6 +52,8 @@ def validate(root, release=False):
     saved_variable, needs_picker, curse_project_id, ui_minor = CONTRACTS[addon]
     externals = fetcher.dependencies(ROOT)
     required = {UI_DIRECTORY.rstrip("/")}
+    if addon == "Orbit_Compass" and release:
+        required.update({"Libs/LibOrbitSearch-1.0", "Libs/LibStub"})
     if needs_picker:
         required.update({PICKER_DIRECTORY.rstrip("/"), "Libs/LibStub"})
     if not required <= externals.keys():
@@ -165,6 +167,8 @@ def validate(root, release=False):
     for api in ("UI.Controller:Create", "UI.Addon:Create", "UI.SettingsStore:Create", "Config.CreateColorProvider"):
         if not re.search(r"\bfunction\s+" + re.escape(api) + r"\s*\(", library):
             raise ValueError(f"Required API is absent from the loaded LibOrbitUI manifest: {api}")
+    if not re.search(r"\bUI\.Client\s*=", library):
+        raise ValueError(f"{addon} requires the shared LibOrbitUI client identity")
     if addon == "Orbit_Compass":
         settings = loaded.get(UI_DIRECTORY + "Addon/AddonSettings.lua", "")
         if not re.search(r"\bregisterWidgets\s*=\s*options\.registerWidgets\b", settings):
@@ -186,6 +190,19 @@ def validate(root, release=False):
         order = list(loaded)
         if order.index("Libs/LibStub/LibStub.lua") > next(i for i, name in enumerate(order) if name.startswith(PICKER_DIRECTORY)):
             raise ValueError("LibStub must load before the color picker")
+    if addon == "Orbit_Compass":
+        search = "\n".join(code for name, code in loaded.items() if name.startswith("Libs/LibOrbitSearch-1.0/"))
+        asset("Libs/LibOrbitSearch-1.0/LICENSE")
+        order = list(loaded)
+        first_search = next(i for i, name in enumerate(order) if name.startswith("Libs/LibOrbitSearch-1.0/"))
+        if order.index("Libs/LibStub/LibStub.lua") > first_search:
+            raise ValueError("LibStub must load before LibOrbitSearch")
+        revision = re.search(r'local\s+MAJOR\s*,\s*MINOR\s*=\s*"LibOrbitSearch-1\.0"\s*,\s*(\d+)', search)
+        if not revision or int(revision[1]) < 2 or not re.search(r'lib\.PROVIDER_CONTRACT\s*=\s*1\b', search):
+            raise ValueError("Compass requires LibOrbitSearch revision 2 and provider contract 1")
+        for method in ("RegisterProvider", "UnregisterProvider", "IsKindIncluded", "NotifyProviderChanged"):
+            if not re.search(r"function\s+lib:" + method + r"\s*\(", search):
+                raise ValueError(f"Required LibOrbitSearch API is absent: {method}")
     print(f"PASS: {addon}; {len(loaded)} runtime files; Lua 5.1; {len(asset_paths)} assets; required library APIs")
 
 

@@ -12,6 +12,8 @@
 ## X-License: All Rights Reserved
 
 Libs\LibOrbitUI-1.0\LibOrbitUI-1.0.xml
+Libs\LibStub\LibStub.lua
+Libs\LibOrbitSearch-1.0\LibOrbitSearch-1.0.xml
 Core\CompassCompatibility.lua
 Localization\Localization.xml
 Core\Core.xml

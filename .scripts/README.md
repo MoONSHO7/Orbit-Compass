@@ -9,12 +9,12 @@ Keep development library links convenient while rejecting incomplete or incompat
 ## Implementation
 `fetch-libs.py` parses immutable GitHub externals from `.pkgmeta`, fetches exact commits and archives their declared runtime subdirectories. Omitted `path` means the repository root. Existing junctions and symlinks are preserved; `--force` refreshes only ordinary directories.
 
-`check-package.py` derives the addon TOC from `.pkgmeta` and walks its TOC/XML load order, including automatic Bindings.xml. It strips do-not-package blocks, compiles Lua with `lupa.lua51`, checks metadata (including the product's CurseForge project ID) and straightforward asset references, and verifies the required APIs exist inside the loaded library closure. Compass requires LibOrbitUI API 1.5 with the addon widget-registration hook; Status Widget requires API 1.4 and picker revision 10. API checks inspect declarations without executing addon code.
+`check-package.py` walks the TOC/XML load order, including Bindings.xml. It strips development blocks, compiles Lua 5.1, checks product metadata/assets and required APIs in the loaded libraries. Compass requires UI API 1.8 with client identity/widget registration and LibOrbitSearch provider APIs; Status requires UI API 1.6 and picker revision 10. API checks inspect declarations without executing addon code.
 
-Run `python .scripts/check-package.py` for linked development sources. Release CI runs `fetch-libs.py`, then `check-package.py --release`, and finally `check-package.py --root .release/ADDON --release` after packaging. `--release` rejects filesystem links; a different `--root` also requires the source version token to have been substituted. Python needs `lupa==2.8`.
+Run `python .scripts/check-package.py` for linked sources. Release CI fetches libraries, runs `check-package.py --release`, then checks the materialized package with `--root .release/ADDON --release`. Release mode requires Compass Search/LibStub externals and rejects filesystem links; a different root also requires substituted version metadata. Python needs `lupa==2.8`.
 
 ## Gotchas
-- The pin selects `LibOrbitUI-1.2` in public `Orbit-Libs`, providing the API 1.5 widget-registration hook required by Compass. Validation checks fetched files; release numbers and runtime API versions are independent.
+- Compass pins verified UI 1.3/API 1.8 and Search 1.0/revision 3 releases. Linked checks do not establish release delivery; validate ordinary fetched packages. The automatic latest-release resolver is not implemented.
 - The scripts remain byte-identical between both addon repositories. Keep changes synchronized.
 - Compilation and static API checks cannot validate combat permissions, native ownership, taint or rendering. Dynamically assembled asset names still need client verification.
 - Fetches use configured Git credentials without an interactive prompt. No token is written into `.pkgmeta` or the scripts.

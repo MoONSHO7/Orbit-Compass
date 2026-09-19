@@ -20,7 +20,7 @@ Optional GatherMate2 supplies recorded locations for all its enabled categories 
 - Standalone starts enabled with native font, gold arrow text, standard text placement and configurable units/name/distance. A compatible Orbit host owns enablement, profiles, themes, fade, layer order, frame anchoring and Canvas text customization.
 - An incompatible Orbit version or an already registered bundled Compass pauses this addon with an update/disable warning. It preserves the existing Compass, commands and settings; disabling Orbit allows standalone startup after reload.
 - Both surfaces stop navigation discovery inside instances. Native pins survive disable.
-- Points requires LibOrbitUI API 1.5 for consumer widget registration, provided by the pinned [monorepo release 1.2](https://github.com/MoONSHO7/Orbit-Libs/releases/tag/LibOrbitUI-1.2). Package validation checks the fetched API and widget hook. Automatic latest-published-release resolution is not implemented.
+- Compass pins verified LibOrbitUI 1.3/API 1.8 and LibOrbitSearch 1.0/revision 3 releases. Validate ordinary fetched files before consumer publication; local junctions are development-only. Exact pins remain the strategy; automatic latest-published-release resolution is not implemented.
 - Orbit-Libs is public; GitHub packaging retains its existing Git credential policy plus a CurseForge upload token. Validate fetched ordinary files; development junctions do not prove the packaged dependency contents.
 
 ## References

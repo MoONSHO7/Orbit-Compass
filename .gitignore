@@ -1,4 +1,6 @@
 /Libs/LibOrbitUI-1.0
+/Libs/LibStub
+/Libs/LibOrbitSearch-1.0
 /.release/
 /.packager/
 /.staging/
