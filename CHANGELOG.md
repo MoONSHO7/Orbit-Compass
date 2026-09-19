@@ -6,6 +6,8 @@
 
 - Prepare standalone Forever Compass with shared client policy, gated nested activities, validated Search ancestry, independent dungeon entrances, client-qualified saved destinations and native/bundled artwork fallbacks. Preserve hidden Retail choices through Points reset. Pending observations cannot trigger auto-advance removal; stale Search selections are refused. Library delivery and in-game verification remain pending.
 
+- Make nearby compass icons more prominent: 140% size within 150 yards, smoothly shrinking to 45% at 1,000 yards and beyond, independent of the visibility range.
+
 - Search releases background demand when an empty field loses focus or Orbit takes over. Clearing text discards old results, and hidden updates avoid repeated cleanup. Typo matching reuses repeated word comparisons within each query; profiler spans cover inline search and catalog work with the ribbon hidden.
 
 - Compass places now reach Orbit's search through the shared LibOrbitSearch library. The ribbon's own search field hides only while Orbit's search includes Locations, so turning that category off in Orbit's Search Bar settings brings the field back.

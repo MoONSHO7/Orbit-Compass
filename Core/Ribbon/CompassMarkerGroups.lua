@@ -59,9 +59,11 @@ function Plugin:LayoutCompassMarkerGroups(selection)
     end
     for index, marker in ipairs(selection) do
         marker.projectedBelowLine = marker.kind:sub(1, #GATHERMATE_KIND_PREFIX) == GATHERMATE_KIND_PREFIX
-        local distanceFraction = math.max(0, math.min(1, marker.distance / self.range))
-        local distanceScale =
-            math.min(C.MARKER_NEAR_SCALE, C.MARKER_FAR_SCALE + (1 - distanceFraction) * C.MARKER_DISTANCE_SCALE_SPAN)
+        local distanceFraction = math.max(
+            0,
+            math.min(1, (marker.distance - C.MARKER_NEAR_DISTANCE) / (C.MARKER_FAR_DISTANCE - C.MARKER_NEAR_DISTANCE))
+        )
+        local distanceScale = C.MARKER_FAR_SCALE + (1 - distanceFraction) * (C.MARKER_NEAR_SCALE - C.MARKER_FAR_SCALE)
         marker.projectedIconSize = Pixel:Snap(self.iconSize * marker.sizeScale * distanceScale, scale)
         marker.projectedHitSize = marker.projectedIconSize + outline
         local left = Pixel:Snap(centerX + marker.projectedX - marker.projectedHitSize / 2, scale)
