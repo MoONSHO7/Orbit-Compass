@@ -7,8 +7,7 @@ if Orbit == nil or not Addon.ClientFeatures.supported then
 end
 
 if
-    Addon.ClientFeatures.family ~= "retail"
-    or type(Orbit) ~= "table"
+    type(Orbit) ~= "table"
     or not Orbit.Engine
     or type(Orbit.ExternalUIHost) ~= "table"
     or Orbit.ExternalUIHost.legacyPluginVersion ~= LEGACY_PLUGIN_VERSION

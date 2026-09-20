@@ -7,7 +7,7 @@ Compass runtime modules, composed into one standalone or Orbit-hosted controller
 Keep startup, settings, discovery, navigation, ribbon rendering and external integrations easy to locate and change independently.
 
 ## Implementation
-`Foundation/CompassClientFeatures.lua` consumes `LibOrbitUI.Client` before compatibility/localization. Its immutable policy is shared by settings, collectors, Search and navigation; Discovery owns data readiness. `CompassCompatibility.lua` selects the optional Retail host; Forever host integration remains withheld. `Core.xml` loads the bundles below, ending with `CompassBoot.lua`, which constructs the application after all declarations exist.
+`Foundation/CompassClientFeatures.lua` consumes `LibOrbitUI.Client` before compatibility/localization. Its immutable policy is shared by settings, collectors, Search and navigation; Discovery owns data readiness. `CompassCompatibility.lua` selects a compatible optional Orbit host on Retail or Forever. `Core.xml` loads the bundles below, ending with `CompassBoot.lua`, which constructs the application after all declarations exist.
 
 | Module | Owns |
 |---|---|

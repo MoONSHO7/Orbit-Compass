@@ -9,7 +9,7 @@ Keep settings presentation separate from navigation, discovery and controller li
 ## Implementation
 `Config.xml` registers the hotkey and Points widgets before loading `CompassSettings.lua`, which supplies `Addon.SettingsTabs`. `CompassPointHotkey.lua` owns native binding capture. `CompassPointsSettings.lua` owns the pooled visibility matrix and column explanations; it reads and writes preferences through `../Discovery/CompassPointVisibility.lua`.
 
-The standalone application and Orbit bridge both consume these schemas and widget registrations. Arrow schemas use the component preferences and distance formatting owned by `../Navigation/`.
+The standalone application and Orbit bridge both consume these schemas and widget registrations. Compass and Arrow omit lifecycle toggles because WoW addon enablement owns availability. Arrow schemas use the component preferences and distance formatting owned by `../Navigation/`.
 
 Arrow appearance and Behaviour use separate tabs. Behaviour owns four explained checkboxes: auto-advance, same-type routing, corpse recovery and native map tracking. Auto-advance presents the existing mode setting as on/off; enabled modes use arrival-or-removal semantics. Same-type routing is visible only while auto-advance is enabled; toggling refreshes the active tab without changing the saved same-type preference.
 

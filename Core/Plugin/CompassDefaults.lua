@@ -4,7 +4,8 @@ local C = Addon.Constants
 
 Addon.Definition = {
     displayName = L.PLG_NAME_COMPASS,
-    defaultDisabled = true,
+    supportedClients = { retail = true, forever = true },
+    alwaysEnabled = true,
     liveToggle = true,
     canvasMode = true,
     indexDefaults = {

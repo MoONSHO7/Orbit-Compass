@@ -168,7 +168,23 @@ def check(name, code, family="forever", before=""):
     tests.append((name, code, family, before))
 
 
+def host_compatibility(family="forever", legacy_version=1, existing=False):
+    lua = LuaRuntime(unpack_returned_tuples=True)
+    lua.execute(f'''
+        Addon={{ClientFeatures={{family="{family}",supported=true}}}}
+        Orbit={{
+            Engine={{}},
+            ExternalUIHost={{legacyPluginVersion={legacy_version}}},
+            GetPlugin=function() return {"{}" if existing else "nil"} end,
+        }}
+    ''')
+    load = lua.eval('function(code) assert(loadstring(code,"CompassCompatibility.lua"))("Orbit_Compass",Addon) end')
+    load((ROOT / "Core/CompassCompatibility.lua").read_text(encoding="utf-8"))
+    return lua
+
+
 check("Forever withheld features", 'local F=Addon.ClientFeatures; assert(F.supported and not F.worldQuests and not F.races and not F.delves and not F.content and not F.petTamers and not F.digSites)')
+check("Hosted clients declared", 'assert(Addon.Definition.supportedClients.retail and Addon.Definition.supportedClients.forever)')
 check("Retail features preserved", 'local F=Addon.ClientFeatures; assert(F.supported and F.worldQuests and F.races and F.delves and F.content and F.petTamers and F.digSites)', "retail")
 check("Unknown family dormant", 'assert(not Addon.ClientFeatures.supported and not Addon.ClientFeatures.AllowsPoint("ShowWaypoint"))', "unknown")
 check("Missing optional namespace", 'assert(not Addon.ClientFeatures.petTamers and not Addon.ClientFeatures.digSites)', "retail", 'C_PetInfo=nil; C_ResearchInfo=nil')
@@ -238,5 +254,18 @@ for name, code, family, before in tests:
     except Exception as error:
         failures.append(name)
         print(f"FAIL {name}: {error}")
-print(f"{len(tests)-len(failures)}/{len(tests)} Compass client boundary scenarios passed")
+host_scenarios = (
+    ("Forever host accepted", host_compatibility(), "assert(Addon.OrbitHost==Orbit and not Addon.incompatibleOrbit)"),
+    ("Retail host accepted", host_compatibility("retail"), "assert(Addon.OrbitHost==Orbit and not Addon.incompatibleOrbit)"),
+    ("Old host rejected", host_compatibility(legacy_version=0), "assert(Addon.incompatibleOrbit and not Addon.OrbitHost)"),
+    ("Existing Compass rejected", host_compatibility(existing=True), "assert(Addon.incompatibleOrbit and not Addon.OrbitHost)"),
+)
+for name, lua, code in host_scenarios:
+    try:
+        lua.execute(code)
+    except Exception as error:
+        failures.append(name)
+        print(f"FAIL {name}: {error}")
+total = len(tests) + len(host_scenarios)
+print(f"{total-len(failures)}/{total} Compass client boundary scenarios passed")
 raise SystemExit(bool(failures))

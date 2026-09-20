@@ -2,9 +2,11 @@
 
 ## Unreleased
 
+- Let WoW addon enablement own Compass availability. Ignore stale standalone and Orbit profile disable flags, and remove the redundant Enabled controls from both Compass and Arrow settings.
+
 - Restore the original gold selection glow atlas on Retail and Forever after an unnecessary gradient replacement.
 
-- Prepare standalone Forever Compass with shared client policy, gated nested activities, validated Search ancestry, independent dungeon entrances, client-qualified saved destinations and native/bundled artwork fallbacks. Preserve hidden Retail choices through Points reset. Pending observations cannot trigger auto-advance removal; stale Search selections are refused. Library delivery and in-game verification remain pending.
+- Prepare standalone and Orbit-hosted Forever Compass with shared client policy, gated nested activities, validated Search ancestry, independent dungeon entrances, client-qualified saved destinations and native/bundled artwork fallbacks. Preserve hidden Retail choices through Points reset. Pending observations cannot trigger auto-advance removal; stale Search selections are refused. Library delivery and in-game verification remain pending.
 
 - Make nearby compass icons more prominent: 140% size within 150 yards, smoothly shrinking to 45% at 1,000 yards and beyond, independent of the visibility range.
 

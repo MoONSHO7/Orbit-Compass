@@ -12,7 +12,8 @@ Preserve Orbit profile ownership and customization while standalone Compass reta
 Search places reach Orbit through LibOrbitSearch rather than this bridge; see `../README.md`.
 
 ## Gotchas
-- An absent host uses standalone services. An unsupported host, any Forever host pending its audit, or an existing bundled Compass pauses startup, preserving the old controller, commands and bindings.
+- An absent host uses standalone services. An unsupported host or an existing bundled Compass pauses startup, preserving the old controller, commands and bindings. Compatible Retail and Forever hosts use the same bridge; Compass's client policy still gates individual Forever sources.
+- A hosted Compass is always active when the addon is installed and enabled. Orbit profile disable flags are ignored, and the shared app shell does not register a redundant Blizzard AddOns category or Enabled checkbox.
 - Preserve `Orbit_Compass`, both settings indices and the historical Orbit migration. Do not flatten Orbit profile/Canvas state into the standalone store.
 - Hosted settings share tab state between ribbon and arrow; validate the selected tab against the active surface when switching.
 - The bridge registers the shared Points renderer on the host layout. Points reset clears supported rows' area/alternate choices and legacy preferences; unsupported client rows retain their values.

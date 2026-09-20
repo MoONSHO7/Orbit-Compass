@@ -17,11 +17,11 @@ Optional GatherMate2 supplies recorded locations for all its enabled categories 
 
 ## Gotchas
 - Standalone settings and Orbit profiles have separate storage. Installing the addon does not silently copy or overwrite either store.
-- Standalone starts enabled with native font, gold arrow text, standard text placement and configurable units/name/distance. A compatible Orbit host owns enablement, profiles, themes, fade, layer order, frame anchoring and Canvas text customization.
+- Compass and its arrow stay active whenever the addon is enabled in WoW; their settings expose no separate Enabled controls and legacy false values are ignored. Standalone uses the native font, gold arrow text, standard text placement and configurable units/name/distance. When hosted, Orbit owns runtime lifecycle, profiles, themes, fade, layer order, frame anchoring and Canvas text customization.
 - An incompatible Orbit version or an already registered bundled Compass pauses this addon with an update/disable warning. It preserves the existing Compass, commands and settings; disabling Orbit allows standalone startup after reload.
 - Both surfaces stop navigation discovery inside instances. Native pins survive disable.
-- The first Forever slice runs standalone with ordinary quests, map points, entrances and navigation. World Quests/tasks, Delves, races, tamers, archaeology, tracked content and Housing pins are withheld. Retail retains its choices. Unknown clients stay dormant; an Orbit host on Forever pauses Compass until its host contract is audited.
-- Compass pins verified LibOrbitUI 1.3/API 1.8 and LibOrbitSearch 1.0/revision 3 releases. Validate ordinary fetched files before consumer publication; local junctions are development-only. Exact pins remain the strategy; automatic latest-published-release resolution is not implemented.
+- Forever runs standalone or through a compatible Orbit host with ordinary quests, map points, entrances and navigation. World Quests/tasks, Delves, races, tamers, archaeology, tracked content and Housing pins remain withheld. Retail retains its choices, and unknown clients stay dormant.
+- Compass pins verified LibOrbitUI 1.4/API 1.8 and LibOrbitSearch 1.0/revision 3 releases. Validate ordinary fetched files before consumer publication; local junctions are development-only. Exact pins remain the strategy; automatic latest-published-release resolution is not implemented.
 - Saved destinations carry client family and optional world-instance identity. Old unclassified records stay stored but cannot navigate; re-save confirmed places on their originating client. See `Core/Navigation/README.md`.
 - Orbit-Libs is public; GitHub packaging retains its existing Git credential policy plus a CurseForge upload token. Validate fetched ordinary files; development junctions do not prove the packaged dependency contents.
 
