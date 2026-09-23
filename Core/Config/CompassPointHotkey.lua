@@ -158,3 +158,4 @@ end
 if not Addon.incompatibleOrbit then
     _G.BINDING_NAME_ORBIT_COMPASS_TOGGLE_POINTS = L.PLU_COMPASS_POINT_TOGGLE_BINDING
 end
+
