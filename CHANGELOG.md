@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Bundle private Orbit UI and Orbit UI Chat faces for standalone ribbon and search text, including locale-specific Korean, Simplified Chinese and Traditional Chinese builds.
+
+- Read names and notes from Kemayo's HandyNotes packs, cache loaded names and resolved text, retry delayed data and retain pins during provider failures. Skip reparsing unchanged text while preserving dynamic callbacks, and retain completed HandyNotes snapshots during ordinary subzone movement within unchanged map artwork. Add per-pack setup/scan timings and cache/invalidation counters when a profiler is available.
+
+- Update the release packager so CurseForge correctly lists Forever 1.60.1 alongside supported Retail versions.
+
 - Let WoW addon enablement own Compass availability. Ignore stale standalone and Orbit profile disable flags, and remove the redundant Enabled controls from both Compass and Arrow settings.
 
 - Restore the original gold selection glow atlas on Retail and Forever after an unnecessary gradient replacement.

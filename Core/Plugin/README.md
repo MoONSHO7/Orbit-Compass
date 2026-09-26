@@ -9,7 +9,7 @@ Give standalone and hosted Compass one owner for frames, events, caches and sett
 ## Implementation
 `Plugin.xml` loads defaults and standalone services, then the optional `../Integrations/Orbit/Orbit.lua` bridge before constructing the controller. `CompassController.lua` selects the standalone store/controller or the real Orbit plugin. `Compass.lua` declares lifecycle methods and creates the native event/update owner during file load; `../CompassBoot.lua` starts the application only after every feature bundle has loaded.
 
-`CompassServices.lua` supplies the product's UI context and rendering/positioning hooks. The Orbit bridge replaces supported hooks before feature modules capture them. `CompassDefaults.lua` owns both surfaces' defaults; settings continue through the selected controller and store.
+`CompassServices.lua` supplies the product's UI context and rendering/positioning hooks, including standalone Orbit UI and Orbit UI Chat paths. The Orbit bridge replaces supported hooks and private font paths before feature modules capture them. `CompassDefaults.lua` owns both surfaces' defaults; settings continue through the selected controller and store.
 
 ## Gotchas
 - Never invoke lifecycle methods to force a refresh. The selected application/host owns activation and settings application.

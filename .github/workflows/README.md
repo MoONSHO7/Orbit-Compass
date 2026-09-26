@@ -7,7 +7,7 @@ Validated branch builds and versioned CurseForge/GitHub releases for Orbit Compa
 Keep incomplete runtime bundles and incompatible embedded libraries out of player releases.
 
 ## Implementation
-`release.yml` validates the triggering checkout, fetches full commit pins from `.pkgmeta`, checks Lua 5.1 and the loaded library APIs, then builds with a pinned BigWigs packager and validates its materialized output. Branch builds retain a ZIP artifact for 14 days; artifact collection allows the hidden `.release` directory and selects only its ZIP files.
+`release.yml` validates the triggering checkout, fetches full commit pins from `.pkgmeta`, checks Lua 5.1 and the loaded library APIs, then builds with a pinned BigWigs packager and validates its materialized output. The packager must be v2.6.0 or newer to classify interface `16001` as Forever instead of Retail. Branch builds retain a ZIP artifact for 14 days; artifact collection allows the hidden `.release` directory and selects only its ZIP files.
 
 Successful `main` pushes choose the next `MAJOR.MINOR` tag, starting at `1.0`; later automatic releases increment the minor number. Stable tag pushes package that exact revision. Manual runs release only when targeting `main` or a stable tag. Other branches and pull requests only build.
 

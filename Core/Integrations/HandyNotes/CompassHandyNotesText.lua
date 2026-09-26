@@ -3,6 +3,7 @@ local Readable, Number = Addon.SourceUtils.Readable, Addon.SourceUtils.Number
 local Text = {}
 local MAX_TOKEN_PASSES = 8
 local MAX_ID = 2147483647
+local CRITERIA_INDEX_LIMIT = 100
 local DOT_MARKUP = "|T%s:0::::16:16::16::16:%d:%d:%d|t"
 local DOT_FALLBACK_COLOR = "FFFF00FF"
 local COLORS = table.freeze({
@@ -66,7 +67,7 @@ local function NamedRecord(value)
     return record and ReadName(record.name)
 end
 
-local function ResolveName(kind, id)
+local function ResolveName(kind, id, criteriaID)
     if kind == "npc" and C_TooltipInfo and C_TooltipInfo.GetHyperlink then
         local data = ReadTable(C_TooltipInfo.GetHyperlink("unit:Creature-0-0-0-0-" .. id))
         local lines = data and ReadTable(data.lines)
@@ -96,7 +97,23 @@ local function ResolveName(kind, id)
         return name, name == nil
     elseif kind == "achievement" and GetAchievementInfo then
         local _, name = GetAchievementInfo(id)
-        return ReadName(name)
+        name = ReadName(name)
+        return name, name == nil
+    elseif kind == "criteria" and criteriaID then
+        local getter
+        if criteriaID < CRITERIA_INDEX_LIMIT then
+            getter = GetAchievementCriteriaInfo
+        else
+            getter = GetAchievementCriteriaInfoByID
+        end
+        if getter then
+            -- Providers can reference criteria that are absent from the current client's achievement data.
+            local ok, name = pcall(getter, id, criteriaID, true)
+            if ok then
+                name = ReadName(name)
+                return name, name == nil
+            end
+        end
     elseif kind == "map" and C_Map and C_Map.GetMapInfo then
         return NamedRecord(C_Map.GetMapInfo(id))
     elseif kind == "area" and C_Map and C_Map.GetAreaInfo then
@@ -112,6 +129,34 @@ local function Color(value, color)
     return "|c" .. COLORS[color] .. value .. "|r"
 end
 
+function Text:ResolveName(kind, id, misses, criteriaID)
+    id = Number(id)
+    if not id or id <= 0 or id > MAX_ID or id % 1 ~= 0 then
+        return
+    end
+    if kind == "criteria" then
+        criteriaID = Number(criteriaID)
+        if not criteriaID or criteriaID <= 0 or criteriaID > MAX_ID or criteriaID % 1 ~= 0 then
+            return
+        end
+    end
+    local controller = Addon.Controller
+    controller.handyNotesTextCache = controller.handyNotesTextCache or {}
+    local cache = controller.handyNotesTextCache
+    local key = kind .. ":" .. id .. (criteriaID and "." .. criteriaID or "")
+    local name, pending = cache[key], misses[key]
+    if not name and pending == nil then
+        name, pending = ResolveName(kind, id, criteriaID)
+        pending = pending == true
+        if name then
+            cache[key] = name
+        else
+            misses[key] = pending
+        end
+    end
+    return name, pending
+end
+
 local function ResolveToken(state, kind, payload, nameOnly)
     if kind == "dot" then
         local color = COLORS[payload] or DOT_FALLBACK_COLOR
@@ -123,19 +168,8 @@ local function ResolveToken(state, kind, payload, nameOnly)
     local value = digits and (ReadString(UNKNOWN) or digits) or payload
     if id and id > 0 and id <= MAX_ID then
         local source = kind == "daily" and "quest" or kind
-        local key = source .. ":" .. digits
-        local name = state.cache[key]
-        local pending = state.misses[key]
-        if not name and pending == nil then
-            name, pending = ResolveName(source, id)
-            pending = pending == true
-            state.incomplete = state.incomplete or pending
-            if name then
-                state.cache[key] = name
-            else
-                state.misses[key] = pending
-            end
-        end
+        local name, pending = Text:ResolveName(source, id, state.misses)
+        state.incomplete = state.incomplete or pending
         value = name and name .. suffix or ReadString(pending and RETRIEVING_DATA or UNKNOWN) or digits
     end
     local color = TOKEN_COLORS[kind]
@@ -160,10 +194,7 @@ local function Render(state, value, nameOnly)
 end
 
 function Text:Read(node, provider)
-    local controller = Addon.Controller
-    controller.handyNotesTextCache = controller.handyNotesTextCache or {}
-    local state =
-        { cache = controller.handyNotesTextCache, misses = {}, incomplete = false, dotTexture = provider.dotTexture }
+    local state = { misses = {}, incomplete = false, dotTexture = provider.dotTexture }
     local name = Render(state, node.label, true)
     local location = Render(state, node.location, false)
     local note = Render(state, node.note, false)

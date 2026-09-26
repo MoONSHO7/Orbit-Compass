@@ -1,6 +1,7 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
     <Script file="CompassHandyNotesZarillion.lua"/>
     <Script file="CompassHandyNotesText.lua"/>
+    <Script file="CompassHandyNotesKemayo.lua"/>
     <Script file="CompassHandyNotesGuides.lua"/>
     <Script file="CompassHandyNotesGuideSource.lua"/>
     <Script file="CompassHandyNotesClick.lua"/>

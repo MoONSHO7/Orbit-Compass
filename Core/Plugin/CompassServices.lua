@@ -14,13 +14,14 @@ Services.tooltipHide = Services.context.tooltipHide
 Services.IsSecret = issecretvalue
 Services.arrowTexture = "Interface\\AddOns\\" .. addonName .. "\\Assets\\orbit-compass-arrow.tga"
 Services.navigationDescriptionFont = "Interface\\AddOns\\" .. addonName .. "\\Assets\\PTSansNarrow.ttf"
+Services.searchFont = Addon.Fonts.Path.Chat
 
 function Services.IsEditMode()
     return Addon.App:IsEditMode()
 end
 
 function Services.GetFont()
-    return STANDARD_TEXT_FONT
+    return Addon.Fonts.Path.UI
 end
 
 function Services.StyleText(region, options)

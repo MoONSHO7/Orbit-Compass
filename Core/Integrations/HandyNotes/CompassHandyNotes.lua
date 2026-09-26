@@ -72,7 +72,11 @@ local function CoreSettingsChanged(plugin, addon)
     return true
 end
 
-local function InvalidateProviders(plugin, providerName)
+local function InvalidateProviders(plugin, providerName, reason)
+    local profiler = Addon.Services.profiler
+    if profiler and profiler.active then
+        profiler:Count(plugin, "HandyNotes/Invalidate/" .. reason .. "/" .. (providerName or "All"))
+    end
     local source = plugin.compassSources.handynotes
     local active = plugin.discoveryJob and plugin.discoveryJob.source == source
     if providerName and source.handynotesProviders then
@@ -167,12 +171,12 @@ local function ReadMapNotesText(data, npcNames, coord)
     return name, description, npcID ~= nil and npcName == nil
 end
 
-local function SnapshotProvider(addon, providerName, handler, mapID, scale, alpha)
+local function SnapshotProvider(addon, providerName, handler, mapID, scale, alpha, iterator, state, initial)
     local snapshots = {}
     local seen = {}
-    local iterator, state, initial = handler:GetNodes2(mapID, false)
-    local mapNotes, npcNames, zarillionNodes
+    local mapNotes, npcNames, zarillionNodes, kemayoNodes
     local zarillion = Addon.HandyNotesZarillion:Get(providerName)
+    local textState = { misses = {}, incomplete = false }
     if providerName == "MapNotes" then
         local context = ReadTable(state)
         if context and Number(context.uiMapId) == mapID then
@@ -184,6 +188,8 @@ local function SnapshotProvider(addon, providerName, handler, mapID, scale, alph
         npcNames = names and ReadTable(names[GetLocale()])
     elseif zarillion then
         zarillionNodes = ReadTable(state)
+    elseif Addon.HandyNotesKemayo:Accepts(providerName) then
+        kemayoNodes = ReadTable(state)
     end
     local incomplete = false
     for coord, nodeMapID, icon, nodeScale, nodeAlpha in iterator, state, initial do
@@ -212,6 +218,13 @@ local function SnapshotProvider(addon, providerName, handler, mapID, scale, alph
                         local pending
                         name, description, pending = ReadMapNotesText(mapNotes, npcNames, coord)
                         incomplete = incomplete or pending
+                    elseif kemayoNodes and nodeMapID == mapID then
+                        local point = ReadTable(kemayoNodes[coord])
+                        if point then
+                            local pending
+                            name, description, pending = Addon.HandyNotesKemayo:Read(providerName, point, textState)
+                            incomplete = incomplete or pending
+                        end
                     elseif zarillionNodes and nodeMapID == mapID then
                         node = ReadTable(zarillionNodes[coord])
                         if node then
@@ -261,7 +274,7 @@ local function SnapshotProvider(addon, providerName, handler, mapID, scale, alph
             end
         end
     end
-    return snapshots, incomplete
+    return snapshots, incomplete, textState
 end
 
 local function ReportProviderError(plugin, providerName, err)
@@ -290,7 +303,7 @@ function Plugin:ConnectCompassHandyNotes()
     self.compassHandyNotesAddon = addon
     local settingsChanged = CoreSettingsChanged(self, addon)
     if not connected or settingsChanged then
-        InvalidateProviders(self)
+        InvalidateProviders(self, nil, connected and "CoreSettings" or "Connect")
     end
     self.compassHandyNotesHooks = self.compassHandyNotesHooks or {}
     self.compassHandyNotesErrors = self.compassHandyNotesErrors or {}
@@ -320,7 +333,7 @@ function Plugin:ConnectCompassHandyNotes()
                             CoreSettingsChanged(self, addon)
                             providerName = nil
                         end
-                        InvalidateProviders(self, providerName)
+                        InvalidateProviders(self, providerName, method)
                     end
                 end, "Compass.HandyNotes.Update")
             )
@@ -379,17 +392,74 @@ function Plugin:CollectCompassHandyNotes(markers)
     local incomplete = false
     for _, provider in ipairs(providers) do
         local entry = cached[provider.name]
+        local profiler = Addon.Services.profiler
+        local profiling = profiler and profiler.active
         if not entry or entry.handler ~= provider.handler or entry.incomplete then
+            if profiling then
+                local reason = not entry and "CacheMiss"
+                    or entry.handler ~= provider.handler and "HandlerChanged"
+                    or "PendingRetry"
+                profiler:Count(self, "HandyNotes/" .. reason .. "/" .. provider.name)
+            end
             entry = nil
+            local start, startKB, phaseStart, phaseKB, profileSource
+            if profiling then
+                profileSource = "Compass.HandyNotes." .. provider.name
+                start, startKB = profiler:Begin()
+                phaseStart, phaseKB = profiler:Begin()
+            end
             -- Provider iterators share mutable state: finish and copy before discovery yields.
-            local ok, records, pending =
-                pcall(SnapshotProvider, addon, provider.name, provider.handler, self.mapID, scale, alpha)
+            local ok, iterator, state, initial = pcall(provider.handler.GetNodes2, provider.handler, self.mapID, false)
+            if phaseStart then
+                profiler:End(self, profileSource .. ".GetNodes2", phaseStart, phaseKB)
+            end
+            local records, pending, textState = iterator, nil, nil
+            if ok then
+                if profiling then
+                    phaseStart, phaseKB = profiler:Begin()
+                end
+                ok, records, pending, textState = pcall(
+                    SnapshotProvider,
+                    addon,
+                    provider.name,
+                    provider.handler,
+                    self.mapID,
+                    scale,
+                    alpha,
+                    iterator,
+                    state,
+                    initial
+                )
+                if phaseStart then
+                    profiler:End(self, profileSource .. ".Nodes", phaseStart, phaseKB)
+                end
+            end
+            if start then
+                profiler:End(self, profileSource, start, startKB)
+            end
             if ok then
                 entry = { handler = provider.handler, records = records, incomplete = pending }
                 cached[provider.name] = entry
+                if profiling then
+                    profiler:Count(self, "HandyNotes/Records/" .. provider.name, #records)
+                    if textState.textCacheHits then
+                        profiler:Count(self, "HandyNotes/TextCacheHit/" .. provider.name, textState.textCacheHits)
+                    end
+                    if textState.textRenders then
+                        profiler:Count(self, "HandyNotes/TextRendered/" .. provider.name, textState.textRenders)
+                    end
+                    if pending then
+                        profiler:Count(self, "HandyNotes/Pending/" .. provider.name)
+                    end
+                end
             else
                 failures[#failures + 1] = { providerName = provider.name, error = records }
+                if profiling then
+                    profiler:Count(self, "HandyNotes/Failed/" .. provider.name)
+                end
             end
+        elseif profiling then
+            profiler:Count(self, "HandyNotes/CacheHit/" .. provider.name)
         end
         if entry then
             incomplete = incomplete or entry.incomplete
@@ -401,6 +471,9 @@ function Plugin:CollectCompassHandyNotes(markers)
     end
     for _, failure in ipairs(failures) do
         ReportProviderError(self, failure.providerName, failure.error)
+    end
+    if #failures > 0 and self.discoveryJob == job then
+        self:MarkCompassSourcePending()
     end
     local guidesPending = self.discoveryJob == job and self:CollectCompassHandyNotesGuides(snapshots, failures)
     incomplete = incomplete or guidesPending

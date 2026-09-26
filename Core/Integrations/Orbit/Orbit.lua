@@ -15,6 +15,7 @@ Services.tooltip = Orbit.Tooltip
 Services.tooltipHide = Orbit.TooltipHide
 Services.IsSecret = Orbit.SecretValueUtils.IsSecret
 Services.navigationDescriptionFont = "PT Sans Narrow"
+Services.searchFont = Orbit.Media.Font.OrbitSansChat
 Bridge.events = Orbit.EventBus
 
 function Bridge.CreateController()

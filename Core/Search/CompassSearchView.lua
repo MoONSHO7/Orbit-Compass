@@ -233,7 +233,7 @@ end
 
 function Plugin:StyleCompassSearch()
     local view = self.compassSearch
-    local font = Services.navigationDescriptionFont
+    local font = Services.searchFont
     Services.StyleText(view.field, { font = font, textSize = NAME_FONT_SIZE, textColor = WHITE })
     Services.StyleText(view.status, { font = font, textSize = DETAIL_FONT_SIZE, textColor = DETAIL_COLOR })
     for _, row in ipairs(view.rows) do

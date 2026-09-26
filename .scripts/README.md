@@ -16,7 +16,7 @@ Run `python .scripts/check-package.py` for linked sources. Release CI fetches li
 `check-client-features.py` loads real Compass policy, collectors, scheduler, map scope, Search, navigation and UI client/store code into Lua 5.1. It checks client families, withheld APIs, partial data, retained preferences, destination provenance, stale actions and source readiness. Run `python .scripts/check-client-features.py`; workspace `develop/search-bridge/compass_provider_harness.py` covers the shared Search integration. Neither simulates native rendering or security.
 
 ## Gotchas
-- Compass pins verified UI 1.4/API 1.8 and Search 1.0/revision 3 releases. Linked checks do not establish release delivery; validate ordinary fetched packages. The automatic latest-release resolver is not implemented.
+- Compass pins verified UI 1.5/API 1.8 and Search 1.0/revision 3 releases. Linked checks do not establish release delivery; validate ordinary fetched packages. The automatic latest-release resolver is not implemented.
 - The scripts remain byte-identical between both addon repositories. Keep changes synchronized.
 - Compilation and static API checks cannot validate combat permissions, native ownership, taint or rendering. Dynamically assembled asset names still need client verification.
 - Fetches use configured Git credentials without an interactive prompt. No token is written into `.pkgmeta` or the scripts.

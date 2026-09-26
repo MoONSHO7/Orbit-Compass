@@ -9,7 +9,7 @@ Preserve Orbit profile ownership and customization while standalone Compass reta
 ## Implementation
 `../../CompassCompatibility.lua` selects the host before localization. `../../Plugin/Plugin.xml` loads `Orbit.lua` between standalone services and controller construction, allowing the bridge to supply the real Compass plugin. The later `../Integrations.xml` loads `OrbitCanvas.lua` after navigation and controller declarations. Product navigation and formatting remain outside this module.
 
-Search places reach Orbit through LibOrbitSearch rather than this bridge; see `../README.md`.
+Search places reach Orbit through LibOrbitSearch rather than this bridge; see `../README.md`. Presentation hooks resolve Orbit UI Chat from Orbit's private media catalog, while standalone Compass uses its bundled locale-specific copy.
 
 ## Gotchas
 - An absent host uses standalone services. An unsupported host or an existing bundled Compass pauses startup, preserving the old controller, commands and bindings. Compatible Retail and Forever hosts use the same bridge; Compass's client policy still gates individual Forever sources.

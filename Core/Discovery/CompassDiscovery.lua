@@ -41,6 +41,7 @@ local SOURCES = {
         collect = "CollectCompassFlightMasters",
         label = "Compass.Discovery.Taxi",
         interval = 60,
+        trackMapArt = true,
     },
     {
         key = "directions",
@@ -104,6 +105,7 @@ local SOURCES = {
         collect = "CollectCompassHandyNotes",
         label = "Compass.Discovery.HandyNotes",
         interval = math.huge,
+        trackMapArt = true,
     },
 }
 local EVENT_SOURCES = {
@@ -267,18 +269,29 @@ function Plugin:InvalidateCompassSource(event)
                 and not taxi.dirty
                 and not taxi.pathDirty
                 and not (job and job.source == taxi)
-            if retainTaxi then
+            local notes = self.compassSources.handynotes
+            local retainNotes = event == "ZONE_CHANGED"
+                and notes.status == "ready"
+                and notes.nextRefresh == math.huge
+                and not notes.dirty
+                and not notes.pathDirty
+                and not (job and job.source == notes)
+            if retainTaxi or retainNotes then
                 local mapArtID = Number(C_Map.GetMapArtID(mapID))
-                retainTaxi = mapArtID ~= nil and mapArtID == taxi.mapArtID
+                retainTaxi = retainTaxi and mapArtID ~= nil and mapArtID == taxi.mapArtID
+                retainNotes = retainNotes and mapArtID ~= nil and mapArtID == notes.mapArtID
             end
             CancelDiscoveryJob(self, "Subzone")
             for key, source in pairs(self.compassSources) do
-                -- Native taxi data is map-scoped, but a different phased map artwork still invalidates it.
-                if key ~= "taxi" or not retainTaxi then
+                local retained = key == "taxi" and retainTaxi or key == "handynotes" and retainNotes
+                if not retained then
                     source.dirty, source.pathDirty, source.nextAllowed = true, false, self.discoveryClock
                     source.handynotesProviders = nil
                 elseif profiler and profiler.active then
-                    profiler:Count(self, "Discovery/SubzoneTaxiRetained")
+                    profiler:Count(
+                        self,
+                        key == "taxi" and "Discovery/SubzoneTaxiRetained" or "Discovery/SubzoneHandyNotesRetained"
+                    )
                 end
             end
             self.discoveryPending, self.waypointDirty = true, true
@@ -418,7 +431,7 @@ function Plugin:DiscoverCompassMarkers()
                 definition = definition,
                 pathOnly = pathOnly,
                 countKey = pathOnly and "questPath" or definition.key,
-                mapArtID = definition.key == "taxi" and Number(C_Map.GetMapArtID(self.mapID)) or nil,
+                mapArtID = definition.trackMapArt and Number(C_Map.GetMapArtID(self.mapID)) or nil,
                 markers = markers,
                 thread = coroutine.create(function()
                     local refreshInterval = self[collect](self, markers)
