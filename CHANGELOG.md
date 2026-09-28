@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- Bundle private Orbit UI and Orbit UI Chat faces for standalone ribbon and search text, including locale-specific Korean, Simplified Chinese and Traditional Chinese builds.
+- Keep confirmation actions visible after settings controls are reused.
+
+- Bundle private Orbit UI and Orbit UI Chat faces for standalone ribbon and search text. Korean and Chinese clients use Blizzard's locale-aware font instead of bundled locale-specific builds.
 
 - Read names and notes from Kemayo's HandyNotes packs, cache loaded names and resolved text, retry delayed data and retain pins during provider failures. Skip reparsing unchanged text while preserving dynamic callbacks, and retain completed HandyNotes snapshots during ordinary subzone movement within unchanged map artwork. Add per-pack setup/scan timings and cache/invalidation counters when a profiler is available.
 

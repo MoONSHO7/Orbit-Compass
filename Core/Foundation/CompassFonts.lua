@@ -1,14 +1,13 @@
 local addonName, Addon = ...
 local mediaPath = "Interface\\AddOns\\" .. addonName .. "\\Assets\\"
+local USE_NATIVE_LOCALE_FONT = LOCALE_koKR or LOCALE_zhCN or LOCALE_zhTW
 
-local UI_PATH = LOCALE_koKR and mediaPath .. "Fonts\\OrbitSansCondensedUIKR-ExtraBold.ttf"
-    or LOCALE_zhCN and mediaPath .. "Fonts\\OrbitSansCondensedUISC-ExtraBold.ttf"
-    or LOCALE_zhTW and mediaPath .. "Fonts\\OrbitSansCondensedUITC-ExtraBold.ttf"
-    or mediaPath .. "Fonts\\OrbitSansCondensedUI-ExtraBold.ttf"
-local CHAT_PATH = LOCALE_koKR and mediaPath .. "Fonts\\OrbitSansCondensedChatKR-Bold.ttf"
-    or LOCALE_zhCN and mediaPath .. "Fonts\\OrbitSansCondensedChatSC-Bold.ttf"
-    or LOCALE_zhTW and mediaPath .. "Fonts\\OrbitSansCondensedChatTC-Bold.ttf"
-    or mediaPath .. "Fonts\\OrbitSansCondensedChat-Bold.ttf"
+local function resolveOrbitFontPath(fileName)
+    return USE_NATIVE_LOCALE_FONT and STANDARD_TEXT_FONT or mediaPath .. "Fonts\\" .. fileName
+end
+
+local UI_PATH = resolveOrbitFontPath("OrbitSansCondensedUI-ExtraBold.ttf")
+local CHAT_PATH = resolveOrbitFontPath("OrbitSansCondensedChat-Bold.ttf")
 
 Addon.Fonts = table.freeze({
     Name = table.freeze({
