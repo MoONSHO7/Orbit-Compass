@@ -11,8 +11,8 @@ from lupa.lua51 import LuaRuntime
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACTS = {
-    "Orbit_Compass": ("OrbitCompassDB", False, "1689597", 8),
-    "Orbit_StatusWidget": ("OrbitStatusWidgetDB", True, "1688135", 6),
+    "Orbit_Compass": ("OrbitCompassDB", False, "1689597", 10),
+    "Orbit_StatusWidget": ("OrbitStatusWidgetDB", True, "1688135", 10),
 }
 UI_DIRECTORY = "Libs/LibOrbitUI-1.0/"
 PICKER_DIRECTORY = "Libs/LibOrbitColorPicker-1.0/"
@@ -167,7 +167,7 @@ def validate(root, release=False):
     minor = re.search(r"\bVERSION_MINOR\s*=\s*(\d+)", library)
     if not major or not minor or int(major[1]) != 1 or int(minor[1]) < ui_minor:
         raise ValueError(f"{addon} requires loaded LibOrbitUI API 1.{ui_minor} or newer within major 1")
-    for api in ("UI.Controller:Create", "UI.Addon:Create", "UI.SettingsStore:Create", "Config.CreateColorProvider"):
+    for api in ("UI.Controller:Create", "UI.Addon:Create", "UI.SettingsStore:Create", "Config.CreateColorProvider", "UI.Tooltip:Create", "UI.TooltipClick:Create"):
         if not re.search(r"\bfunction\s+" + re.escape(api) + r"\s*\(", library):
             raise ValueError(f"Required API is absent from the loaded LibOrbitUI manifest: {api}")
     if not re.search(r"\bUI\.Client\s*=", library):
@@ -177,6 +177,8 @@ def validate(root, release=False):
         if not re.search(r"\bregisterWidgets\s*=\s*options\.registerWidgets\b", settings):
             raise ValueError("Compass requires Addon settings to forward the consumer registerWidgets hook")
     asset(UI_DIRECTORY + "LICENSE")
+    for button in ("left", "middle", "right"):
+        asset(UI_DIRECTORY + f"Rendering/Assets/orbit-click-{button}.tga")
     for destination in externals:
         if not any(name.startswith(destination + "/") for name in loaded):
             raise ValueError(f"Pinned dependency is not loaded by the runtime manifest: {destination}")

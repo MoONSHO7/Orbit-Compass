@@ -1,26 +1,57 @@
 # Release workflow
 
 ## Description
-Validated branch builds and versioned CurseForge/GitHub releases for Orbit Compass.
+Validated branch builds, the client-boundary suite and versioned CurseForge/GitHub releases for Orbit Compass.
 
 ## Purpose
-Keep incomplete runtime bundles and incompatible embedded libraries out of player releases.
+Keep incomplete runtime bundles and incompatible embedded libraries out of player releases, and run the behaviour suite
+on every push and pull request.
 
 ## Implementation
-`release.yml` validates the triggering checkout, fetches full commit pins from `.pkgmeta`, checks Lua 5.1 and the loaded library APIs, then builds with a pinned BigWigs packager and validates its materialized output. The packager must be v2.6.0 or newer to classify interface `16001` as Forever instead of Retail. Branch builds retain a ZIP artifact for 14 days; artifact collection allows the hidden `.release` directory and selects only its ZIP files.
+`release.yml` has three jobs. `package` validates the triggering checkout, fetches full commit pins from `.pkgmeta`,
+checks Lua 5.1 and the loaded library APIs, then builds with a pinned BigWigs packager and validates its materialized
+output. The packager must be v2.6.0 or newer to classify interface `16001` as Forever instead of Retail. Branch builds
+retain a ZIP artifact for 14 days; artifact collection allows the hidden `.release` directory and selects only its ZIP
+files.
 
-Successful `main` pushes choose the next `MAJOR.MINOR` tag, starting at `1.0`; later automatic releases increment the minor number. Stable tag pushes package that exact revision. Manual runs release only when targeting `main` or a stable tag. Other branches and pull requests only build.
+`suites` runs beside `package` on the same pushes and pull requests. It checks the addon out into `Orbit-Compass/`,
+fetches the same pinned libraries, symlinks `Orbit-Libs/LibOrbitUI/LibOrbitUI-1.0` to the fetched `Libs/LibOrbitUI-1.0`
+(the sibling path `.scripts/check-client-features.py` reads, mirroring the workspace layout), then runs the client suite
+and `.scripts/check-landmark-budget.py` for cooperative work bounds and balanced profiler phases. These use simulated
+native boundaries and need no fixtures beyond the libraries.
 
-The version tag is initially local to the runner and is pushed only after package validation. Publishing retains the validated package with `-o -c -e`, uploading to the TOC's CurseForge project ID and GitHub Releases. Uploaded GitHub assets are downloaded and compared with the local artifacts. The same run handles publication, so tags created with `GITHUB_TOKEN` do not need to trigger another workflow. LF bytes are preserved.
+Successful `main` pushes choose the next `MAJOR.MINOR` tag, starting at `1.0`; later automatic releases increment the
+minor number. Stable tag pushes package that exact revision. Manual runs release only when targeting `main` or a stable
+tag. Other branches and pull requests only build.
+
+The version tag is initially local to the runner and is pushed only after package validation. Publishing retains the
+validated package with `-o -c -e`, uploading to the TOC's CurseForge project ID and GitHub Releases. Uploaded GitHub
+assets are downloaded and compared with the local artifacts. The same run handles publication, so tags created with
+`GITHUB_TOKEN` do not need to trigger another workflow. LF bytes are preserved.
 
 ## Gotchas
-- `CURSE_API_KEY` authorizes CurseForge upload; `ORBIT_PAT` retains the GitHub CLI credential-helper policy for public Orbit-Libs. The repository-scoped `GITHUB_TOKEN` publishes tags and GitHub releases. Checkout credentials are not persisted.
-- Fork/Dependabot pull requests receive no dependency credentials and only report that full coverage is unavailable. This workflow never uses `pull_request_target`.
-- The `LibOrbitUI-1.2` monorepo pin provides API 1.5 and the widget-registration hook required by Points. Source and staged-package validation check fetched commits before tagging or uploading; local development junctions cannot substitute for these checks.
-- Main/tag publication runs are serialized. A retry reuses a version already attached to its commit. If a GitHub release already exists, publication fails for human review: its existence cannot prove the CurseForge or asset uploads completed. After any failed upload, inspect both destinations before retrying, including when no GitHub release was created.
-- The pinned packager deletes its package directory without `-o`, even when `-c` skips copying. Keep all three retention flags on the upload pass. Asset downloads catch packager asset failures that its exit status can miss.
-- Both packager passes receive the selected stable tag explicitly; otherwise the packager can choose a newer nonstable tag attached to the same commit.
-- Source and package checks cannot certify WoW rendering, combat protection or taint. In-game acceptance and merging to `main` remain with the human.
+- `CURSE_API_KEY` authorizes CurseForge upload; `ORBIT_PAT` retains the GitHub CLI credential-helper policy for public
+  Orbit-Libs in both jobs. The repository-scoped `GITHUB_TOKEN` publishes tags and GitHub releases. Checkout credentials
+  are not persisted.
+- Fork/Dependabot pull requests receive no dependency credentials: both jobs skip, and `unavailable-library-coverage`
+  only reports that full coverage is unavailable. This workflow never uses `pull_request_target`.
+- `suites` does not gate `package`: a failing suite turns the run red without blocking the tag or upload. Making it a
+  release gate is one `needs: suites` line on `package`, at the cost of serializing the two jobs.
+- `.pkgmeta` pins the LibOrbitUI and LibOrbitSearch release commits and nested runtime paths, and its comments name each
+  release and the API or revision it provides; those releases carry the widget-registration and provider contracts
+  Points requires, and both jobs fetch exactly those commits. Source and staged-package validation check fetched commits
+  before tagging or uploading; local development junctions cannot substitute for these checks.
+- Main/tag publication runs are serialized. A retry reuses a version already attached to its commit. If a GitHub release
+  already exists, publication fails for human review: its existence cannot prove the CurseForge or asset uploads
+  completed. After any failed upload, inspect both destinations before retrying, including when no GitHub release was
+  created.
+- The pinned packager deletes its package directory without `-o`, even when `-c` skips copying. Keep all three retention
+  flags on the upload pass. Asset downloads catch packager asset failures that its exit status can miss.
+- Both packager passes receive the selected stable tag explicitly; otherwise the packager can choose a newer nonstable
+  tag attached to the same commit.
+- Source, package and suite checks cannot certify WoW rendering, combat protection or taint. In-game acceptance and
+  merging to `main` remain with the human.
 
 ## References
-[Project](../../README.md), [validation tools](../../.scripts/README.md), [package metadata](../../.pkgmeta), [BigWigs packager](https://github.com/BigWigsMods/packager).
+[Project](../../README.md), [validation tools](../../.scripts/README.md), [package metadata](../../.pkgmeta), [BigWigs
+packager](https://github.com/BigWigsMods/packager).
