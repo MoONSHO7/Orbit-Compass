@@ -111,10 +111,14 @@ function Text.Words(folded)
     return words
 end
 
-function Text.AddSearchFields(target, name, place)
-    local foldedName, foldedPlace = Text.Fold(name), Text.Fold(place or "")
+function Text.AddNameFields(target, name)
+    local foldedName = Text.Fold(name)
     target.searchText, target.search, target.nameWords = foldedName, " " .. foldedName, Text.Words(foldedName)
-    target.place, target.placeWords = " " .. foldedPlace, Text.Words(foldedPlace)
+    return target
+end
+
+function Text.AddSearchFields(target, name, place)
+    Text.AddNameFields(target, name).placeWords = Text.Words(Text.Fold(place or ""))
     return target
 end
 

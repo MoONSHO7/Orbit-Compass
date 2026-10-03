@@ -3,6 +3,7 @@ local Plugin = Addon.Controller
 local C = Addon.Constants
 local Number = Addon.SourceUtils.Number
 local SOURCE_RETRY_INTERVAL = 30
+local QUEST_DATA_DIRTY = "questData"
 local SOURCES = {
     {
         key = "gathermate",
@@ -117,7 +118,7 @@ local EVENT_SOURCES = {
     QUEST_POI_UPDATE = { "quests", "offers" },
     QUEST_DATA_LOAD_RESULT = { "quests", "offers" },
     SUPER_TRACKING_CHANGED = { "quests", "content", "route" },
-    SUPER_TRACKING_PATH_UPDATED = { "content", "route" },
+    SUPER_TRACKING_PATH_UPDATED = "route",
     WORLD_QUEST_COMPLETED_BY_SPELL = "quests",
     TAXI_NODE_STATUS_CHANGED = "taxi",
     DYNAMIC_GOSSIP_POI_UPDATED = "directions",
@@ -250,6 +251,18 @@ function Plugin:InvalidateCompassSourceSettings(key, retainProviders)
     end
 end
 
+local function ScheduleInvalidatedSource(plugin, key)
+    if not plugin.mapWidth then
+        return
+    end
+    local source = plugin.compassSources[key]
+    if source.enabled then
+        plugin.discoveryNext = math.min(plugin.discoveryNext, source.nextAllowed, source.nextRefresh)
+    elseif source.reason == "provider" then
+        plugin.discoveryPending = true
+    end
+end
+
 function Plugin:InvalidateCompassSource(event)
     local profiler = Addon.Services.profiler
     if profiler and profiler.active and (EVENT_SOURCES[event] or CONTEXT_EVENTS[event]) then
@@ -302,14 +315,21 @@ function Plugin:InvalidateCompassSource(event)
         local sources = EVENT_SOURCES[event]
         if type(sources) == "table" then
             for _, key in ipairs(sources) do
-                self.compassSources[key].dirty = true
+                local source = self.compassSources[key]
+                if key ~= "quests" or event ~= "QUEST_DATA_LOAD_RESULT" then
+                    source.dirty = true
+                elseif not source.dirty then
+                    source.dirty = QUEST_DATA_DIRTY
+                end
+                ScheduleInvalidatedSource(self, key)
             end
         else
             self.compassSources[sources].dirty = true
+            ScheduleInvalidatedSource(self, sources)
         end
-        self.discoveryPending = true
         if event == "SUPER_TRACKING_PATH_UPDATED" then
             self.compassSources.quests.pathDirty = true
+            ScheduleInvalidatedSource(self, "quests")
         elseif event == "SUPER_TRACKING_CHANGED" then
             self.waypointDirty = true
         end
@@ -422,6 +442,9 @@ function Plugin:DiscoverCompassMarkers()
                 and not source.dirty
                 and self.discoveryClock < source.nextRefresh
             local collect = pathOnly and definition.refreshPath or definition.collect
+            local questDataOnly = not pathOnly
+                and source.dirty == QUEST_DATA_DIRTY
+                and self.discoveryClock < source.nextRefresh
             source.dirty, source.pathDirty = false, false
             source.nextAllowed = self.discoveryClock + C.DISCOVERY_MIN_INTERVAL
             source.mapArtID = nil
@@ -430,6 +453,7 @@ function Plugin:DiscoverCompassMarkers()
                 source = source,
                 definition = definition,
                 pathOnly = pathOnly,
+                questDataOnly = questDataOnly,
                 countKey = pathOnly and "questPath" or definition.key,
                 mapArtID = definition.trackMapArt and Number(C_Map.GetMapArtID(self.mapID)) or nil,
                 markers = markers,
@@ -494,7 +518,7 @@ function Plugin:DiscoverCompassMarkers()
         end
         job.source.nextAllowed = self.discoveryClock + C.DISCOVERY_MIN_INTERVAL
         job.source.mapArtID = job.mapArtID
-        if not job.pathOnly then
+        if not job.pathOnly and not job.questDataOnly then
             job.source.nextRefresh = job.nextRefresh or self.discoveryClock + job.definition.interval
         end
         self.discoveryJob = nil

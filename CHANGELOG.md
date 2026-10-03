@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Avoid redundant discovery wakeups and tracked-content collection on navigation path updates, while preserving source deadlines and delayed addon readiness.
+
+- Spread child-map preparation and duplicate cleanup across catalog frames, and separate build phases in performance captures, including native map reads and search-index string assembly.
+
+- Place search scores only plausible matches from an index built alongside the place list, keeping typing responsive on large maps. Results and their order are unchanged.
+
+- Stop re-querying watched-quest waypoints when only quest data finished loading. They still refresh on quest-log, POI, watch-list, super-tracking, subzone and map changes and at least every 30 seconds.
+
+- Build the place index only when a search needs it. The ribbon no longer advances it, Orbit's search waits for a two-letter query, loading screens never rebuild it, and an unresolved tracked pin drives at most one background walk.
+
+- Build place-search text only for the places the index keeps, and fold each zone and continent once per index build.
+
+- Search reuses the result rows of the ribbon's current markers (HandyNotes, GatherMate2, rares, treasures, quest offers) between keystrokes instead of rebuilding them on every query. Results are unchanged.
+
 - Keep confirmation actions visible after settings controls are reused.
 
 - Bundle private Orbit UI and Orbit UI Chat faces for standalone ribbon and search text. Korean and Chinese clients use Blizzard's locale-aware font instead of bundled locale-specific builds.

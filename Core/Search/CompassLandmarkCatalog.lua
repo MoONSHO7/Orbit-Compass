@@ -4,7 +4,7 @@ local Plugin = Addon.Controller
 local F = Addon.ClientFeatures
 local Utils = Addon.SourceUtils
 local Readable, Number = Utils.Readable, Utils.Number
-local AddSearchFields = Addon.Text.AddSearchFields
+local Fold, Words, AddNameFields = Addon.Text.Fold, Addon.Text.Words, Addon.Text.AddNameFields
 local ROOT_RETRY_SECONDS = 1
 local DATA_RETRY_SECONDS = 30
 local BUILD_BUDGET_MS = 1
@@ -12,6 +12,7 @@ local FOCUSED_BUILD_BUDGET_MS = 4
 local REFRESH_AGE_SECONDS = 300
 local LISTENER_INTERVAL = 0.25
 local MAP_CENTER = 0.5
+local PIN_DEMAND = "pin"
 local RAID_INFO_INDEX = 12
 local AREA_POI = Enum.SuperTrackingMapPinType.AreaPOI
 local TAXI_NODE = Enum.SuperTrackingMapPinType.TaxiNode
@@ -47,6 +48,35 @@ local QUEST_KEY = "quest:"
 local MAP_KEY = "map:"
 local GRAVEYARD_KEY = "graveyard:"
 local INVASION_KEY = "invasion:"
+local PHASE = {
+    CHILDREN_NATIVE = "Compass.Landmarks.Children.Native",
+    CHILDREN_COPY = "Compass.Landmarks.Children.Copy",
+    COLLECT = "Compass.Landmarks.Collect",
+    DUPLICATE_GROUPS = "Compass.Landmarks.Duplicates.Group",
+    DUPLICATE_COMPARE = "Compass.Landmarks.Duplicates.Compare",
+    DUPLICATE_COMPACT = "Compass.Landmarks.Duplicates.Compact",
+}
+
+local function EndPhase(catalog)
+    if catalog.phaseStart then
+        catalog.phaseProfiler:End(Plugin, catalog.phase, catalog.phaseStart, catalog.phaseStartKB)
+        catalog.phaseStart, catalog.phaseStartKB, catalog.phaseProfiler = nil, nil, nil
+    end
+end
+
+local function BeginPhase(catalog)
+    local profiler = Addon.Services.profiler
+    if catalog.phase and profiler then
+        catalog.phaseStart, catalog.phaseStartKB = profiler:Begin()
+        catalog.phaseProfiler = catalog.phaseStart and profiler or nil
+    end
+end
+
+local function SetPhase(catalog, phase)
+    EndPhase(catalog)
+    catalog.phase = phase
+    BeginPhase(catalog)
+end
 
 local function NoCheckpoint() end
 
@@ -89,7 +119,19 @@ local function Landmark(key, pinType, id, mapID, position, name, atlas, kind, pl
         zone = zone,
         continent = continent,
     }
-    return table.freeze(AddSearchFields(landmark, name, (zone or "") .. " " .. (continent or "")))
+    return landmark
+end
+
+local function Finalize(landmark, placeWords)
+    local place = (landmark.zone or "") .. " " .. (landmark.continent or "")
+    local words = placeWords[place]
+    if not words then
+        words = Words(Fold(place))
+        table.freeze(words)
+        placeWords[place] = words
+    end
+    landmark.placeWords = words
+    return table.freeze(AddNameFields(landmark, landmark.name))
 end
 
 local function ReadMapDetails(mapID)
@@ -368,7 +410,8 @@ local function Supersedes(keep, drop, target, maps, cache)
     return keepRank > dropRank or (keepRank == dropRank and keep.key < drop.key)
 end
 
-local function RemoveDuplicates(target, maps, checkpoint)
+local function RemoveDuplicates(target, maps, checkpoint, phase)
+    phase(PHASE.DUPLICATE_GROUPS)
     local groups = {}
     for _, landmark in ipairs(target.entries) do
         if not landmark.questID then
@@ -382,29 +425,38 @@ local function RemoveDuplicates(target, maps, checkpoint)
         checkpoint()
     end
     local removed, cache = {}, {}
+    phase(PHASE.DUPLICATE_COMPARE)
     for _, group in pairs(groups) do
         for _, candidate in ipairs(group) do
             for _, other in ipairs(group) do
                 if other ~= candidate and Supersedes(other, candidate, target, maps, cache) then
                     removed[candidate.key] = true
+                    checkpoint()
                     break
                 end
+                checkpoint()
             end
             checkpoint()
         end
     end
     local entries, positions, ranks = {}, {}, {}
+    phase(PHASE.DUPLICATE_COMPACT)
     for _, landmark in ipairs(target.entries) do
         if not removed[landmark.key] then
             entries[#entries + 1] = landmark
             positions[landmark.key], ranks[landmark.key] = #entries, target.ranks[landmark.key]
         end
+        checkpoint()
     end
-    target.entries, target.positions, target.ranks = entries, positions, ranks
+    return entries, positions, ranks
 end
 
 local function BuildCatalog(catalog, target)
     local incomplete = false
+    local placeWords = {}
+    local function Phase(phase)
+        SetPhase(catalog, phase)
+    end
     local function Checkpoint(pending)
         incomplete = incomplete or pending == true
         if debugprofilestop() >= catalog.deadline then
@@ -416,23 +468,28 @@ local function BuildCatalog(catalog, target)
             return
         end
         local position = target.positions[landmark.key]
+        if position and rank <= target.ranks[landmark.key] then
+            return
+        end
+        landmark = Finalize(landmark, placeWords)
         if not position then
             target.entries[#target.entries + 1] = landmark
             target.positions[landmark.key], target.ranks[landmark.key] = #target.entries, rank
-        elseif rank > target.ranks[landmark.key] then
-            target.entries[position], target.ranks[landmark.key] = landmark, rank
         else
-            return
+            target.entries[position], target.ranks[landmark.key] = landmark, rank
         end
         if target == catalog then
             catalog.revision = catalog.revision + 1
         end
     end
     local maps, order = {}, {}
+    Phase(PHASE.CHILDREN_NATIVE)
     local children = Readable(C_Map.GetMapChildrenInfo(catalog.rootID, nil, true))
     if type(children) ~= "table" then
         return false
     end
+    Checkpoint()
+    Phase(PHASE.CHILDREN_COPY)
     for _, details in ipairs(children) do
         details = Readable(details)
         local mapID = type(details) == "table" and Number(details.mapID)
@@ -446,12 +503,14 @@ local function BuildCatalog(catalog, target)
             }
             order[#order + 1] = mapID
         end
+        Checkpoint()
     end
     local function Lookup(mapID)
         return maps[mapID]
     end
     Checkpoint()
     local areas = {}
+    Phase(PHASE.COLLECT)
     for _, mapID in ipairs(order) do
         local details = maps[mapID]
         local depth = MAP_DEPTH[details.mapType]
@@ -469,7 +528,12 @@ local function BuildCatalog(catalog, target)
         end
         Checkpoint()
     end
-    RemoveDuplicates(target, maps, Checkpoint)
+    local entries, positions, ranks = RemoveDuplicates(target, maps, Checkpoint, Phase)
+    local queryIndex
+    if not incomplete or target == catalog then
+        queryIndex = Plugin:BuildCompassLandmarkQueryIndex(entries, Checkpoint, Phase)
+    end
+    target.entries, target.positions, target.ranks, target.queryIndex = entries, positions, ranks, queryIndex
     return incomplete and "incomplete" or true
 end
 
@@ -516,8 +580,6 @@ function Plugin:RefreshCompassLandmarkDriver()
     self.compassLandmarkDriver:SetScript("OnUpdate", active and self.compassLandmarkDriverUpdate or nil)
 end
 
--- Search consumers outside the ribbon (Orbit sessions, the inline field) must advance the index while the
--- ribbon is hidden or the player is inside an instance, where UpdateCompass returns before stepping.
 function Plugin:AcquireCompassLandmarkDemand(owner, focused)
     if not self:IsActive() or self:IsProfileSuppressed() then
         return
@@ -530,6 +592,29 @@ end
 function Plugin:ReleaseCompassLandmarkDemand(owner)
     self.compassLandmarks.demand[owner] = nil
     self:RefreshCompassLandmarkDriver()
+end
+
+-- A persistent miss (dedup-removed, hostile or withheld pin) must not restart the world walk.
+function Plugin:RequestCompassPinLandmarks(pinType, id)
+    local catalog = self.compassLandmarks
+    local key = PIN_KEYS[pinType] .. id
+    if catalog.pinAttempted == key then
+        return
+    end
+    self:AcquireCompassLandmarkDemand(PIN_DEMAND, false)
+    catalog.pinAttempted = key
+    if catalog.state ~= "building" and catalog.state ~= "pending" then
+        catalog.demand[PIN_DEMAND] = nil
+    end
+end
+
+function Plugin:PauseCompassPinLandmarks()
+    local catalog = self.compassLandmarks
+    if catalog.demand[PIN_DEMAND] ~= nil then
+        catalog.demand[PIN_DEMAND], catalog.pinAttempted = nil, nil
+        self.waypointDirty = true
+        self:RefreshCompassLandmarkDriver()
+    end
 end
 
 function Plugin:SetCompassLandmarkListener(owner, listener)
@@ -565,24 +650,32 @@ function Plugin:RequestCompassLandmarkCatalog()
     end
     catalog.rootRetryAt = nil
     if root ~= catalog.rootID then
+        if catalog.rootID then
+            catalog.pinAttempted = nil
+        end
         catalog.rootID, catalog.state, catalog.thread, catalog.target = root, "idle", nil, nil
-        catalog.entries, catalog.positions, catalog.ranks = {}, {}, {}
+        catalog.entries, catalog.positions, catalog.ranks, catalog.queryIndex = {}, {}, {}, nil
         catalog.revision = catalog.revision + 1
         self.compassPinDestination = nil
         NotifyListeners(catalog)
     end
-    if not self:IsActive() or self:IsProfileSuppressed() then
+    if not self:IsActive() or self:IsProfileSuppressed() or not next(catalog.demand) then
         return
     end
     local stale = catalog.state == "complete" and now - catalog.builtAt >= REFRESH_AGE_SECONDS
     if catalog.state == "idle" or catalog.state == "pending" or catalog.state == "failed" or stale then
         catalog.target = #catalog.entries == 0 and catalog or { entries = {}, positions = {}, ranks = {} }
+        if catalog.target == catalog then
+            catalog.queryIndex = nil
+        end
         catalog.state = "building"
+        catalog.phase = nil
         catalog.thread = coroutine.create(BuildCatalog)
     end
 end
 
 function Plugin:InvalidateCompassLandmarkScope()
+    self:PauseCompassPinLandmarks()
     local catalog = self.compassLandmarks
     catalog.rootRetryAt = nil
     if catalog.rootID or next(catalog.demand) then
@@ -594,6 +687,7 @@ end
 function Plugin:StopCompassLandmarks()
     local catalog = self.compassLandmarks
     catalog.state, catalog.thread, catalog.target = "idle", nil, nil
+    catalog.pinAttempted = nil
     wipe(catalog.demand)
     wipe(catalog.listeners)
     self:RefreshCompassLandmarkDriver()
@@ -605,10 +699,9 @@ function Plugin:StepCompassLandmarkCatalog()
     if catalog.state == "pending" then
         self:RequestCompassLandmarkCatalog()
     end
-    if catalog.state ~= "building" or catalog.steppedAt == now then
+    if catalog.state ~= "building" then
         return
     end
-    catalog.steppedAt = now
     local profiler = Addon.Services.profiler
     local start, startKB
     if profiler then
@@ -617,13 +710,16 @@ function Plugin:StepCompassLandmarkCatalog()
     local budget = IsDemandFocused(catalog) and FOCUSED_BUILD_BUDGET_MS or BUILD_BUDGET_MS
     catalog.deadline = debugprofilestop() + budget
     local thread = catalog.thread
+    BeginPhase(catalog)
     local ok, err = coroutine.resume(thread, catalog, catalog.target)
+    EndPhase(catalog)
     if start then
         profiler:End(self, "Compass.Landmarks", start, startKB)
     end
     if not ok then
         catalog.state, catalog.thread, catalog.target = "failed", nil, nil
         catalog.rootRetryAt = now + DATA_RETRY_SECONDS
+        catalog.demand[PIN_DEMAND] = nil
         error(err, 0)
     end
     if catalog.thread ~= thread then
@@ -633,13 +729,18 @@ function Plugin:StepCompassLandmarkCatalog()
         if err == false or err == "incomplete" then
             catalog.state, catalog.thread, catalog.target = "pending", nil, nil
             catalog.rootRetryAt = now + (err == false and ROOT_RETRY_SECONDS or DATA_RETRY_SECONDS)
+            if err == "incomplete" then
+                catalog.demand[PIN_DEMAND] = nil
+            end
             NotifyListeners(catalog)
             return
         end
         local target = catalog.target
         catalog.entries, catalog.positions, catalog.ranks = target.entries, target.positions, target.ranks
+        catalog.queryIndex = target.queryIndex
         catalog.state, catalog.thread, catalog.target = "complete", nil, nil
         catalog.builtAt, catalog.revision = GetTime(), catalog.revision + 1
+        catalog.demand[PIN_DEMAND] = nil
         NotifyListeners(catalog)
         -- Pins tracked before the index existed can now resolve their destination and route artwork.
         self.compassSources.route.dirty = true
@@ -669,7 +770,7 @@ function Plugin:FindCompassLandmarkOnMap(mapID, pinType, id)
     local found
     local function Add(landmark)
         if landmark and landmark.key == key then
-            found = landmark
+            found = Finalize(landmark, {})
         end
     end
     if pinType == AREA_POI then

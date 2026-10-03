@@ -41,7 +41,7 @@ function Plugin:ResolveCompassPinDestination(pinType, id)
     if destination then
         self.compassPinDestination = destination
     elseif self:CompassLandmarksInclude(pinType) then
-        self:RequestCompassLandmarkCatalog()
+        self:RequestCompassPinLandmarks(pinType, id)
     end
     return destination
 end

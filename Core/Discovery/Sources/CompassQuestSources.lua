@@ -2,6 +2,7 @@ local _, Addon = ...
 local C = Addon.Constants
 local Plugin = Addon.Controller
 local F = Addon.ClientFeatures
+local IsSecret = Addon.Services.IsSecret
 local Utils = Addon.SourceUtils
 local Readable, Number, ReadPosition, AddMarker = Utils.Readable, Utils.Number, Utils.ReadPosition, Utils.AddMarker
 local QUEST_PROGRESS_ATLAS = "Quest-In-Progress-Icon-yellow"
@@ -79,17 +80,24 @@ local function AddQuest(plugin, markers, questID, position, watched, seen, taskO
     end
 end
 
-local function AddQuestWaypoint(plugin, markers, questID, watched, seen)
-    local profiler = Addon.Services.profiler
-    local start, startKB
-    if profiler and profiler.active then
-        start, startKB = profiler:Begin()
+local function AddQuestWaypoint(plugin, markers, questID, watched, seen, memo)
+    local position = memo and memo[questID]
+    if not position then
+        local profiler = Addon.Services.profiler
+        local start, startKB
+        if profiler and profiler.active then
+            start, startKB = profiler:Begin()
+        end
+        local x, y = C_QuestLog.GetNextWaypointForMap(questID, plugin.mapID)
+        if start then
+            profiler:End(plugin, "Compass.Discovery.QuestWaypoint", start, startKB)
+        end
+        position = { x = x, y = y }
+        if memo and not IsSecret(x, "Compass.MapData") and not IsSecret(y, "Compass.MapData") then
+            memo[questID] = position
+        end
     end
-    local x, y = C_QuestLog.GetNextWaypointForMap(questID, plugin.mapID)
-    if start then
-        profiler:End(plugin, "Compass.Discovery.QuestWaypoint", start, startKB)
-    end
-    AddQuest(plugin, markers, questID, { x = x, y = y }, watched, seen)
+    AddQuest(plugin, markers, questID, position, watched, seen)
 end
 
 function Plugin:CollectCompassQuests(markers)
@@ -98,6 +106,11 @@ function Plugin:CollectCompassQuests(markers)
     then
         return
     end
+    local source = self.compassSources.quests
+    if not self.discoveryJob.questDataOnly or not source.questWaypoints then
+        source.questWaypoints = {}
+    end
+    local memo = source.questWaypoints
     local watched, seen = {}, {}
     for index = 1, Number(C_QuestLog.GetNumQuestWatches()) or 0 do
         local id = Number(C_QuestLog.GetQuestIDForQuestWatchIndex(index))
@@ -118,7 +131,7 @@ function Plugin:CollectCompassQuests(markers)
         watched[superTracked] = true
     end
     for id in pairs(watched) do
-        AddQuestWaypoint(self, markers, id, watched, seen)
+        AddQuestWaypoint(self, markers, id, watched, seen, id ~= superTracked and memo or nil)
         self:CompassDiscoveryCheckpoint()
     end
     if self.showQuestObjectives then

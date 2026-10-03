@@ -191,6 +191,7 @@ function Plugin:RefreshCompassInstanceState()
         self:HideNavigationView()
         self.navigationTarget = nil
         self:InitializeCompassDiscovery()
+        self:PauseCompassPinLandmarks()
         wipe(self.markers)
         wipe(self.bearings)
         self.frame:Hide()
@@ -219,6 +220,7 @@ function Plugin:UpdateCompass(elapsed)
         or not self.frame:IsVisible()
     then
         self:HideCompassPeek()
+        self:PauseCompassPinLandmarks()
         return
     end
     self.discoveryClock = self.discoveryClock + elapsed
@@ -241,9 +243,6 @@ function Plugin:UpdateCompass(elapsed)
         if start then
             profiler:End(self, "Compass.Discovery", start, startKB)
         end
-    end
-    if self:IsCompassLandmarkCatalogBuilding() then
-        self:StepCompassLandmarkCatalog()
     end
     start, startKB = nil, nil
     if profiler and profiler.active then

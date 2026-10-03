@@ -11,6 +11,7 @@ local MIN_PARTIAL_LENGTH = 3
 local TYPO_MIN_LENGTH = 4
 local TYPO_WIDE_LENGTH = 7
 local SPACE_BYTE = 32
+local LINE_BREAK = "\n"
 local WORD_EXACT = 3
 local WORD_PREFIX = 2
 local WORD_TYPO = 1
@@ -541,20 +542,199 @@ end
 
 local function CompassMarkers(plugin, consider, indexed)
     local zone = MapName(plugin.mapID)
+    local rows = plugin.compassLiveMarkers
     for _, marker in ipairs(plugin.markers) do
-        if not LIVE_MARKER_EXCLUDED[marker.kind] and not indexed[marker.key] then
-            local fields =
-                { kind = marker.kind, key = marker.key, name = marker.name, atlas = marker.atlas, marker = marker }
-            for _, field in ipairs(C.MARKER_ART_FIELDS) do
-                fields[field] = marker[field]
+        if not LIVE_MARKER_EXCLUDED[marker.kind] then
+            local entry = rows.previous[marker]
+            if entry and entry.zone ~= zone then
+                entry = nil
             end
-            consider(LiveEntry(fields, zone))
+            if not entry and not indexed[marker.key] then
+                local fields =
+                    { kind = marker.kind, key = marker.key, name = marker.name, atlas = marker.atlas, marker = marker }
+                for _, field in ipairs(C.MARKER_ART_FIELDS) do
+                    fields[field] = marker[field]
+                end
+                entry = LiveEntry(fields, zone)
+            end
+            if entry then
+                rows.current[marker] = entry
+                rows.previous[marker] = nil
+                if not indexed[marker.key] then
+                    consider(entry)
+                end
+            end
+        end
+    end
+    wipe(rows.previous)
+    rows.previous, rows.current = rows.current, rows.previous
+end
+
+local function MarkCandidate(scratch, index)
+    if not scratch.marked[index] then
+        scratch.marked[index] = true
+        scratch.candidates[#scratch.candidates + 1] = index
+    end
+end
+
+local function MarkPostings(scratch, postings)
+    for _, index in ipairs(postings) do
+        MarkCandidate(scratch, index)
+    end
+end
+
+local function LineAt(starts, cursor, position)
+    while starts[cursor + 1] and starts[cursor + 1] <= position do
+        cursor = cursor + 1
+    end
+    return cursor
+end
+
+local function MarkPlain(queryIndex, text, scratch)
+    local blob, starts, cursor, init = queryIndex.blob, queryIndex.starts, 1, 1
+    while true do
+        local found = string.find(blob, text, init, true)
+        if not found then
+            return
+        end
+        cursor = LineAt(starts, cursor, found)
+        MarkCandidate(scratch, cursor)
+        init = starts[cursor + 1]
+        if not init then
+            return
         end
     end
 end
 
+local function OrderedPattern(letters)
+    local parts = { LINE_BREAK }
+    for position = 1, #letters do
+        local letter = string.sub(letters, position, position)
+        parts[#parts + 1] = "[^" .. LINE_BREAK .. letter .. "]*" .. letter
+    end
+    return table.concat(parts)
+end
+
+local function MarkOrdered(queryIndex, letters, scratch)
+    local blob, starts, cursor, init = queryIndex.blob, queryIndex.starts, 1, 1
+    local pattern = OrderedPattern(letters)
+    while true do
+        local found = string.find(blob, pattern, init)
+        if not found then
+            return
+        end
+        cursor = LineAt(starts, cursor, found + #LINE_BREAK)
+        MarkCandidate(scratch, cursor)
+        init = starts[cursor + 1]
+        if not init then
+            return
+        end
+        init = init - #LINE_BREAK
+    end
+end
+
+local function LongestWord(words)
+    local longest = words[1]
+    for _, word in ipairs(words) do
+        if #word > #longest then
+            longest = word
+        end
+    end
+    return longest
+end
+
+local function MarkWord(queryIndex, word, rows, scratch)
+    local bucket = queryIndex.buckets[string.byte(word, 1)]
+    if not bucket then
+        return
+    end
+    local limit = rows and TypoLimit(word) or 0
+    for _, target in ipairs(bucket) do
+        if StartsWith(target, word) or (limit > 0 and IsTypoMatch(word, target, limit, rows)) then
+            MarkPostings(scratch, queryIndex.postings[target])
+        end
+    end
+end
+
+local function MarkCandidates(queryIndex, query, rows, scratch)
+    wipe(scratch.marked)
+    wipe(scratch.candidates)
+    MarkPlain(queryIndex, query.text, scratch)
+    MarkWord(queryIndex, LongestWord(query.words), rows, scratch)
+    if query.kinds and #query.rest == 0 then
+        for kind in pairs(query.kinds) do
+            local list = queryIndex.kinds[kind]
+            if list then
+                MarkPostings(scratch, list)
+            end
+        end
+    elseif query.kinds then
+        MarkWord(queryIndex, LongestWord(query.rest), rows, scratch)
+    end
+    if rows and #query.letters >= MIN_PARTIAL_LENGTH then
+        MarkOrdered(queryIndex, query.letters, scratch)
+    end
+    table.sort(scratch.candidates)
+end
+
+local function AddPosting(queryIndex, word, index)
+    local postings = queryIndex.postings[word]
+    if not postings then
+        postings = {}
+        queryIndex.postings[word] = postings
+        local first = string.byte(word, 1)
+        local bucket = queryIndex.buckets[first]
+        if not bucket then
+            bucket = {}
+            queryIndex.buckets[first] = bucket
+        end
+        bucket[#bucket + 1] = word
+    end
+    if postings[#postings] ~= index then
+        postings[#postings + 1] = index
+    end
+end
+
+function Plugin:BuildCompassLandmarkQueryIndex(entries, checkpoint, phase)
+    if phase then
+        phase("Compass.Landmarks.QueryIndex.Entries")
+    end
+    local queryIndex = { entries = entries, starts = {}, buckets = {}, postings = {}, kinds = {} }
+    local texts, start = {}, #LINE_BREAK + 1
+    for index, entry in ipairs(entries) do
+        texts[index], queryIndex.starts[index] = entry.searchText, start
+        start = start + #entry.searchText + #LINE_BREAK
+        for _, word in ipairs(entry.nameWords) do
+            AddPosting(queryIndex, word, index)
+        end
+        for _, word in ipairs(entry.placeWords) do
+            AddPosting(queryIndex, word, index)
+        end
+        local kind = queryIndex.kinds[entry.kind]
+        if not kind then
+            kind = {}
+            queryIndex.kinds[entry.kind] = kind
+        end
+        kind[#kind + 1] = index
+        checkpoint()
+    end
+    if phase then
+        phase("Compass.Landmarks.QueryIndex.Blob")
+    end
+    queryIndex.blob = LINE_BREAK .. table.concat(texts, LINE_BREAK) .. LINE_BREAK
+    return queryIndex
+end
+
 function Plugin:NewCompassSearchScratch()
-    return { scores = {}, tiers = {} }
+    return { scores = {}, tiers = {}, candidates = {}, marked = {} }
+end
+
+local function IsScoredQuery(folded)
+    return strlenutf8(folded) >= MIN_QUERY_LENGTH
+end
+
+function Plugin:IsScoredCompassQuery(text)
+    return IsScoredQuery(Fold(text))
 end
 
 -- Callers own their scratch so the inline field and an Orbit search session never share score tables.
@@ -565,7 +745,7 @@ function Plugin:SearchCompassLandmarks(text, results, scratch, options)
     wipe(tiers)
     local fuzzy = not options or options.fuzzy ~= false
     local folded = Fold(text)
-    if strlenutf8(folded) < MIN_QUERY_LENGTH then
+    if not IsScoredQuery(folded) then
         return results
     end
     local profiler = Addon.Services.profiler
@@ -575,6 +755,7 @@ function Plugin:SearchCompassLandmarks(text, results, scratch, options)
     end
     self.compassSearchKeywords = self.compassSearchKeywords or BuildKeywords()
     self.compassSearchRows = self.compassSearchRows or { target = {}, twoBack = {}, previous = {}, current = {} }
+    self.compassLiveMarkers = self.compassLiveMarkers or { previous = {}, current = {} }
     local words = Words(folded)
     local kinds, rest = ParseQuery(self.compassSearchKeywords, words)
     local query = {
@@ -598,17 +779,29 @@ function Plugin:SearchCompassLandmarks(text, results, scratch, options)
     CompassMarkers(self, Collect, indexed)
     SavedLocations(self, Collect)
     local landmarks = self:GetCompassLandmarks()
-    local function Pass(rows)
-        for _, group in ipairs({ landmarks, live }) do
-            for _, entry in ipairs(group) do
-                if Addon.ClientFeatures.AllowsKind(entry.kind) and not scores[entry] then
-                    local score, tier = Score(entry, query, rows)
-                    if score then
-                        results[#results + 1] = entry
-                        scores[entry], tiers[entry] = score, tier
-                    end
-                end
+    local queryIndex = self.compassLandmarks.queryIndex
+    local function Visit(entry, rows)
+        if Addon.ClientFeatures.AllowsKind(entry.kind) and not scores[entry] then
+            local score, tier = Score(entry, query, rows)
+            if score then
+                results[#results + 1] = entry
+                scores[entry], tiers[entry] = score, tier
             end
+        end
+    end
+    local function Pass(rows)
+        if queryIndex then
+            MarkCandidates(queryIndex, query, rows, scratch)
+            for _, index in ipairs(scratch.candidates) do
+                Visit(queryIndex.entries[index], rows)
+            end
+        else
+            for _, entry in ipairs(landmarks) do
+                Visit(entry, rows)
+            end
+        end
+        for _, entry in ipairs(live) do
+            Visit(entry, rows)
         end
     end
     Pass(nil)

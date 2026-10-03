@@ -28,7 +28,6 @@ end
 
 function Provider.BeginSession(session)
     sessions[session] = { scratch = Plugin:NewCompassSearchScratch(), results = {} }
-    Plugin:AcquireCompassLandmarkDemand(session, true)
     Plugin:SetCompassLandmarkListener(session, function()
         session:Invalidate()
     end)
@@ -44,6 +43,10 @@ function Provider.Query(session, query)
     local state = sessions[session]
     if not state or type(query.text) ~= "string" then
         return {}
+    end
+    if not state.demand and Plugin:IsScoredCompassQuery(query.text) then
+        state.demand = true
+        Plugin:AcquireCompassLandmarkDemand(session, true)
     end
     local options = { fuzzy = query.fuzzy, limit = query.limit }
     local results = Plugin:SearchCompassLandmarks(query.text, state.results, state.scratch, options)

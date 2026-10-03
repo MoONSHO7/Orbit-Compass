@@ -24,6 +24,9 @@ function UnitFactionGroup() return "Alliance" end
 function UnitIsGhost() return false end
 function CreateVector2D(x,y) return { x=x, y=y } end
 function print(s) mock.prints[#mock.prints+1] = s end
+function LibStub() return mock.search end
+mock.search = { PROVIDER_CONTRACT=1, RegisterCallback=function() end, IsKindIncluded=function() return false end,
+ RegisterProvider=function(_, _, provider) mock.provider=provider; return true end }
 function CreateFrame()
     return { SetScript = function(self,k,v) self[k]=v end,
         RegisterEvent = function(self,event) mock.events[event]=true end,
@@ -131,6 +134,7 @@ FILES = [
  "Discovery/Sources/CompassContentSources.lua", "Discovery/Sources/CompassOfferSources.lua",
  "Discovery/Sources/CompassMapSources.lua", "Discovery/Sources/CompassQuestSources.lua", "Discovery/CompassDiscovery.lua",
  "Search/CompassMapScope.lua", "Search/CompassLandmarkCatalog.lua", "Search/CompassLandmarkSearch.lua",
+  "Integrations/CompassSearchProvider.lua", "Plugin/Compass.lua",
 ]
 
 
@@ -156,7 +160,9 @@ def client(family="forever", before=""):
       P.events=CreateFrame(); P.mapID=3; P.mapWidth=1000; P.mapHeight=1000; P.markers={}
       P:InitializeCompassDiscovery(); if Addon.ClientFeatures.supported then P:CacheCompassPointVisibility() end; P:InitializeCompassLandmarks()
       function Drain() for i=1,30 do P:DiscoverCompassMarkers() end end
-      function Build() P:RequestCompassLandmarkCatalog(); for i=1,30 do mock.now=mock.now+0.01; P:StepCompassLandmarkCatalog() end end
+      function Build() P:AcquireCompassLandmarkDemand("test",true); for i=1,30 do mock.now=mock.now+0.01; P:StepCompassLandmarkCatalog() end end
+      function Drive(n) for i=1,n do mock.now=mock.now+0.01; if P.compassLandmarkDriver.OnUpdate then P:StepCompassLandmarkDemand(0.01) end end end
+      function CountWalks() local base=C_Map.GetMapChildrenInfo; mock.walks=0; C_Map.GetMapChildrenInfo=function(...) mock.walks=mock.walks+1; return base(...) end end
     ''')
     return lua
 
@@ -226,6 +232,61 @@ check("Missing quest classification disables only quests", 'assert(Addon.ClientF
 check("Ordinary quests survive missing task API", 'assert(Addon.ClientFeatures.quests); Drain(); Build()', before='C_TaskQuest=nil')
 check("Missing base map API refuses startup contract", 'assert(not Addon.ClientFeatures.supported)', before='C_Map.GetMapInfo=false')
 check("Partial map data retains dungeon entrances", 'mock.noPOIs=true; mock.entrances={{areaPoiID=456,name="Entrance",position={x=.1,y=.2},atlasName="test"}}; Drain(); assert(P.compassSources.map.status=="pending" and #P.compassSources.map.markers==1); Build(); assert(P.compassLandmarks.positions["poi:456"] and P.compassLandmarks.state=="pending"); mock.noPOIs=false; mock.now=mock.now+31; Build(); assert(P.compassLandmarks.state=="complete")')
+check("Request without demand starts no walk", 'P:RequestCompassLandmarkCatalog(); assert(P.compassLandmarks.thread==nil and P.compassLandmarks.state=="idle")')
+check("Stale world entry does not rebuild", 'Build(); P:ReleaseCompassLandmarkDemand("test"); mock.now=mock.now+301; P:InvalidateCompassLandmarkScope(); assert(P.compassLandmarks.state=="complete" and P.compassLandmarks.thread==nil)')
+check("Pin miss drives one finished walk", 'local c=P.compassLandmarks; P:RequestCompassPinLandmarks(0,999); assert(c.thread and c.demand.pin==false and c.pinAttempted=="poi:999"); for i=1,3 do P:StepCompassLandmarkCatalog() end; assert(c.state=="complete" and c.demand.pin==nil); mock.now=mock.now+301; P:RequestCompassPinLandmarks(0,999); assert(c.thread==nil and c.demand.pin==nil and c.state=="complete")')
+check("World entry pauses pin walk", 'local t=0; debugprofilestop=function() t=t+10; return t end; local c=P.compassLandmarks; P:RequestCompassPinLandmarks(0,999); P:StepCompassLandmarkCatalog(); local th=c.thread; assert(th and c.state=="building"); P:InvalidateCompassLandmarkScope(); assert(c.demand.pin==nil and c.pinAttempted==nil and P.compassLandmarkDriver.OnUpdate==nil and c.thread==th); P:RequestCompassPinLandmarks(0,999); assert(c.thread==th and P.compassLandmarkDriver.OnUpdate)')
+check("Search session acquires on first scored query", 'local c=P.compassLandmarks; P:ConnectCompassSearchProvider(); local s={Invalidate=function(self) self.invalidated=true end}; mock.provider.BeginSession(s); assert(not next(c.demand)); mock.provider.Query(s,{text="a"}); assert(not next(c.demand)); mock.provider.Query(s,{text="ab"}); assert(c.demand[s]==true and c.state=="building"); mock.provider.EndSession(s); assert(not next(c.demand))')
+check("Pause keeps a finished pin memoised and a paused pin resumable", '''
+local c=P.compassLandmarks
+P:RequestCompassPinLandmarks(0,999); for i=1,3 do P:StepCompassLandmarkCatalog() end; assert(c.state=="complete" and c.pinAttempted=="poi:999")
+P:PauseCompassPinLandmarks(); assert(c.pinAttempted=="poi:999"); mock.now=mock.now+301
+P:RequestCompassPinLandmarks(0,999); assert(c.thread==nil and c.demand.pin==nil)
+local t=0; debugprofilestop=function() t=t+10; return t end
+P:RequestCompassPinLandmarks(0,998); P:StepCompassLandmarkCatalog(); local th=c.thread
+assert(th and c.state=="building" and c.demand.pin==false)
+P:PauseCompassPinLandmarks()
+assert(c.demand.pin==nil and c.pinAttempted==nil and P.compassLandmarkDriver.OnUpdate==nil and c.thread==th)
+P:RequestCompassPinLandmarks(0,998); assert(c.thread==th and c.demand.pin==false and P.compassLandmarkDriver.OnUpdate)
+''')
+check("Paused pin walk resumes when the ribbon returns", '''
+local c=P.compassLandmarks; local t=0; debugprofilestop=function() t=t+10; return t end
+P:RequestCompassPinLandmarks(0,998); P:StepCompassLandmarkCatalog(); local th=c.thread
+assert(th and c.state=="building" and c.demand.pin==false)
+P.waypointDirty, P.discoveryDirty = false, false
+P:PauseCompassPinLandmarks(); assert(P.waypointDirty==true and c.demand.pin==nil and c.thread==th)
+local rebuilds=0; function P:RebuildCompassMarkers() rebuilds=rebuilds+1; self:RequestCompassPinLandmarks(0,998) end
+P:DiscoverCompassMarkers()
+assert(rebuilds>=1 and P.waypointDirty==false and c.demand.pin==false and c.thread==th and P.compassLandmarkDriver.OnUpdate)
+''')
+check("Incomplete pin walk is not repeated", '''
+local c=P.compassLandmarks; CountWalks(); mock.noPOIs=true
+P:RequestCompassPinLandmarks(0,999); Drive(10)
+assert(mock.walks==1 and c.state=="pending" and c.demand.pin==nil and c.pinAttempted=="poi:999")
+P:RequestCompassPinLandmarks(0,999); mock.now=mock.now+31; Drive(10)
+assert(mock.walks==1 and c.demand.pin==nil)
+''')
+check("Pin memo survives the first root resolution", '''
+local c=P.compassLandmarks; CountWalks(); mock.noPOIs=true; mock.playerMap=nil
+P:RequestCompassPinLandmarks(0,999); assert(c.state=="pending" and c.rootID==nil and c.demand.pin==false)
+mock.playerMap=3; mock.now=mock.now+2; Drive(10)
+assert(mock.walks==1 and c.rootID==1 and c.demand.pin==nil and c.pinAttempted=="poi:999")
+P:RequestCompassPinLandmarks(0,999); mock.now=mock.now+31; Drive(10)
+assert(mock.walks==1 and c.demand.pin==nil)
+''')
+check("Failed pin walk releases demand", '''
+local c=P.compassLandmarks; C_Map.GetMapChildrenInfo=function() error("native failure") end
+P:RequestCompassPinLandmarks(0,999); assert(not pcall(P.StepCompassLandmarkDemand,P,0.01))
+assert(c.state=="failed" and c.demand.pin==nil and c.pinAttempted=="poi:999")
+''')
+check("Root change and disable clear the pin memo", '''
+local c=P.compassLandmarks; P:RequestCompassPinLandmarks(0,999); Drive(10)
+assert(c.state=="complete" and c.pinAttempted=="poi:999")
+mock.maps[3].parentMapID=20; mock.maps[20]={mapID=20,mapType=1,parentMapID=0,name="Other"}
+P:InvalidateCompassLandmarkScope(); assert(c.rootID==20 and c.pinAttempted==nil)
+P:RequestCompassPinLandmarks(0,999); assert(c.thread and c.pinAttempted=="poi:999")
+P:StopCompassLandmarks(); assert(c.pinAttempted==nil and c.thread==nil)
+''')
 check("Idle world entry does not start Search", 'P:InvalidateCompassLandmarkScope(); assert(P.compassLandmarks.state=="idle" and P.compassLandmarks.thread==nil)')
 check("Nested quest task cannot bypass through Search", 'C_QuestInfoSystem.GetQuestClassification=function() return Enum.QuestClassification.BonusObjective end; assert(not Addon.SourceUtils.AllowsQuest(123)); assert(not P:TrackCompassLandmark({kind="quest",questID=123,mapID=3,x=.5,y=.5}) and mock.waypoints==0)')
 check("Disabled native tracking action refused", 'mock.disabled=true; C_SuperTrack.SetSuperTrackedMapPin=function() error("disabled native action") end; assert(not P:TrackCompassLandmark({kind="poi",pinType=0,id=99,mapID=3,x=.5,y=.5}))')
@@ -246,6 +307,343 @@ P.compassSources.map.status="ready"; P.discoveryClock=11; P:UpdateCompassAutoAdv
 assert(P.compassAutoAdvance.missingSince==11);
 P.discoveryClock=13; P:UpdateCompassAutoAdvance(); assert(not P.compassAutoAdvance)
 ''')
+
+check("Losers build no text", '''
+C_Map.GetMapChildrenInfo=function(root) mock.queriedRoot=root; return {mock.maps[3],mock.maps[2]} end; mock.poiIDs={77}
+local fold, folds = Addon.Text.Fold, 0
+Addon.Text.Fold=function(text) if text=="Landmark" then folds=folds+1 end return fold(text) end
+Build(); local c=P.compassLandmarks; local r=c.entries[c.positions["poi:77"]]
+assert(r and r.mapID==3 and folds==1, "folds "..folds)
+''')
+check("Place words are shared per place", '''
+mock.poiIDs={77,78}
+C_AreaPoiInfo.GetAreaPOIInfo=function(_,id) return {areaPoiID=id,name="Alpha"..id,position={x=id==77 and 0.1 or 0.9,y=0.3},atlasName="test"} end
+Build(); local c=P.compassLandmarks; local a, b=c.entries[c.positions["poi:77"]], c.entries[c.positions["poi:78"]]
+assert(a.mapID==3 and b.mapID==3 and rawequal(a.placeWords,b.placeWords))
+local T=Addon.Text; local expected=T.Words(T.Fold("Zone Continent"))
+assert(#a.placeWords==#expected); for i, word in ipairs(expected) do assert(a.placeWords[i]==word) end
+for _, r in ipairs({a,b}) do
+  local fresh=T.AddSearchFields({}, r.name, "Zone Continent")
+  assert(r.searchText==fresh.searchText and r.search==fresh.search and #r.nameWords==#fresh.nameWords)
+  for i, word in ipairs(fresh.nameWords) do assert(r.nameWords[i]==word) end
+end
+''')
+TRACK_FREEZE = 'mock.frozen=setmetatable({},{__mode="k"}); table.freeze=function(t) mock.frozen[t]=true; return t end'
+check("Map lookup finalizes only its hit", '''
+mock.poiIDs={77,78}
+C_AreaPoiInfo.GetAreaPOIInfo=function(_,id) return {areaPoiID=id,name="Alpha"..id,position={x=0.2,y=0.3},atlasName="test"} end
+local fold, folds = Addon.Text.Fold, {}
+Addon.Text.Fold=function(text) folds[text]=(folds[text] or 0)+1 return fold(text) end
+local r=P:FindCompassLandmarkOnMap(3, Enum.SuperTrackingMapPinType.AreaPOI, 77)
+assert(r and r.key=="poi:77" and r.searchText and r.search and r.nameWords and r.placeWords)
+assert(folds.Alpha77==1 and not folds.Alpha78, "hit-only fold")
+assert(mock.frozen[r] and mock.frozen[r.placeWords], "hit frozen")
+''', before=TRACK_FREEZE)
+check("Catalog records and place words stay frozen", '''
+mock.poiIDs={77,78}
+C_AreaPoiInfo.GetAreaPOIInfo=function(_,id) return {areaPoiID=id,name="Alpha"..id,position={x=id==77 and 0.1 or 0.9,y=0.3},atlasName="test"} end
+Build(); local c=P.compassLandmarks; assert(#c.entries>0)
+local copies={}
+for _, r in ipairs(c.entries) do
+  assert(mock.frozen[r] and mock.frozen[r.placeWords], r.key)
+  local copy={} for i, word in ipairs(r.placeWords) do copy[i]=word end copies[r]=copy
+end
+local out=P:SearchCompassLandmarks("zone",{},P:NewCompassSearchScratch()); assert(#out>0)
+for r, copy in pairs(copies) do
+  assert(#r.placeWords==#copy); for i, word in ipairs(copy) do assert(r.placeWords[i]==word) end
+end
+''', before=TRACK_FREEZE)
+
+QUERY_CORPUS = r"""
+local SYL={"dor","no","gal","val","dra","kar","thal","mur","en","il","ash","storm","wind","iron","forge","hold","moon","glade","fel","wood"}
+local COMMON={"Flight Master","Camp","Ruins of","The","Hold","Portal to"}
+local function Word(i,w)
+  local s=SYL[(i*7+w*3+math.floor(i/#SYL))%#SYL+1]..SYL[(i*13+w*5)%#SYL+1]
+  if (i+w)%4==0 then s=s..SYL[(i*3+w)%#SYL+1] end
+  return s:sub(1,1):upper()..s:sub(2)
+end
+NAMES={}
+for i=1,mock.corpus do
+  local parts={} if i%3==0 then parts[1]=COMMON[i%#COMMON+1] end
+  for w=1,1+i%3 do parts[#parts+1]=Word(i,w) end
+  NAMES[i]=table.concat(parts," ")
+end
+NAMES[5]="Ironforge"; NAMES[6]="\208\147\208\190\209\128\208\180\208\190\208\188"
+NAMES[7]="\233\147\129\231\130\137\229\160\161"; NAMES[8]="Storm-Wind's Keep"; NAMES[9]="Moonglade Hold"
+for i=10,280,30 do NAMES[i]=i%60==10 and "Twin Hold" or "Hold Twinn" end
+local poi, gate, taxi=math.floor(mock.corpus*0.75), math.floor(mock.corpus*0.875), mock.corpus
+mock.poiIDs={} for i=1,poi do mock.poiIDs[i]=i end
+C_AreaPoiInfo.GetAreaPOIInfo=function(_,id)
+  return {areaPoiID=id,name=NAMES[id],position={x=(id%97)/100,y=(id%89)/100},atlasName="test"}
+end
+mock.entrances={}
+for i=poi+1,gate do
+  mock.entrances[#mock.entrances+1]={areaPoiID=i,name=NAMES[i],position={x=(i%83)/100,y=.2},atlasName="test"}
+end
+C_TaxiMap.GetTaxiNodesForMap=function()
+  local t={}
+  for i=gate+1,taxi do t[#t+1]={nodeID=i,faction=0,name=NAMES[i],position={x=(i%79)/100,y=.4},atlasName="test"} end
+  return t
+end
+"""
+INDEX_QUERIES = ["iron", "ironforge", "irnforge", "forg", "orge", "storm wind", "wind storm", "flight master storm",
+    "instance kar", "poi", "rare", "saved", "notes", "delve", "dungeon", "mgl", "zzzz", "storm-wind's", "kp",
+    "mgh", "irunforge", "zone", "\u0433\u0440\u043e\u0434", "\u0433\u043e\u0440\u0431", "\u0433\u043e\u0440", "\u94c1\u7089\u5821", "camp dor", "fel wood", "ashen", "twin hold", "hold"]
+INDEX_EQUIVALENCE = r"""
+mock.corpus=400
+""" + QUERY_CORPUS + r"""
+Build(); local c=P.compassLandmarks; local index=c.queryIndex
+assert(c.state=="complete" and index and index.entries==c.entries and #c.entries>300)
+local function Run(q, fuzzy)
+  local scratch=P:NewCompassSearchScratch(); local out=P:SearchCompassLandmarks(q,{},scratch,{fuzzy=fuzzy})
+  local keys={} for i, e in ipairs(out) do keys[i]=e.key.."="..scratch.scores[e].."/"..scratch.tiers[e] end
+  return table.concat(keys,","), scratch
+end
+for _, q in ipairs(QUERIES) do
+  for _, fuzzy in ipairs({false,true}) do
+    c.queryIndex=index; local indexed=Run(q,fuzzy); c.queryIndex=nil; local scanned=Run(q,fuzzy)
+    assert(indexed==scanned, q.." fuzzy="..tostring(fuzzy))
+  end
+end
+c.queryIndex=index; local _, scratch=Run("ironforge",false)
+assert(#scratch.candidates>0 and #scratch.candidates<#c.entries/2)
+"""
+
+
+def lua_escape(text):
+    return "".join(ch if ord(ch) < 128 else "".join("\\%d" % b for b in ch.encode("utf-8")) for ch in text)
+
+
+def index_equivalence(family):
+    queries = "QUERIES={" + ",".join('"' + lua_escape(q) + '"' for q in INDEX_QUERIES) + "}\n"
+    check(f"Indexed search matches a full scan ({family})", queries + INDEX_EQUIVALENCE, family)
+
+
+index_equivalence("forever")
+index_equivalence("retail")
+check("Completed walk publishes its query index", r"""
+mock.poiIDs={77,78}; Build(); local c=P.compassLandmarks
+assert(c.state=="complete" and c.queryIndex and c.queryIndex.entries==c.entries and #c.queryIndex.starts==#c.entries)
+""")
+check("Refresh swaps the query index with its entries", r"""
+local children=C_Map.GetMapChildrenInfo; C_Map.GetMapChildrenInfo=function() return {} end
+Build(); local c=P.compassLandmarks; assert(c.state=="complete" and #c.entries==0 and c.queryIndex.entries==c.entries)
+C_Map.GetMapChildrenInfo=children; mock.poiIDs={77,78}; mock.now=mock.now+301
+P:RequestCompassLandmarkCatalog(); assert(c.target==c and c.queryIndex==nil)
+Build(); local old, entries=c.queryIndex, c.entries; assert(old.entries==entries and #entries>0)
+mock.now=mock.now+301; Build()
+assert(c.state=="complete" and c.entries~=entries and c.queryIndex~=old and c.queryIndex.entries==c.entries)
+""")
+check("Root change retires the query index", r"""
+mock.poiIDs={77}; Build(); local c=P.compassLandmarks; assert(c.queryIndex); P:ReleaseCompassLandmarkDemand("test")
+mock.maps[3].parentMapID=20; mock.maps[20]={mapID=20,mapType=1,parentMapID=0,name="Other"}
+P:RequestCompassLandmarkCatalog(); assert(c.rootID==20 and c.queryIndex==nil)
+Build(); assert(c.state=="complete" and c.queryIndex and c.queryIndex.entries==c.entries)
+""")
+check("Incomplete refresh keeps the published index and query-index build yields", r"""
+mock.poiIDs={77}; Build(); local c=P.compassLandmarks; local old, entries=c.queryIndex, c.entries
+mock.now=mock.now+301; mock.noPOIs=true; Build()
+assert(c.state=="pending" and c.queryIndex==old and c.entries==entries)
+P:StopCompassLandmarks(); c.entries, c.positions, c.ranks, c.queryIndex={}, {}, {}, nil; c.rootRetryAt=nil; mock.noPOIs=false
+mock.corpus=200
+""" + QUERY_CORPUS + r"""
+local t=0; debugprofilestop=function() t=t+0.3; return t end
+local build, inIndex, indexYields=P.BuildCompassLandmarkQueryIndex, false, 0
+P.BuildCompassLandmarkQueryIndex=function(self, ...) inIndex=true; local q=build(self, ...); inIndex=false; return q end
+P:AcquireCompassLandmarkDemand("test",false); assert(c.state=="building")
+local steps=0
+while c.state=="building" do
+  steps=steps+1; assert(steps<1000); mock.now=mock.now+0.01; P:StepCompassLandmarkCatalog()
+  if inIndex then indexYields=indexYields+1 end
+  P:SearchCompassLandmarks("iron",{},P:NewCompassSearchScratch())
+  assert(c.queryIndex==nil or c.queryIndex.entries==c.entries)
+end
+assert(c.state=="complete" and steps>5 and indexYields>0 and c.queryIndex.entries==c.entries, steps.." "..indexYields)
+""")
+check("First build publishes deduplicated entries with the revision", r"""
+mock.corpus=200
+""" + QUERY_CORPUS + r"""
+local t=0; debugprofilestop=function() t=t+0.3; return t end
+local c=P.compassLandmarks; P:AcquireCompassLandmarkDemand("test",false)
+local steps=0
+while c.state=="building" do
+  local entries, revision=c.entries, c.revision
+  steps=steps+1; assert(steps<1000); mock.now=mock.now+0.01; P:StepCompassLandmarkCatalog()
+  assert(c.entries==entries or c.revision~=revision or c.state~="building", "unannounced publish at step "..steps)
+end
+assert(c.state=="complete" and steps>5 and c.queryIndex.entries==c.entries)
+""")
+
+LIVE_MARKER = ('P.markers={{key="poi:7",kind="poi",name="Alpha Spire",atlas="test",destination={mapID=3,x=.5,y=.5}}}; '
+    'function Find(q) local out=P:SearchCompassLandmarks(q,{},P:NewCompassSearchScratch()); return out[1], out end; ')
+check("Live marker rows reuse identity", LIVE_MARKER + 'local a=Find("alpha"); local b=Find("alpha"); assert(a and a==b and b.marker==P.markers[1] and b.zone=="Zone")')
+check("Replaced marker gets a new row", LIVE_MARKER + 'local a=Find("alpha"); local old=P.markers[1]; P.markers[1]=CopyTable(old); local b=Find("alpha"); assert(a and b and a~=b and b.marker==P.markers[1] and b.marker~=old)')
+check("Emptied marker list empties live rows", LIVE_MARKER + 'assert(Find("alpha")); P.markers={}; local a, out=Find("alpha"); assert(#out==0 and next(P.compassLiveMarkers.previous)==nil and next(P.compassLiveMarkers.current)==nil)')
+check("Map name change rebuilds marker rows", LIVE_MARKER + 'local a=Find("alpha"); mock.maps[3].name="Renamed"; local b=Find("alpha"); assert(a and b and a~=b and a.zone=="Zone" and b.zone=="Renamed")')
+check("Indexed marker skip is per query", LIVE_MARKER + 'local a=Find("alpha"); P.compassLandmarks.positions={["poi:7"]=1}; local b, out=Find("alpha"); assert(a and #out==0); P.compassLandmarks.positions={}; local c=Find("alpha"); assert(c==a)')
+check("Cached marker row is choosable", LIVE_MARKER + 'Find("alpha"); local a=Find("alpha"); assert(P:ChooseCompassSearchResult(a) and mock.waypoints==1)')
+check("Duplicate marker object gets two rows", LIVE_MARKER + 'P.markers[2]=P.markers[1]; local _, a=Find("alpha"); local _, b=Find("alpha"); assert(#a==2 and #b==2 and a[1]~=a[2] and b[1]~=b[2])')
+check("Fuzzy pass keeps cached rows", LIVE_MARKER + '''
+local scratch=P:NewCompassSearchScratch()
+local a=P:SearchCompassLandmarks("alpja",{},scratch)[1]; local tier, score=scratch.tiers[a], scratch.scores[a]
+local b=P:SearchCompassLandmarks("alpja",{},scratch)[1]
+assert(a and a==b and tier and scratch.tiers[b]==tier and scratch.scores[b]==score)
+''')
+
+QUEST_WATCHES = ('mock.n=0; C_QuestLog.GetNumQuestWatches=function() return mock.watches or 2 end; '
+    'C_QuestLog.GetQuestIDForQuestWatchIndex=function(i) return 100+i end; '
+    'C_QuestLog.GetNextWaypointForMap=function() mock.n=mock.n+1; if mock.secret then return {secret=true},{secret=true} end return 0.3,0.4 end; ')
+QUEST_LOAD = 'P:InvalidateCompassSource("QUEST_DATA_LOAD_RESULT"); '
+check("Quest-data load reuses watched waypoints", QUEST_WATCHES + 'Drain(); assert(mock.n==2); P.discoveryClock=1; ' + QUEST_LOAD + 'Drain(); assert(mock.n==2 and #P.compassSources.quests.markers==2); P.discoveryClock=2; P:InvalidateCompassSource("QUEST_LOG_UPDATE"); Drain(); assert(mock.n==4 and #P.compassSources.quests.markers==2)')
+check("Mixed quest invalidation re-queries waypoints", QUEST_WATCHES + 'Drain(); P.discoveryClock=1; ' + QUEST_LOAD + 'P:InvalidateCompassSource("QUEST_POI_UPDATE"); Drain(); assert(mock.n==4); P.discoveryClock=2; P:InvalidateCompassSource("SUPER_TRACKING_CHANGED"); ' + QUEST_LOAD + 'Drain(); assert(mock.n==6)')
+check("Quest-data pass keeps the waypoint refresh deadline", QUEST_WATCHES + 'Drain(); local due=P.compassSources.quests.nextRefresh; P.discoveryClock=10; ' + QUEST_LOAD + 'Drain(); assert(mock.n==2 and P.compassSources.quests.nextRefresh==due); P.discoveryClock=31; Drain(); assert(mock.n==4)')
+check("Super-tracked waypoint always re-queried", QUEST_WATCHES + 'mock.watches=1; C_SuperTrack.GetSuperTrackedQuestID=function() return 123 end; Drain(); assert(mock.n==2); P.discoveryClock=1; ' + QUEST_LOAD + 'Drain(); assert(mock.n==3 and #P.compassSources.quests.markers==2)')
+check("Secret waypoint never reused", QUEST_WATCHES + 'mock.watches=1; mock.secret=true; Drain(); assert(mock.n==1 and #P.compassSources.quests.markers==0); P.discoveryClock=1; ' + QUEST_LOAD + 'Drain(); assert(mock.n==2)')
+check("Settings and context changes re-query waypoints", QUEST_WATCHES + 'Drain(); P.discoveryClock=1; P:InvalidateCompassSourceSettings("quests"); ' + QUEST_LOAD + 'Drain(); assert(mock.n==4); P.discoveryClock=2; P.discoveryDirty=true; ' + QUEST_LOAD + 'Drain(); assert(mock.n==6)')
+
+DISCOVERY_RUNTIME = r'''
+P.frame={IsVisible=function() return not mock.hidden end}
+P.markerClock,P.sortElapsed=0,0
+function P:HideCompassPeek() end
+function P:RefreshCompassBearings() end
+function P:UpdateCompassAutoAdvance() end
+function P:LayoutCompassArtwork() return false end
+P.showHandyNotes=true
+P.showTrackedContent=true
+C_ContentTracking.GetCollectableSourceTrackingEnabled=function() return true end
+C_ContentTracking.GetCollectableSourceTypes=function() return {0} end
+C_ContentTracking.GetTrackablesOnMap=function() return 0,{} end
+Drain()
+mock.visits,mock.counts=0,{}
+local discover=P.DiscoverCompassMarkers
+P.DiscoverCompassMarkers=function(self) mock.visits=mock.visits+1; return discover(self) end
+Addon.Services.profiler={active=true,Begin=function() end,
+ Count=function(_,_,key) mock.counts[key]=(mock.counts[key] or 0)+1 end}
+function Tick(elapsed,event)
+  mock.now=mock.now+elapsed
+  if event then P:InvalidateCompassSource(event) end
+  P:UpdateCompass(elapsed)
+end
+function Completed(key) return mock.counts["Discovery/Completed/"..key] or 0 end
+'''
+
+for family in ("retail", "forever"):
+    for fps in (60, 208):
+        check(f"{family} path storm respects source deadlines at {fps} FPS", DISCOVERY_RUNTIME + f'''
+local fps={fps}; local duration=1000/fps
+for i=1,1000 do Tick(1/fps,"SUPER_TRACKING_PATH_UPDATED") end
+local maximum=math.ceil(duration/Addon.Constants.DISCOVERY_MIN_INTERVAL)+1
+assert(Completed("route")>0 and Completed("route")<=maximum)
+assert(Completed("questPath")>0 and Completed("questPath")<=maximum)
+assert(mock.visits<=maximum+math.ceil(duration/2)+5, "visits="..mock.visits)
+assert(Completed("content")==0, "path events recollected content")
+''', family)
+        check(f"{family} missing map keeps recovery deadline at {fps} FPS", DISCOVERY_RUNTIME + f'''
+P.mapWidth=nil; mock.mapReads=0
+function P:RefreshCompassMap() mock.mapReads=mock.mapReads+1 end
+P:DiscoverCompassMarkers(); mock.visits=0
+for i=1,1000 do Tick(1/{fps},"SUPER_TRACKING_PATH_UPDATED") end
+assert(mock.visits<=math.floor((1000/{fps})/Addon.Constants.DISCOVERY_INTERVAL)+1, mock.visits)
+assert(mock.mapReads==mock.visits+1)
+''', family)
+    check(f"{family} path event schedules quest deadline outside event source list", DISCOVERY_RUNTIME + '''
+P.compassSources.route.nextAllowed=100; P.compassSources.route.nextRefresh=100
+P:InvalidateCompassSource("SUPER_TRACKING_PATH_UPDATED")
+assert(P.discoveryNext==P.compassSources.quests.nextAllowed)
+Tick(.21); assert(Completed("questPath")==1 and Completed("route")==0)
+''', family)
+    check(f"{family} coalesced path updates publish the latest route", DISCOVERY_RUNTIME + '''
+mock.waypoint={uiMapID=3,position={x=.8,y=.8}}; mock.routeX=.2
+C_Navigation.GetNextWaypointForMap=function() return mock.routeX,.3,"Route" end
+Tick(.3,"SUPER_TRACKING_PATH_UPDATED")
+local route=P.compassSources.route
+assert(#route.markers==1 and route.markers[1].x==.2)
+local before=Completed("route")
+for i=1,10 do mock.routeX=.2+i*.01; Tick(.005,"SUPER_TRACKING_PATH_UPDATED") end
+assert(Completed("route")==before and route.markers[1].x==.2)
+Tick(.2); assert(Completed("route")==before+1 and route.markers[1].x==mock.routeX)
+''', family)
+    check(f"{family} disabled source events cannot wake idle discovery", DISCOVERY_RUNTIME + '''
+P.showVignettes=false; P:InvalidateCompassSourceSettings("vignettes"); P:DiscoverCompassMarkers()
+assert(P.compassSources.vignettes.status=="disabled")
+mock.visits=0
+for i=1,100 do Tick(.001,"VIGNETTES_UPDATED") end
+assert(mock.visits==0, mock.visits)
+''', family)
+    check(f"{family} non-path event advances idle discovery", DISCOVERY_RUNTIME + '''
+Tick(.3); mock.visits=0; mock.poiIDs={99}
+P:InvalidateCompassSource("AREA_POIS_UPDATED")
+Tick(.01)
+assert(mock.visits==1 and #P.compassSources.map.markers==1)
+assert(P.compassSources.map.markers[1].key=="poi:99")
+''', family)
+    check(f"{family} new source event preserves an earlier scheduler deadline", DISCOVERY_RUNTIME + '''
+P.compassSources.route.dirty=true; P.compassSources.route.nextAllowed=.1
+P.discoveryNext=.1
+P:InvalidateCompassSource("AREA_POIS_UPDATED")
+assert(P.discoveryNext==.1)
+Tick(.11); assert(Completed("route")==1 and Completed("map")==0)
+''', family)
+    check(f"{family} pending HandyNotes provider wakes on availability", DISCOVERY_RUNTIME + '''
+assert(P.compassSources.handynotes.reason=="provider")
+assert(P.compassSources.handynotes.nextRefresh>=30)
+mock.loaded.HandyNotes=true
+P:InvalidateCompassSource("ORBIT_COMPASS_HANDYNOTES")
+Tick(.001)
+assert(mock.visits==1 and Completed("handynotes")==1)
+assert(P.compassSources.handynotes.status=="ready")
+''', family)
+    check(f"{family} suspended discovery keeps progressing without more events", DISCOVERY_RUNTIME + '''
+local passes=0
+function P:CollectCompassMapPoints(markers) passes=passes+1; coroutine.yield() end
+Tick(.3,"AREA_POIS_UPDATED"); assert(P.discoveryJob)
+Tick(.001); assert(not P.discoveryJob and Completed("map")==1 and passes==1)
+''', family)
+    check(f"{family} in-flight invalidation survives completion", DISCOVERY_RUNTIME + '''
+local passes=0
+function P:CollectCompassMapPoints(markers)
+  passes=passes+1
+  if passes==1 then self:InvalidateCompassSource("AREA_POIS_UPDATED") end
+end
+Tick(.3,"AREA_POIS_UPDATED")
+assert(passes==1 and P.compassSources.map.dirty)
+Tick(.01); assert(passes==1)
+Tick(.2); assert(passes==2 and not P.compassSources.map.dirty)
+''', family)
+    for event in ("PLAYER_ENTERING_WORLD", "settings"):
+        invalidate = 'P:InvalidateCompassSourceSettings("map")' if event == "settings" else f'P:InvalidateCompassSource("{event}")'
+        check(f"{family} {event} cancels suspended discovery before publication", DISCOVERY_RUNTIME + '''
+local passes=0
+function P:CollectCompassMapPoints(markers)
+  passes=passes+1
+  Addon.SourceUtils.AddMarker(self,markers,"poi:"..passes,{x=.2,y=.3},"Point","test",1,"poi")
+  if passes==1 then coroutine.yield() end
+end
+Tick(.3,"AREA_POIS_UPDATED")
+local retired=P.discoveryJob
+assert(retired and #retired.source.markers==0)
+''' + invalidate + '''
+Tick(.001)
+assert(P.discoveryJob~=retired and passes==2)
+assert(#P.compassSources.map.markers==1 and P.compassSources.map.markers[1].key=="poi:2")
+''', family)
+
+check("Unsupported source events cannot wake idle discovery", DISCOVERY_RUNTIME + '''
+assert(P.compassSources.tamers.status=="unsupported")
+for i=1,100 do Tick(.001,"SPELLS_CHANGED") end
+assert(mock.visits==0, mock.visits)
+''')
+check("Tracked content retains its own events and timed recovery", DISCOVERY_RUNTIME + '''
+local events={"CONTENT_TRACKING_UPDATE","CONTENT_TRACKING_LIST_UPDATE","CONTENT_TRACKING_IS_ENABLED_UPDATE",
+ "TRACKABLE_INFO_UPDATE","TRACKING_TARGET_INFO_UPDATE","SUPER_TRACKING_CHANGED"}
+for index,event in ipairs(events) do
+  Tick(.3,event)
+  assert(Completed("content")==index, event)
+end
+local count=Completed("content")
+for i=1,31 do Tick(1) end
+assert(Completed("content")==count+1)
+''', "retail")
 
 failures = []
 for name, code, family, before in tests:
