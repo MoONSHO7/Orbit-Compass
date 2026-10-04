@@ -4,15 +4,15 @@ externals:
   Libs/LibStub:
     url: https://github.com/wowace-clone/LibStub
     commit: d0d26a9a58eade74964ea95114ca0ab593271b1b
-  # LibOrbitUI release 1.7 provides API 1.9; pin its verified release commit.
+  # LibOrbitUI release 1.8 provides API 1.10; pin its verified release commit.
   Libs/LibOrbitUI-1.0:
     url: https://github.com/MoONSHO7/Orbit-Libs
-    commit: ce846adc8f03fd00ca4811f87430007b4db652c0
+    commit: bcdf20687b3555fac7078b1bf044104fb8db167e
     path: LibOrbitUI/LibOrbitUI-1.0
-  # LibOrbitSearch release 1.1 provides revision 3 and provider contract 1.
+  # LibOrbitSearch release 1.2 provides revision 5 and provider contract 1.
   Libs/LibOrbitSearch-1.0:
     url: https://github.com/MoONSHO7/Orbit-Libs
-    commit: 633ae7ace624fd46128c102226e1985dee550041
+    commit: bcdf20687b3555fac7078b1bf044104fb8db167e
     path: LibOrbitSearch/LibOrbitSearch-1.0
 
 ignore:
