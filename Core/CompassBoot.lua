@@ -76,7 +76,7 @@ Addon.App = UI.Addon:Create({
         close = L.CMN_CLOSE,
         settings = L.CFG_SETTINGS_FALLBACK,
         edit = L.CFG_TAB_EDIT_MODE,
-        reset = L.CMN_RESET,
+        reset = L.CMN_RESET_POSITION,
         notReady = L.MSG_COMPASS_NOT_READY,
     },
     slashKey = "ORBITCOMPASS",

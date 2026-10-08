@@ -12,8 +12,8 @@ constructing the controller. `CompassController.lua` selects the standalone stor
 `Compass.lua` declares lifecycle methods and creates the native event/update owner during file load;
 `../CompassBoot.lua` starts the application only after every feature bundle has loaded.
 
-`CompassServices.lua` supplies the product's UI context and rendering/positioning hooks, including standalone Orbit UI
-and Orbit UI Chat paths. Standalone tooltips use LibOrbitUI's default Orbit surface and embedded mouse artwork;
+`CompassServices.lua` requires LibOrbitUI API 1.11 before creating the private UI context. It supplies rendering/positioning
+hooks, including standalone Orbit UI and Orbit UI Chat paths. Standalone tooltips use the default Orbit surface and embedded mouse artwork;
 hosted tooltips retain Orbit's current appearance. The Orbit bridge replaces supported hooks and private font paths before feature modules capture
 them. `CompassDefaults.lua` owns both surfaces' defaults; settings continue through the selected controller and store.
 

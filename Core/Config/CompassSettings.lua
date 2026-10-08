@@ -18,6 +18,9 @@ local function Bind(control, index, key)
     control.onChange = function(value)
         Changed(index, key, value)
     end
+    control.onReset = function()
+        Changed(index, key, nil)
+    end
     return control
 end
 
@@ -39,33 +42,44 @@ local function Checkbox(index, key, label, tooltip)
 end
 
 local function ComponentToggle(key, label)
+    local function SetShown(shown)
+        local values = {}
+        for _, disabled in ipairs(Plugin:GetSetting(C.NAVIGATION_SYSTEM_INDEX, "DisabledComponents")) do
+            if disabled ~= key then
+                values[#values + 1] = disabled
+            end
+        end
+        if not shown then
+            values[#values + 1] = key
+        end
+        Changed(C.NAVIGATION_SYSTEM_INDEX, "DisabledComponents", values)
+    end
     return {
         type = "checkbox",
         label = label,
         default = true,
+        onReset = function()
+            SetShown(true)
+        end,
         getValue = function()
             return not Plugin:IsComponentDisabled(key)
         end,
-        onChange = function(shown)
-            local values = {}
-            for _, disabled in ipairs(Plugin:GetSetting(C.NAVIGATION_SYSTEM_INDEX, "DisabledComponents")) do
-                if disabled ~= key then
-                    values[#values + 1] = disabled
-                end
-            end
-            if not shown then
-                values[#values + 1] = key
-            end
-            Changed(C.NAVIGATION_SYSTEM_INDEX, "DisabledComponents", values)
-        end,
+        onChange = SetShown,
     }
 end
 
-local function ArrowControls()
+local function ArrowAppearanceControls()
     return {
         {
             type = "dropdown",
             label = L.PLU_COMPASS_UNITS,
+            onReset = function()
+                local positions = CopyTable(Plugin:GetSetting(C.NAVIGATION_SYSTEM_INDEX, "ComponentPositions"))
+                if positions.Distance and positions.Distance.overrides then
+                    positions.Distance.overrides.DistanceUnits = nil
+                end
+                Changed(C.NAVIGATION_SYSTEM_INDEX, "ComponentPositions", positions)
+            end,
             default = "yards",
             options = {
                 { text = L.PLU_COMPASS_YARDS, value = "yards" },
@@ -84,15 +98,7 @@ local function ArrowControls()
                 Changed(C.NAVIGATION_SYSTEM_INDEX, "ComponentPositions", positions)
             end,
         },
-        Slider(
-            C.NAVIGATION_SYSTEM_INDEX,
-            "NavigationSize",
-            L.CMN_SIZE,
-            C.NAVIGATION_SIZE_MIN,
-            C.NAVIGATION_SIZE_MAX,
-            C.NAVIGATION_SIZE_STEP
-        ),
-        Slider(C.NAVIGATION_SYSTEM_INDEX, "FontSize", L.PLU_COMPASS_FONT_SIZE, C.FONT_MIN, C.FONT_MAX, 1),
+        Slider(C.NAVIGATION_SYSTEM_INDEX, "FontSize", L.CMN_FONT_SIZE, C.FONT_MIN, C.FONT_MAX, 1),
         ComponentToggle("Name", L.CFG_CM_PREVIEW_NAME),
         ComponentToggle("Distance", L.PLU_COMPASS_DISTANCE),
     }
@@ -101,13 +107,17 @@ end
 local function BehaviourControls(refresh)
     local sameType =
         Checkbox(C.SYSTEM_INDEX, "AutoAdvanceSameType", L.PLU_COMPASS_AUTO_SAME_TYPE, L.PLU_COMPASS_AUTO_SAME_TYPE_TT)
-    sameType.visibleIf = function()
-        return Plugin:GetSetting(C.SYSTEM_INDEX, "AutoAdvanceMode") ~= "off"
+    sameType.disabled = function()
+        return Plugin:GetSetting(C.SYSTEM_INDEX, "AutoAdvanceMode") == "off"
     end
+    sameType.disabledReason = L.CFG_SETTING_ENABLE_PARENT_F:format(L.PLU_COMPASS_AUTO_ADVANCE)
     return {
         {
             type = "checkbox",
             label = L.PLU_COMPASS_AUTO_ADVANCE,
+            onReset = function()
+                Changed(C.SYSTEM_INDEX, "AutoAdvanceMode", nil)
+            end,
             tooltip = L.PLU_COMPASS_AUTO_ADVANCE_TT,
             default = false,
             getValue = function()
@@ -131,18 +141,58 @@ end
 function Addon.SettingsTabs(index, refresh)
     if index == C.NAVIGATION_SYSTEM_INDEX then
         return {
-            { id = "arrow", label = L.PLU_COMPASS_ARROW, controls = ArrowControls() },
-            { id = "behaviour", label = L.PLU_COMPASS_BEHAVIOUR, controls = BehaviourControls(refresh) },
+            {
+                id = "layout",
+                label = L.CFG_SETTINGS_TAB_LAYOUT,
+                scopeText = L.CFG_SETTINGS_SCOPE_LAYOUT,
+                controls = {
+                    Slider(
+                        C.NAVIGATION_SYSTEM_INDEX,
+                        "NavigationSize",
+                        L.CMN_ICON_SIZE,
+                        C.NAVIGATION_SIZE_MIN,
+                        C.NAVIGATION_SIZE_MAX,
+                        C.NAVIGATION_SIZE_STEP
+                    ),
+                },
+            },
+            {
+                id = "appearance",
+                label = L.CFG_SETTINGS_TAB_APPEARANCE,
+                scopeText = L.CFG_SETTINGS_SCOPE_LAYOUT,
+                controls = ArrowAppearanceControls(),
+            },
+            {
+                id = "behaviour",
+                label = L.CFG_SETTINGS_TAB_BEHAVIOUR,
+                scopeText = L.CFG_SETTINGS_SCOPE_LAYOUT,
+                controls = BehaviourControls(refresh),
+            },
         }
     end
     return {
         {
-            id = "appearance",
-            label = L.PLU_COMPASS_APPEARANCE,
+            id = "layout",
+            label = L.CFG_SETTINGS_TAB_LAYOUT,
+            scopeText = L.CFG_SETTINGS_SCOPE_LAYOUT,
             controls = {
                 Slider(C.SYSTEM_INDEX, "Width", L.CMN_WIDTH, C.WIDTH_MIN, C.WIDTH_MAX, C.WIDTH_STEP),
-                Slider(C.SYSTEM_INDEX, "FontSize", L.PLU_COMPASS_FONT_SIZE, C.FONT_MIN, C.FONT_MAX, 1),
-                Slider(C.SYSTEM_INDEX, "IconSize", L.CFG_ICON_SIZE, C.ICON_MIN, C.ICON_MAX, 1),
+            },
+        },
+        {
+            id = "appearance",
+            label = L.CFG_SETTINGS_TAB_APPEARANCE,
+            scopeText = L.CFG_SETTINGS_SCOPE_LAYOUT,
+            controls = {
+                Slider(C.SYSTEM_INDEX, "FontSize", L.CMN_FONT_SIZE, C.FONT_MIN, C.FONT_MAX, 1),
+                Slider(C.SYSTEM_INDEX, "IconSize", L.CMN_ICON_SIZE, C.ICON_MIN, C.ICON_MAX, 1),
+            },
+        },
+        {
+            id = "behaviour",
+            label = L.CFG_SETTINGS_TAB_BEHAVIOUR,
+            scopeText = L.CFG_SETTINGS_SCOPE_LAYOUT,
+            controls = {
                 Slider(
                     C.SYSTEM_INDEX,
                     "Range",
@@ -167,7 +217,12 @@ function Addon.SettingsTabs(index, refresh)
                 ),
             },
         },
-        { id = "points", label = L.PLU_COMPASS_POINTS, controls = Addon.PointsSettings() },
+        {
+            id = "points",
+            label = L.PLU_COMPASS_POINTS,
+            scopeText = L.CFG_SETTINGS_SCOPE_LAYOUT,
+            controls = Addon.PointsSettings(),
+        },
     }
 end
 

@@ -23,8 +23,9 @@ validates native atlases and rejected texture assignments, falling back to a nat
 - Atlas existence is cached per session; lookup availability does not prove correct artwork or asynchronous residency.
   Preserve existing assets unless Forever testing produces a nil error tied to that asset; names such as Housing do not
   establish client availability.
-- `Text.Fold` changes case and separators only through explicit byte ranges. Locale-aware `string.lower` and `%s`/`%p`
-  can rewrite UTF-8 lead or continuation bytes, which corrupts accented and Cyrillic names.
+- `Text.Fold` folds case with `C_Intl.FoldCase` (captured at load; Retail 12.1.5+, Forever), then strips accents;
+  Retail 12.1.0, or a call returning nothing, uses the Latin/Cyrillic byte tables. Separators use explicit byte ranges:
+  locale-aware `string.lower` and `%s`/`%p` can rewrite UTF-8 bytes in accented and Cyrillic names.
 - Fixed click-through behavior belongs in the templates. `SetPassThroughButtons` is protected even on Compass's insecure
   buttons; marker pools can grow during combat.
 

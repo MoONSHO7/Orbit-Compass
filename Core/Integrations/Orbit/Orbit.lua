@@ -163,15 +163,10 @@ function Bridge.RenderSettings(plugin, dialog, frame)
     Addon.RegisterSettingsWidgets(Engine.Layout)
     Engine.SchemaBuilder:SetTabRefreshCallback(dialog, plugin, frame)
     local tabs = Addon.SettingsTabs(frame.systemIndex, dialog.orbitTabCallback)
-    local labels, schema = {}, { hideNativeSettings = true, controls = {} }
-    local selectedTab
+    local labels, schema = {}, { hideNativeSettings = true, controls = {}, scope = "layout" }
     for index, tab in ipairs(tabs) do
         labels[index] = tab.label
-        if tab.label == dialog.orbitCurrentTab then
-            selectedTab = tab.label
-        end
     end
-    dialog.orbitCurrentTab = selectedTab or labels[1]
     local current = Engine.SchemaBuilder:AddSettingsTabs(schema, dialog, labels, labels[1], plugin)
     for _, tab in ipairs(tabs) do
         if tab.label == current then
@@ -185,7 +180,6 @@ function Bridge.RenderSettings(plugin, dialog, frame)
         if current == Addon.L.PLU_COMPASS_POINTS then
             plugin:ResetCompassPointVisibility()
         end
-        Bridge.ResetPosition(frame.systemIndex)
     end
     Engine.Config:Render(dialog, frame, plugin, schema)
 end

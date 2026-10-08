@@ -30,8 +30,8 @@ that name to Blizzard's locale-aware font on Korean and Chinese clients.
   and the shared app shell does not register a redundant Blizzard AddOns category or Enabled checkbox.
 - Preserve `Orbit_Compass`, both settings indices and the historical Orbit migration. Do not flatten Orbit
   profile/Canvas state into the standalone store.
-- Hosted settings share tab state between ribbon and arrow; validate the selected tab against the active surface when
-  switching.
+- Hosted settings share tab state between ribbon and arrow; the host's `SchemaBuilder` validates selection when switching.
+  Tab reset preserves frame placement; the explicit position action keeps that separate ownership.
 - The bridge registers the shared Points renderer on the host layout. Points reset clears supported rows' area/alternate
   choices and legacy preferences; unsupported client rows retain their values.
 - The bridge must load before any feature caches service hooks or the controller. Canvas needs that controller, so it

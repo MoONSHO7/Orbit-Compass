@@ -93,8 +93,8 @@ uses, so Blizzard's route shortcuts guide the arrow.
 
 ## Secrets
 Native map, POI, quest, journal, graveyard and taxi records pass through `SourceUtils.Readable`/`Number` before
-comparison or arithmetic. Folding uses explicit byte ranges because locale-aware `string.lower` and `%s`/`%p` classes
-can rewrite UTF-8 bytes.
+comparison or arithmetic. Folding never uses locale-aware `string.lower` or `%s`/`%p` classes, which can rewrite UTF-8
+bytes (see `../Foundation/README.md`).
 
 ## References
 `../Navigation/README.md` (tracking and destination resolution), `../Discovery/README.md`, `../Foundation/README.md`,

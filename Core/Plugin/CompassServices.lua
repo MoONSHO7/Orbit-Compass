@@ -1,6 +1,6 @@
 local addonName, Addon = ...
 local UI = Addon.LibOrbitUI
-assert(UI.VERSION_MAJOR == 1 and UI.VERSION_MINOR >= 10, "Orbit Compass requires LibOrbitUI 1.10")
+assert(UI.VERSION_MAJOR == 1 and UI.VERSION_MINOR >= 11, "Orbit Compass requires LibOrbitUI 1.11")
 local C = Addon.Constants
 local HUD_STRATA = "MEDIUM"
 local ROOT_LEVEL_OFFSET = 1

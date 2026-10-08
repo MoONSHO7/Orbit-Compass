@@ -16,12 +16,14 @@ The standalone application and the Orbit bridge both consume these schemas and w
 omit lifecycle toggles because WoW addon enablement owns availability. Arrow schemas use the component preferences and
 distance formatting owned by `../Navigation/`.
 
-Arrow appearance and Behaviour use separate tabs. Behaviour owns four explained checkboxes: auto-advance, same-type
-routing, corpse recovery and native map tracking. Auto-advance presents the existing mode setting as on/off; enabled
-modes use arrival-or-removal semantics. Same-type routing is visible only while auto-advance is enabled; toggling
-refreshes the active tab without changing the saved same-type preference.
+Both surfaces use Layout, Appearance and Behaviour in that order, with Points appended for the ribbon. Scope appears
+in control hover help. Arrow Behaviour owns auto-advance, same-type routing, corpse recovery and native map tracking.
+Auto-advance maps the existing mode to on/off; enabled modes use arrival-or-removal semantics. Same-type routing remains
+visible but disabled while auto-advance is off, with the reason on hover; changing the parent retains the child's preference.
 
 ## Gotchas
+- Tab resets retain frame positions. Compound component/distance settings clear only the owned field; Arrow Behaviour
+  writes to its navigation controller's existing owner. Standalone Reset position remains a separate action.
 - Both settings windows must use the same widget renderer and controller accessors. Standalone changes trigger
   application through the store callback; hosted changes explicitly request application.
 - Points intersects all 18 definitions with the same client policy as Discovery/Search. GatherMate2 and HandyNotes also

@@ -11,8 +11,8 @@ from lupa.lua51 import LuaRuntime
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACTS = {
-    "Orbit_Compass": ("OrbitCompassDB", False, "1689597", 10),
-    "Orbit_StatusWidget": ("OrbitStatusWidgetDB", True, "1688135", 10),
+    "Orbit_Compass": ("OrbitCompassDB", False, "1689597", 11),
+    "Orbit_StatusWidget": ("OrbitStatusWidgetDB", True, "1688135", 11),
 }
 UI_DIRECTORY = "Libs/LibOrbitUI-1.0/"
 PICKER_DIRECTORY = "Libs/LibOrbitColorPicker-1.0/"

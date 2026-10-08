@@ -72,6 +72,7 @@ local CYRILLIC_EXTENDED_LIMIT = 0x90
 local CYRILLIC_BASIC_LIMIT = 0xA0
 local CYRILLIC_EXTENDED_SHIFT = 0x10
 local CYRILLIC_BASIC_SHIFT = 0x20
+local FoldCase = C_Intl and C_Intl.FoldCase
 local ASCII_LOWER = {}
 for byte = string.byte("A"), string.byte("Z") do
     ASCII_LOWER[string.char(byte)] = string.char(byte + CYRILLIC_BASIC_SHIFT)
@@ -91,14 +92,21 @@ local function LowerCyrillic(character)
     return CYRILLIC_LOWER_LEAD .. string.char(byte - CYRILLIC_BASIC_SHIFT)
 end
 
+local function LowerCase(value)
+    local folded = FoldCase and FoldCase(value)
+    if folded then
+        return (string.gsub(folded, MULTIBYTE_PATTERN, FoldCharacter))
+    end
+    folded = string.gsub(value, MULTIBYTE_PATTERN, FoldCharacter)
+    folded = string.gsub(folded, CYRILLIC_UPPER_PATTERN, LowerCyrillic)
+    return (string.gsub(folded, ASCII_UPPER_PATTERN, ASCII_LOWER))
+end
+
 local Text = {}
 
 -- Locale-aware string.lower and %s/%p classes can match UTF-8 bytes, so every pattern uses explicit byte ranges.
 function Text.Fold(value)
-    local folded = string.gsub(value, MULTIBYTE_PATTERN, FoldCharacter)
-    folded = string.gsub(folded, CYRILLIC_UPPER_PATTERN, LowerCyrillic)
-    folded = string.gsub(folded, ASCII_UPPER_PATTERN, ASCII_LOWER)
-    folded = string.gsub(folded, SEPARATOR_PATTERN, " ")
+    local folded = string.gsub(LowerCase(value), SEPARATOR_PATTERN, " ")
     folded = string.gsub(folded, LEADING_SEPARATOR, "")
     return (string.gsub(folded, TRAILING_SEPARATOR, ""))
 end

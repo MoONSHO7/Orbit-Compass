@@ -134,13 +134,14 @@ FILES = [
  "Discovery/Sources/CompassContentSources.lua", "Discovery/Sources/CompassOfferSources.lua",
  "Discovery/Sources/CompassMapSources.lua", "Discovery/Sources/CompassQuestSources.lua", "Discovery/CompassDiscovery.lua",
  "Search/CompassMapScope.lua", "Search/CompassLandmarkCatalog.lua", "Search/CompassLandmarkSearch.lua",
-  "Integrations/CompassSearchProvider.lua", "Plugin/Compass.lua",
+  "Integrations/CompassSearchProvider.lua", "Plugin/Compass.lua", "Config/CompassSettings.lua",
 ]
 
 
 def client(family="forever", before=""):
     lua = LuaRuntime(unpack_returned_tuples=True)
     lua.execute(HARNESS)
+    lua.globals().PyCaseFold = lambda text: text.casefold()
     lua.execute("\n".join(f'{name}=Namespace("{name}")' for name in NAMESPACES))
     lua.execute(BOUNDARIES)
     versions = {"retail": "12.1.0", "forever": "1.60.1", "unknown": "11.2.0"}
@@ -186,6 +187,44 @@ def host_compatibility(family="forever", legacy_version=1, existing=False):
     ''')
     load = lua.eval('function(code) assert(loadstring(code,"CompassCompatibility.lua"))("Orbit_Compass",Addon) end')
     load((ROOT / "Core/CompassCompatibility.lua").read_text(encoding="utf-8"))
+    return lua
+
+
+def hosted_settings(family):
+    lua = host_compatibility(family)
+    lua.execute('''
+        Addon.Services={}
+        Addon.Constants={NAVIGATION_SYSTEM_INDEX=2}
+        Addon.L={PLU_COMPASS_POINTS="Points"}
+        Orbit.Media={Font={OrbitSansChat="Font"}}
+        Orbit.SecretValueUtils={IsSecret=function()return false end}
+        Orbit.Engine.SchemaBuilder={}
+        function Orbit.Engine.SchemaBuilder:SetTabRefreshCallback(dialog)
+            dialog.orbitTabCallback=function()end
+        end
+        function Orbit.Engine.SchemaBuilder:AddSettingsTabs(schema,dialog,labels)
+            local selected
+            for _,label in ipairs(labels) do
+                if label==dialog.orbitCurrentTab then selected=label end
+            end
+            dialog.orbitCurrentTab=selected or labels[1]
+            if #labels>1 then schema.controls[1]={type="tabs",tabs=labels} end
+            return dialog.orbitCurrentTab
+        end
+        Orbit.Engine.Config={}
+        function Orbit.Engine.Config:Render(dialog,frame,plugin,schema)Captured=schema end
+        Addon.RegisterSettingsWidgets=function()end
+        function Addon.SettingsTabs(index)
+            return {{label=index==2 and "Arrow" or "Appearance",controls={{key="Width",type="slider"}}},
+                {label="Points",controls={{key="PointVisibility",type="points"}}}}
+        end
+        Plugin={resets=0}
+        function Plugin:ResetCompassPointVisibility()self.resets=self.resets+1 end
+        function Plugin:SetSetting()error("Settings reset must not write frame placement")end
+        Addon.Controller=Plugin
+    ''')
+    load = lua.eval('function(code) assert(loadstring(code,"Orbit.lua"))("Orbit_Compass",Addon) end')
+    load((ROOT / "Core/Integrations/Orbit/Orbit.lua").read_text(encoding="utf-8"))
     return lua
 
 
@@ -414,13 +453,26 @@ def lua_escape(text):
     return "".join(ch if ord(ch) < 128 else "".join("\\%d" % b for b in ch.encode("utf-8")) for ch in text)
 
 
-def index_equivalence(family):
+def index_equivalence(family, before="", label=""):
     queries = "QUERIES={" + ",".join('"' + lua_escape(q) + '"' for q in INDEX_QUERIES) + "}\n"
-    check(f"Indexed search matches a full scan ({family})", queries + INDEX_EQUIVALENCE, family)
+    check(f"Indexed search matches a full scan ({family}{label})", queries + INDEX_EQUIVALENCE, family, before)
 
 
+UNICODE_FOLD = (
+    "C_Intl={FoldCase=function(text) mock.folds=(mock.folds or 0)+1;"
+    " if not mock.foldNothing then return PyCaseFold(text) end end}"
+)
+FOLD_SAMPLE = lua_escape("\u0414\u0420\u0410\u041a\u041e\u041d \u00c9clair-Peak")
+FOLD_RESULT = lua_escape("\u0434\u0440\u0430\u043a\u043e\u043d eclair peak")
 index_equivalence("forever")
 index_equivalence("retail")
+index_equivalence("forever", UNICODE_FOLD, ", C_Intl folding")
+check("C_Intl case folding precedes accent stripping", f'''
+local T=Addon.Text; mock.folds=0
+assert(T.Fold("{FOLD_SAMPLE}")=="{FOLD_RESULT}" and T.Fold("{lua_escape(chr(0x1E9E))}")=="ss" and mock.folds==2)
+mock.foldNothing=true; assert(T.Fold("{FOLD_SAMPLE}")=="{FOLD_RESULT}" and mock.folds==3)
+''', before=UNICODE_FOLD)
+check("Byte tables fold case without C_Intl", f'assert(Addon.Text.Fold("{FOLD_SAMPLE}")=="{FOLD_RESULT}")', before="C_Intl=nil")
 check("Completed walk publishes its query index", r"""
 mock.poiIDs={77,78}; Build(); local c=P.compassLandmarks
 assert(c.state=="complete" and c.queryIndex and c.queryIndex.entries==c.entries and #c.queryIndex.starts==#c.entries)
@@ -645,6 +697,40 @@ for i=1,31 do Tick(1) end
 assert(Completed("content")==count+1)
 ''', "retail")
 
+for family in ("retail", "forever"):
+    check(f"{family} canonical settings tabs and owned reset", r'''
+        Addon.App={Apply=function()end};Addon.OrbitBridge={}
+        Addon.PointsSettings=function()return {{type="compassPoints",label="Points"}} end
+        function P:IsComponentDisabled(key)
+            for _,value in ipairs(self:GetSetting(2,"DisabledComponents")) do if value==key then return true end end
+            return false
+        end
+        local refreshes=0
+        local tabs=Addon.SettingsTabs(2,function()refreshes=refreshes+1 end)
+        assert(#tabs==3 and tabs[1].id=="layout" and tabs[2].id=="appearance" and tabs[3].id=="behaviour")
+        for _,tab in ipairs(tabs) do assert(tab.scopeText==Addon.L.CFG_SETTINGS_SCOPE_LAYOUT) end
+        local controls=tabs[3].controls
+        P:SetSetting(1,"AutoAdvanceMode","off");P:SetSetting(1,"AutoAdvanceSameType",false)
+        assert(controls[2].disabled() and not controls[2].visibleIf and controls[2].disabledReason)
+        controls[1].onChange(true)
+        assert(not controls[2].disabled() and refreshes==1 and not P:GetSetting(1,"AutoAdvanceSameType"))
+        P:SetSetting(2,"Position",{point="CENTER",x=123,y=45})
+        controls[1].onReset();assert(P:GetSetting(1,"AutoAdvanceMode")==Addon.Definition.defaults.AutoAdvanceMode)
+        assert(P:GetSetting(2,"Position").x==123)
+        P:SetSetting(2,"DisabledComponents",{"Name","Distance","Unrelated"})
+        for _,control in ipairs(tabs[2].controls) do
+            if control.label==Addon.L.CFG_CM_PREVIEW_NAME then control.onReset() end
+        end
+        assert(not P:IsComponentDisabled("Name") and P:IsComponentDisabled("Distance") and P:IsComponentDisabled("Unrelated"))
+        P:SetSetting(2,"ComponentPositions",{Distance={x=12,overrides={DistanceUnits="meters",FontSize=23}},Name={x=54}})
+        tabs[2].controls[1].onReset()
+        local positions=P:GetSetting(2,"ComponentPositions")
+        assert(positions.Distance.x==12 and positions.Distance.overrides.FontSize==23 and positions.Name.x==54)
+        assert(not positions.Distance.overrides.DistanceUnits)
+        local ribbon=Addon.SettingsTabs(1)
+        assert(#ribbon==4 and ribbon[1].id=="layout" and ribbon[2].id=="appearance" and ribbon[3].id=="behaviour" and ribbon[4].id=="points")
+    ''', family)
+
 failures = []
 for name, code, family, before in tests:
     try:
@@ -657,6 +743,18 @@ host_scenarios = (
     ("Retail host accepted", host_compatibility("retail"), "assert(Addon.OrbitHost==Orbit and not Addon.incompatibleOrbit)"),
     ("Old host rejected", host_compatibility(legacy_version=0), "assert(Addon.incompatibleOrbit and not Addon.OrbitHost)"),
     ("Existing Compass rejected", host_compatibility(existing=True), "assert(Addon.incompatibleOrbit and not Addon.OrbitHost)"),
+    *((f"{family} hosted tab reset preserves placement", hosted_settings(family), '''
+        local dialog={orbitCurrentTab="Appearance"}
+        Addon.OrbitBridge.RenderSettings(Plugin,dialog,{systemIndex=2})
+        assert(dialog.orbitCurrentTab=="Arrow" and Captured.controls[1].type=="tabs")
+        Captured.onReset()
+        assert(Plugin.resets==0)
+        dialog.orbitCurrentTab="Points"
+        Addon.OrbitBridge.RenderSettings(Plugin,dialog,{systemIndex=1})
+        assert(dialog.orbitCurrentTab=="Points" and Captured.controls[2].key=="PointVisibility")
+        Captured.onReset()
+        assert(Plugin.resets==1)
+    ''') for family in ("retail", "forever")),
 )
 for name, lua, code in host_scenarios:
     try:

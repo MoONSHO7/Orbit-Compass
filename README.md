@@ -61,7 +61,7 @@ place of the standalone store.
   its choices; unknown clients stay dormant.
 - Saved destinations carry client family and optional world-instance identity. Old unclassified records stay stored but
   cannot navigate; re-save confirmed places on their originating client. See `Core/Navigation/README.md`.
-- Pins are the verified LibOrbitUI 1.8 (API 1.10) and LibOrbitSearch 1.2 (revision 5) releases. Validate ordinary fetched
+- Pins are the verified LibOrbitUI 1.10 (API 1.14) and LibOrbitSearch 1.2 (revision 5) releases. Validate ordinary fetched
   files before consumer publication; local junctions are development-only, and automatic latest-published-release
   resolution is not implemented. Orbit-Libs is public; packaging keeps its Git credential policy plus a CurseForge
   upload token.

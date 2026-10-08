@@ -13,8 +13,8 @@ runtime subdirectories. Omitted `path` means the repository root. Existing junct
 `--force` refreshes only ordinary directories.
 
 `check-package.py` walks the TOC/XML load order, including Bindings.xml. It strips development blocks, compiles Lua 5.1,
-checks product metadata/assets and required APIs in the loaded libraries. Compass requires UI API 1.10 with client
-identity/widget registration and LibOrbitSearch revision 2 with provider contract 1; Status requires UI API 1.10 and
+checks product metadata/assets and required APIs in the loaded libraries. Compass requires UI API 1.11 with client
+identity/widget registration and LibOrbitSearch revision 2 with provider contract 1; Status requires UI API 1.11 and
 picker revision 10. Interface metadata accepts distinct positive integers including Retail 120100; this does not certify
 loader behavior. API checks inspect declarations without executing addon code.
 
@@ -36,7 +36,7 @@ bounds, pause/resume and publication checks, and balanced phase spans across yie
 bounds do not certify an in-game millisecond limit. Release CI runs both suites.
 
 ## Gotchas
-- Compass pins verified UI 1.8/API 1.10 and Search 1.2/revision 5 releases. Linked checks do not establish release
+- Compass pins verified UI 1.10/API 1.14 and Search 1.2/revision 5 releases. Linked checks do not establish release
   delivery; validate ordinary fetched packages. The automatic latest-release resolver is not implemented.
 - `fetch-libs.py` and `check-package.py` remain byte-identical between both addon repositories; keep their changes
   synchronized. `check-client-features.py` is product-specific despite sharing its name with Status's suite.
