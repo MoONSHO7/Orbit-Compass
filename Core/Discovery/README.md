@@ -15,7 +15,9 @@ queue, invalidation and refresh deadlines. Assembly adds the user waypoint and, 
 followed map pin or vignette as a waypoint-priority marker, so a tracked destination shows at any range, even when its
 category is hidden or it sits on another map of the same continent.
 
-Native collectors live in `Sources/`; optional-addon collectors stay with their provider under `../Integrations/`.
+Native collectors live in `Sources/`; optional-addon collectors stay with their provider under `../Integrations/`,
+and their `SOURCES` rows name the `provider` addon that must be loaded. The `navigation` row has no Points field: it
+refreshes only when Orbit Navigation's callback invalidates it, and Navigation's settings decide whether it is empty.
 Navigation consumes the assembled records for guidance, and Ribbon selects and projects them for display.
 
 With the optional Orbit profiler active, source timing rows count coroutine resumes. Fixed counters distinguish started,

@@ -5,8 +5,9 @@ local F = Addon.ClientFeatures
 local Plugin = Addon.Controller
 local Utils = Addon.SourceUtils
 local Readable, Number = Utils.Readable, Utils.Number
-local NAVIGATION_RANK = { corpse = 1, route = 2, selected = 3, directions = 4 }
+local NAVIGATION_RANK = { corpse = 1, provider = 2, route = 3, selected = 4, directions = 5 }
 local ROUTE_DISMISSAL = "route"
+local PROVIDER_SOURCE = "navigation"
 
 function Plugin:CollectCompassCorpse(markers)
     if F.corpse and self.showCorpse and Readable(UnitIsGhost("player")) == true then
@@ -62,15 +63,25 @@ local function NativeSelection()
     end
 end
 
-function Plugin:SelectCompassNavigation()
-    local keys, prefix
-    if self:FollowsCompassPin(self:GetCompassTrackedPin()) then
-        keys, prefix = NativeSelection()
+local function MatchesSelection(markerKey, keys, prefix)
+    for _, key in ipairs(keys) do
+        if markerKey == key or (prefix and markerKey:sub(1, #key) == key) then
+            return true
+        end
     end
+    return false
+end
+
+function Plugin:SelectCompassNavigation()
+    -- Dismissals reset on native changes even without Follow Targets, so a new super-track reaches Orbit Navigation.
+    local keys, prefix = NativeSelection()
     local selectionID = keys and (keys[1] or "unavailable")
     if self.nativeNavigationID ~= selectionID then
         self.nativeNavigationID = selectionID
         self.dismissedNavigationKey = nil
+    end
+    if not self:FollowsCompassPin(self:GetCompassTrackedPin()) then
+        keys, prefix = nil, nil
     end
     local x, y, positionRead
     local target, bestRank, bestDistance, selected, selectedDistance
@@ -80,16 +91,11 @@ function Plugin:SelectCompassNavigation()
         if marker.kind == "corpse" then
             rank = NAVIGATION_RANK.corpse
         elseif marker.kind == "route" then
-            rank = NAVIGATION_RANK.route
+            rank = marker.source == PROVIDER_SOURCE and NAVIGATION_RANK.provider or NAVIGATION_RANK.route
         elseif marker.key == "waypoint" and not keys then
             rank = NAVIGATION_RANK.selected
-        elseif keys then
-            for _, key in ipairs(keys) do
-                if marker.key == key or (prefix and marker.key:sub(1, #key) == key) then
-                    rank = NAVIGATION_RANK.selected
-                    break
-                end
-            end
+        elseif keys and MatchesSelection(marker.key, keys, prefix) then
+            rank = NAVIGATION_RANK.selected
         end
         if not rank and not keys and self.followTracked and marker.kind == "directions" then
             rank = NAVIGATION_RANK.directions
@@ -118,10 +124,16 @@ function Plugin:SelectCompassNavigation()
             end
         end
     end
+    local dismissedKey = self.dismissedNavigationKey
+    local dismissed = dismissedKey == ROUTE_DISMISSAL
+        or (keys ~= nil and dismissedKey ~= nil and MatchesSelection(dismissedKey, keys, prefix))
+    self:PublishCompassNavigationDestination(selected, not keys, dismissed)
     if target and target.kind == "route" and selected then
         local east, north = (selected.x - target.x) * self.mapWidth, (selected.y - target.y) * self.mapHeight
-        -- Native routing may place its step on the destination; keep the destination's identity for auto-advance.
-        if east * east + north * north <= C.ARRIVAL_DISTANCE * C.ARRIVAL_DISTANCE then
+        local useSelected = target.source ~= PROVIDER_SOURCE
+            or (x and y and selectedDistance <= C.ARRIVAL_DISTANCE * C.ARRIVAL_DISTANCE)
+        -- Orbit's final walk keeps its step list until the player also reaches the destination.
+        if useSelected and east * east + north * north <= C.ARRIVAL_DISTANCE * C.ARRIVAL_DISTANCE then
             target = selected
         end
     end

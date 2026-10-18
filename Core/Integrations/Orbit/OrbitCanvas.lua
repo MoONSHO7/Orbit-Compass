@@ -78,7 +78,7 @@ function Plugin:SetupNavigationCanvas()
         if not preview.arrow then
             preview.arrow = preview:CreateTexture(nil, "OVERLAY", nil, C.MARKER_ICON_SUBLEVEL)
             preview.arrow:SetAllPoints()
-            preview.arrow:SetTexture(Addon.Services.arrowTexture)
+            preview.arrow:SetTexture(Addon.Services.arrowTexture, nil, nil, C.ARROW_TEXTURE_FILTER)
         end
         local fontPath, fontSize = self.navigationFontPath, self.navigationFontSize
         local positions = self:GetComponentPositions(C.NAVIGATION_SYSTEM_INDEX)

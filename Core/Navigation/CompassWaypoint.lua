@@ -159,7 +159,8 @@ function Plugin:GetWaypointTitle(mapID, x, y)
     end
     self.waypointLabel = nil
     self:ClearCompassHandyNotesGuides()
-    return L.PLU_COMPASS_WAYPOINT
+    local title, description = self:GetCompassNavigationWaypointLabel(mapID, x, y)
+    return title or L.PLU_COMPASS_WAYPOINT, description
 end
 
 function Plugin:SetWaypointFromText(input)

@@ -20,16 +20,17 @@ uses, so Blizzard's route shortcuts guide the arrow.
   index older than five minutes refreshes into a side table that replaces the live index only when complete. The walk's
   child-copy, duplicate comparison/compaction and query-entry loops check that budget per record; native child-map
   retrieval and the final folded-name concatenation remain indivisible. Final steps build a query index (word postings,
-  a folded-name blob and kind lists) and publish it with
-  the entries in one step, except after an incomplete refresh; a root change or a build into the live index clears it,
-  so none exists while a first build runs.
-- **Collectors.** Policy-enabled collectors on each continent, zone and micro map contribute area records; dungeon
-  entrances and delves; events, races, quest hubs and generic area POIs, split into teleports by atlas; map links, split
-  into caves; pet tamers and friendly taxi nodes; dig sites, task quests (world quests, world bosses, bonus objectives),
-  graveyards and invasions. This follows Blizzard's `MapLegendFrame.lua` categories. Records are frozen landmarks keyed
-  like ribbon markers (`poi:`, `taxi:`, `digSite:`, `quest:`, `map:`); only a record that wins its key gets folded name
-  text, and each distinct place (zone, continent) is folded once per walk into read-only words shared by its records.
-  `FindCompassLandmarkOnMap` reuses the collectors for world-map clicks.
+  a folded-name blob and kind lists) and publish it with the entries in one step, except after an incomplete refresh; a
+  root change or a build into the live index clears it, so none exists while a first build runs.
+- **Collectors.** Policy-enabled collectors contribute area records for each continent, zone and micro map, walked in
+  native order; dungeon entrances and delves; events, races, quest hubs and generic area POIs, split into teleports by
+  atlas; map links, split into caves; pet tamers and friendly taxi nodes; dig sites, task quests (world quests, world
+  bosses, bonus objectives), graveyards and invasions, as in Blizzard's `MapLegendFrame.lua`. After the area pass the
+  other collectors walk zones, then micro maps, then continents (`COLLECT_PASSES`, rank order), so a candidate that
+  cannot outrank its key's record skips its native reads and construction. Records are frozen landmarks keyed like
+  ribbon markers (`poi:`, `taxi:`, `digSite:`, `quest:`, `map:`); only a record that wins its key gets folded name text,
+  and each distinct place is folded once per walk into read-only words shared by its records. `FindCompassLandmarkOnMap`
+  reuses the collectors for a world-map click and reads only the clicked key.
 - **Ranking.** `CompassLandmarkSearch.lua` searches into caller-owned scratch (`NewCompassSearchScratch`), recording a
   score and a match tier per result (5 exact to 1 typo/loose) so Orbit can merge places with its own results;
   `fuzzy = false` skips the fuzzy pass and `limit` trims the list. It adds live results at query time (quest-log quests,
@@ -80,8 +81,10 @@ uses, so Blizzard's route shortcuts guide the arrow.
   Partial category words need three letters (`MIN_PARTIAL_LENGTH`), and typos need four (`TYPO_MIN_LENGTH`; one edit,
   two from seven letters). A typo must keep the word's first letter. Repeated word/target typo comparisons share a
   query-local cache, discarded after the fuzzy pass; ranking is unchanged.
-- Phased map copies with the same name and parent collapse to the first. A POI ID seen on several maps keeps the primary
-  or deepest map's record, and task quests prefer their own map (`childDepth`).
+- Phased map copies with the same name and parent collapse to the first. A POI ID on several maps keeps the primary or
+  higher-ranked map's record (zone, micro, continent); equal ranks keep the native list's first map, and task quests
+  prefer their own map (`childDepth`). Entry order is collection order, so rows tied on score, kind, name and zone have
+  no defined order.
 - After the walk, same-name entries collapse when one sits on an ancestor or continent map of the other, or within 100
   yards in world space. Parent maps repeat places under other POI IDs that do not route. Same-name places elsewhere stay
   distinct, and quests are excluded.

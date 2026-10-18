@@ -17,7 +17,8 @@ omit lifecycle toggles because WoW addon enablement owns availability. Arrow sch
 distance formatting owned by `../Navigation/`.
 
 Both surfaces use Layout, Appearance and Behaviour in that order, with Points appended for the ribbon. Scope appears
-in control hover help. Arrow Behaviour owns auto-advance, same-type routing, corpse recovery and native map tracking.
+in control hover help. Arrow Behaviour owns Show Arrow, auto-advance, same-type routing, corpse recovery and native map
+tracking; Show Arrow is a display preference on index 2, not a lifecycle toggle.
 Auto-advance maps the existing mode to on/off; enabled modes use arrival-or-removal semantics. Same-type routing remains
 visible but disabled while auto-advance is off, with the reason on hover; changing the parent retains the child's preference.
 

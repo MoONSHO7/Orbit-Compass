@@ -25,7 +25,7 @@ when startup is refused.
 | [Ribbon](Ribbon/README.md) | Visible-point selection, overlap groups, pooled icons, headings and the Alt callout |
 | [Search](Search/README.md) | World landmark index, category/place ranking and the inline search field |
 | [Config](Config/README.md) | Appearance schemas, Points matrix and native hotkey capture |
-| [Integrations](Integrations/README.md) | HandyNotes, GatherMate2, LibOrbitSearch provider and Orbit host bridge |
+| [Integrations](Integrations/README.md) | HandyNotes, GatherMate2, Orbit Navigation, Search provider and Orbit bridge |
 
 Bundle order is Foundation → Plugin → Discovery → Navigation → Integrations → Ribbon → Search → Config → boot. Discovery
 supplies records to Navigation and Ribbon; Config updates the selected controller's preferences, and external adapters
@@ -48,5 +48,5 @@ labelled `SecretValueUtils.IsSecret` when hosted); Navigation retains validated 
 those results. See the owning module README before changing a native-data boundary.
 
 ## References
-`../README.md`, `../Localization/README.md`, `../.scripts/README.md`; Orbit `Core/README.md` and the workspace
+`../README.md`, `../Localization/README.md`, `../../.scripts/README.md`; Orbit `Core/README.md` and the workspace
 architecture/skill standards.

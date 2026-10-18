@@ -112,6 +112,7 @@ local function BehaviourControls(refresh)
     end
     sameType.disabledReason = L.CFG_SETTING_ENABLE_PARENT_F:format(L.PLU_COMPASS_AUTO_ADVANCE)
     return {
+        Checkbox(C.NAVIGATION_SYSTEM_INDEX, "ShowArrow", L.PLU_COMPASS_SHOW_ARROW, L.PLU_COMPASS_SHOW_ARROW_TT),
         {
             type = "checkbox",
             label = L.PLU_COMPASS_AUTO_ADVANCE,

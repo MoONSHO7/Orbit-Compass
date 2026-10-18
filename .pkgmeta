@@ -1,5 +1,9 @@
 package-as: Orbit_Compass
 
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
 externals:
   Libs/LibStub:
     url: https://github.com/wowace-clone/LibStub

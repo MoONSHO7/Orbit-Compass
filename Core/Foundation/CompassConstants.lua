@@ -125,6 +125,7 @@ Addon.Constants = table.freeze({
     WORLD_QUEST_PRIORITY = 5,
     POI_PRIORITY = 6,
     FALLBACK_ATLAS = "Waypoint-MapPin-Untracked",
+    ARROW_TEXTURE_FILTER = "TRILINEAR",
     DIRECTIONS_ATLAS = "poi-traveldirections-arrow",
     POINT_TYPE_LABELS = {
         quest = "PLU_COMPASS_TYPE_QUEST",

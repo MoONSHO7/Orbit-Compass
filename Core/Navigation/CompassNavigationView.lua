@@ -12,7 +12,7 @@ function Plugin:CreateNavigationView()
     self:CreateNavigationFrame()
     local frame = self.navigationFrame
     local arrow = frame:CreateTexture(nil, "OVERLAY", nil, C.MARKER_ICON_SUBLEVEL)
-    arrow:SetTexture(Services.arrowTexture)
+    arrow:SetTexture(Services.arrowTexture, nil, nil, C.ARROW_TEXTURE_FILTER)
     local distance = frame:CreateFontString(nil, "OVERLAY")
     distance:SetMaxLines(1)
     distance:SetJustifyH("CENTER")
@@ -106,7 +106,8 @@ function Plugin:RenderNavigation(facing)
         or (
             not preview
             and (
-                not target
+                not self.showArrow
+                or not target
                 or not target.distance
                 or not facing
                 or (target.distance > C.ARRIVAL_DISTANCE and not target.bearing)

@@ -11,6 +11,7 @@ local SOURCES = {
         collect = "CollectCompassGatherMate",
         label = "Compass.Discovery.GatherMate",
         interval = 30,
+        provider = "GatherMate2",
     },
     {
         key = "quests",
@@ -22,6 +23,13 @@ local SOURCES = {
         pathLabel = "Compass.Discovery.QuestPath",
     },
     { key = "route", collect = "CollectCompassRoute", label = "Compass.Discovery.Route", interval = 30 },
+    {
+        key = "navigation",
+        collect = "CollectCompassNavigationRoute",
+        label = "Compass.Discovery.NavigationRoute",
+        interval = math.huge,
+        provider = "Orbit_Navigation",
+    },
     {
         key = "vignettes",
         fields = { "showVignettes" },
@@ -107,6 +115,7 @@ local SOURCES = {
         label = "Compass.Discovery.HandyNotes",
         interval = math.huge,
         trackMapArt = true,
+        provider = "HandyNotes",
     },
 }
 local EVENT_SOURCES = {
@@ -141,6 +150,7 @@ local EVENT_SOURCES = {
     CORPSE_OUT_OF_RANGE = "corpse",
     ORBIT_COMPASS_LOCATIONS = "locations",
     ORBIT_COMPASS_HANDYNOTES = "handynotes",
+    ORBIT_COMPASS_NAVIGATION_ROUTE = "navigation",
 }
 local CONTEXT_EVENTS = {
     USER_WAYPOINT_UPDATED = true,
@@ -347,10 +357,7 @@ local function ReconcileSource(plugin, definition)
         status, reason = "unsupported", "client-contract"
     elseif not enabled then
         status, reason = "disabled", "preference"
-    elseif
-        (definition.key == "handynotes" and not C_AddOns.IsAddOnLoaded("HandyNotes"))
-        or (definition.key == "gathermate" and not C_AddOns.IsAddOnLoaded("GatherMate2"))
-    then
+    elseif definition.provider and not C_AddOns.IsAddOnLoaded(definition.provider) then
         status, reason = "pending", "provider"
     end
     if status then

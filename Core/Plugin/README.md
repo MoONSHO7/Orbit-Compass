@@ -16,6 +16,7 @@ constructing the controller. `CompassController.lua` selects the standalone stor
 hooks, including standalone Orbit UI and Orbit UI Chat paths. Standalone tooltips use the default Orbit surface and embedded mouse artwork;
 hosted tooltips retain Orbit's current appearance. The Orbit bridge replaces supported hooks and private font paths before feature modules capture
 them. `CompassDefaults.lua` owns both surfaces' defaults; settings continue through the selected controller and store.
+`CompassStandaloneStore.lua` strips retired keys from `OrbitCompassDB` inside `../CompassBoot.lua`'s `readStore`.
 
 ## Gotchas
 - Never invoke lifecycle methods to force a refresh. The selected application/host owns activation and settings
@@ -27,6 +28,8 @@ them. `CompassDefaults.lua` owns both surfaces' defaults; settings continue thro
   while its feature policy still withholds unaudited activities. Optional pet-battle calls are guarded; Discovery
   registers supported source events. Disable disconnects provider sessions before retiring Search jobs, listeners and
   demand.
+- The standalone LibOrbitUI store rejects the whole saved table when any key lacks a default, so a removed standalone
+  default must join `CompassStandaloneStore.lua`'s retired list; the unreleased route-guidance keys already do.
 - Appearance changes reuse discovery caches. Category changes invalidate only their source; profile switches also
   refresh saved locations.
 - Standalone visibility applies when pet/vehicle hiding changes. Edit Mode transitions redraw without restarting

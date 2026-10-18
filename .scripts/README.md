@@ -25,8 +25,8 @@ version metadata. Python needs `lupa==2.8`.
 
 `check-client-features.py` loads real Compass policy, collectors, scheduler, map scope, Search, navigation and
 LibOrbitUI client/store code into Lua 5.1. It checks client families, withheld APIs, partial data, retained preferences,
-destination provenance, stale actions and source readiness, including event storms at different frame rates. Run
-`python .scripts/check-client-features.py`; it reads LibOrbitUI from the sibling
+destination provenance, Navigation route guidance, stale actions and source readiness, including event storms at
+different frame rates. Run `python .scripts/check-client-features.py`; it reads LibOrbitUI from the sibling
 `../Orbit-Libs/LibOrbitUI/LibOrbitUI-1.0` path, which is the workspace checkout locally and, in the workflow's `suites`
 job, a symlink to the fetched `Libs/LibOrbitUI-1.0`. It does not simulate native rendering or security.
 

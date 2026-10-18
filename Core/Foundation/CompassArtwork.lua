@@ -27,7 +27,7 @@ function Artwork.Apply(region, atlas, useSize)
     if Artwork.Exists(atlas) then
         region:SetAtlas(atlas, useSize)
     else
-        region:SetTexture(FALLBACK_TEXTURE)
+        region:SetTexture(FALLBACK_TEXTURE, nil, nil, Addon.Constants.ARROW_TEXTURE_FILTER)
         region:SetTexCoord(0, 1, 0, 1)
     end
 end

@@ -11,7 +11,8 @@ Own destinations and guidance independently of how the ribbon chooses visible ic
   choice menus, player position/bearings, then arrow construction, rendering and component settings.
   `CompassWaypoint.lua` owns explicit native waypoint changes; `CompassCommands.lua` and `CompassPointMenu.lua` feed
   that same selection path. `CompassLocations.lua` owns saved destinations, and `CompassTargets.lua` chooses guidance in
-  the order corpse, native route step, selected destination, then gossip directions.
+  the order corpse, Orbit Navigation route point, native route step, selected destination, then gossip directions, and
+  hands the selected destination to Orbit Navigation (`../Integrations/README.md`).
 - **Tracked pins.** `CompassTrackedPin.lua` identifies the super-tracked map pin and decides whether Compass follows it
   (Follow Targets, or a pin chosen through Search). It resolves the pin's destination from the search choice, the open
   world map or the landmark index in `../Search/`; an unresolved pin drives at most one finished index walk per pin and
@@ -43,8 +44,10 @@ Own destinations and guidance independently of how the ribbon chooses visible ic
 - Indexed Search actions require current catalog membership, live marker actions require current identity, and saved
   actions reread the collection. Disabled/suppressed clients reject waypoint changes. Native content/vignette tracking
   and explicit quests obey client policy.
-- Index 2 owns arrow position, size, text and Canvas drafts. Reset clears the saved position only after movement guards
-  accept the current default, so later scale/display changes remain dynamic.
+- Index 2 owns arrow visibility, position, size, text and Canvas drafts. `ShowArrow` hides only the gameplay view:
+  targets, auto-advance and the Orbit Navigation handoff continue, and Edit Mode/Canvas still preview the arrow so it
+  stays selectable. Reset clears the saved position only after movement guards accept the current default, so later
+  scale/display changes remain dynamic.
 - Map-position gaps retain calibration only on the same map and world instance. Initial acquisition and changed
   instances require fresh coordinates.
 - Position and bearing phases do not catch errors; the existing update callback owns error handling. Failed phase spans
@@ -52,9 +55,10 @@ Own destinations and guidance independently of how the ribbon chooses visible ic
 - Menu choices capture labels, destinations and provider actions; regrouping cannot retarget a choice. Native HandyNotes
   actions run only on explicit selection, and following a guide retains its parent instructions.
 - Route steps are guidance, not destinations. Clicks, menus, the target hotkey and auto-advance skip them. A step within
-  arrival range of the selected destination yields to it, and dismissing a routed pin hides the whole trip until the
-  native selection changes. Saving a routed target stores its resolved destination, and is refused when the pin's
-  destination is unknown.
+  arrival range of the selected destination yields to it; Orbit Navigation also requires a valid player position within
+  arrival range, keeping its step list during the final walk. Dismissing a routed pin hides the whole trip until the
+  native selection changes, observed even without Follow Targets so Orbit Navigation can follow the next super-track.
+  Saving a routed target stores its resolved destination, and is refused when the pin's destination is unknown.
 - Waypoint adoption compares against the last observed pin, so login, reloads and zone changes never re-track an
   existing pin, and untracking a pin on the world map is respected. Quest-offer and housing pins cannot be resolved
   off-map and rely on route steps.

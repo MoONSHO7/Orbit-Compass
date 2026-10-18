@@ -16,7 +16,7 @@ place of the standalone store.
   Orbit's module conventions: Foundation, Plugin, Discovery, Navigation, Integrations, Ribbon, Search and Config each
   own a directory, XML bundle and README; [Core/README.md](Core/README.md) maps the data flow and startup phases.
   `Assets/` owns the arrow texture, logo and private fonts.
-- **Orbit boundary.** The TOC declares `## OptionalDeps: Orbit, HandyNotes, GatherMate2`.
+- **Orbit boundary.** The TOC declares `## OptionalDeps: Orbit, HandyNotes, GatherMate2, Orbit_Navigation`.
   `Core/CompassCompatibility.lua` accepts a host only when `Orbit.ExternalUIHost.legacyPluginVersion == 1` and no
   `Compass` plugin is already registered; it exports `Addon.OrbitHost` or sets `Addon.incompatibleOrbit`.
   `Core/Integrations/Orbit/Orbit.lua` is the bridge: it registers the real `Orbit_Compass` plugin (indices 1 and 2 plus
@@ -41,6 +41,10 @@ place of the standalone store.
 - **GatherMate2.** One GatherMate2 row in Points shows recorded locations for every category enabled in GatherMate2;
   import GatherMate2_Data there for a prebuilt database. Records are possible spawn locations, and arrival-based
   auto-advance can visit them in sequence.
+- **Orbit Navigation.** With Orbit Navigation enabled, Compass sends its selected destination (or an off-continent
+  user waypoint) through the versioned `_G.OrbitNavigation` API and points at the current destination step, such as a
+  flightmaster, portal entrance or final goal, ahead of the game's own route step. Detailed paths stay on the maps
+  (`Core/Integrations/README.md`).
 - **Packaging.** `.pkgmeta` defines the `Orbit_Compass` package and pins embedded libraries to full commits. The TOC
   declares CurseForge project `1689597`; the packager replaces `@project-version@`. `.github/workflows/release.yml`
   validates the package, runs `.scripts/check-client-features.py`, and creates a stable `MAJOR.MINOR` tag from `main` or
@@ -50,8 +54,8 @@ place of the standalone store.
 - Standalone settings (`OrbitCompassDB`) and Orbit profiles are separate stores. Installing the addon never copies or
   overwrites either.
 - Compass and its arrow stay active whenever the addon is enabled in WoW; neither exposes an Enabled control and legacy
-  false values are ignored. When hosted, Orbit owns runtime lifecycle, profiles, themes, fade, layer order, frame
-  anchoring and Canvas text customization.
+  false values are ignored. Show Arrow only hides the arrow outside Edit Mode; guidance keeps running. When hosted,
+  Orbit owns runtime lifecycle, profiles, themes, fade, layer order, frame anchoring and Canvas text customization.
 - An incompatible Orbit, or an Orbit that still carries a bundled Compass, pauses this addon with an update/disable
   warning and preserves the existing Compass, commands and settings; disabling Orbit allows standalone startup after
   reload.

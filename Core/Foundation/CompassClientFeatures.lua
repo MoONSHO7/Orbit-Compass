@@ -143,6 +143,7 @@ features.points = table.freeze({
 features.sources = table.freeze({
     gathermate = known,
     handynotes = known,
+    navigation = known,
     locations = known,
     quests = features.quests,
     route = features.route,

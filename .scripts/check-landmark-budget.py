@@ -218,10 +218,89 @@ assert(Finish()>10)
 assert(P.compassLandmarks.phaseStart==nil and P.compassLandmarks.phaseProfiler==nil)
 '''
 
+# The continent repeats every zone record and the native list puts the cave before its zone.
+REPEATED_WORLD = r'''
+mock.maps[4]={mapID=4,mapType=3,parentMapID=2,name="Second zone"}
+mock.maps[31]={mapID=31,mapType=5,parentMapID=3,name="Cave"}
+mock.reads={info={},titles=0,worldQuests=0,journal=0}
+local order={mock.maps[31],mock.maps[2],mock.maps[3],mock.maps[4]}
+local function X(mapID) return (mapID%10)/10+.05 end
+C_Map.GetMapChildrenInfo=function() return order end
+local pois={[3]={101,104,105},[2]={101,104,105,102,103},[4]={103}}
+local primary={[101]=3,[104]=3,[105]=3,[102]=2,[103]=4}
+C_AreaPoiInfo.GetAreaPOIForMap=function(mapID) return pois[mapID] or {} end
+C_AreaPoiInfo.GetAreaPOIInfo=function(mapID,id)
+  mock.reads.info[#mock.reads.info+1]=mapID..":"..id
+  return {areaPoiID=id,name="Place "..id,position={x=X(mapID),y=id/1000},atlasName="poi",
+    isPrimaryMapForPOI=primary[id]==mapID}
+end
+local quests={[31]={{5003,0}},[3]={{5001,0},{5003,1}},[4]={{5002,0}},[2]={{5001,1},{5003,2},{5002,1}}}
+C_TaskQuest.GetQuestsOnMap=function(mapID)
+  local list={}
+  for i,q in ipairs(quests[mapID] or {}) do
+    list[i]={questID=q[1],childDepth=q[2],x=X(mapID),y=q[1]/10000,questTagType=0}
+  end
+  return list
+end
+C_TaskQuest.GetQuestInfoByQuestID=function(id) mock.reads.titles=mock.reads.titles+1; return "Quest "..id end
+C_QuestLog.IsWorldQuest=function() mock.reads.worldQuests=mock.reads.worldQuests+1; return true end
+local repeated={[3]=true,[2]=true}
+C_EncounterJournal.GetDungeonEntrancesForMap=function(mapID)
+  return repeated[mapID] and {{areaPoiID=301,name="Depths",position={x=X(mapID),y=.5},journalInstanceID=9}} or {}
+end
+function EJ_GetInstanceInfo()
+  mock.reads.journal=mock.reads.journal+1
+  return nil,nil,nil,nil,nil,nil,nil,nil,nil,nil,nil,false
+end
+C_TaxiMap.GetTaxiNodesForMap=function(mapID)
+  return repeated[mapID] and {{nodeID=201,name="Roost",position={x=X(mapID),y=.25},faction=0}} or {}
+end
+C_DeathInfo.GetGraveyardsForMap=function(mapID)
+  return repeated[mapID] and {{graveyardID=401,name="Rest",position={x=X(mapID),y=.75}}} or {}
+end
+'''
+
+REPEATED_RECORDS = r'''
+local F,c=Addon.ClientFeatures,P.compassLandmarks
+local function Reads()
+  local reads={}
+  for i,read in ipairs(mock.reads.info) do reads[i]=read end
+  table.sort(reads)
+  return table.concat(reads,",")
+end
+local function MapOf(key) return c.entries[c.positions[key]].mapID end
+Build()
+assert(c.state=="complete",c.state)
+assert(Reads()=="2:102,3:101,3:104,3:105,4:103","continent copies of zone records skipped their reads: "..Reads())
+assert(MapOf("poi:101")==3 and MapOf("poi:102")==2 and MapOf("poi:103")==4 and MapOf("poi:104")==3)
+assert(MapOf("taxi:201")==3 and MapOf("graveyard:401")==3 and MapOf("poi:301")==3)
+if F.tasks then
+  assert(MapOf("quest:5003")==31,"an equal rank keeps the record of the map the native list returned first")
+  assert(MapOf("quest:5001")==3 and MapOf("quest:5002")==4)
+  assert(mock.reads.titles==4 and mock.reads.worldQuests==4,"losing quest copies read no title or quest type")
+end
+if F.journalClassification then
+  assert(mock.reads.journal==1,"the losing continent entrance read no journal entry")
+end
+local journal=mock.reads.journal
+mock.reads.info={}
+local found=P:FindCompassLandmarkOnMap(3,Enum.SuperTrackingMapPinType.AreaPOI,104)
+assert(found and found.key=="poi:104" and found.mapID==3)
+assert(Reads()=="3:104" and mock.reads.journal==journal,"a map click reads only the clicked record")
+'''
+
+
+def repeated_records(family):
+    lua = harness["client"](family, REPEATED_WORLD)
+    lua.execute(REPEATED_RECORDS)
+    print(f"PASS {family}: repeated records skip losing reads and keep native-order ties")
+
+
 for family in ("retail", "forever"):
     check("large build, pause, refresh cancellation and equivalent publication", LIFECYCLE, family)
     check("focused budget and indivisible native/blob attribution", FOCUSED, family)
     check("collector failure closes all phase spans", FAILURE, family)
     check("standalone build without profiler", ABSENT_PROFILER, family)
+    repeated_records(family)
 
-print("8/8 landmark budget scenarios passed (12640 POIs and 12642 child records each)")
+print("10/10 landmark budget scenarios passed (large builds: 12640 POIs and 12642 child records each)")

@@ -63,7 +63,7 @@ Addon.App = UI.Addon:Create({
     store = Addon.Store,
     bridge = Addon.OrbitBridge,
     readStore = function()
-        return OrbitCompassDB
+        return Addon.MigrateStandaloneStore(OrbitCompassDB)
     end,
     writeStore = function(db)
         OrbitCompassDB = db

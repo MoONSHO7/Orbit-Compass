@@ -4,8 +4,9 @@ from pathlib import Path
 import re
 from lupa.lua51 import LuaRuntime
 
-ROOT = Path(__file__).resolve().parents[1]
-WORKSPACE = ROOT.parent
+REPOSITORY = Path(__file__).resolve().parents[1]
+ROOT = REPOSITORY
+WORKSPACE = REPOSITORY.parent
 UI = WORKSPACE / "Orbit-Libs/LibOrbitUI/LibOrbitUI-1.0"
 NAMESPACES = sorted(set(re.findall(r"\b(C_\w+)\.", "\n".join(
     p.read_text(encoding="utf-8") for p in (ROOT / "Core").rglob("*.lua")
@@ -128,11 +129,13 @@ C_DeathInfo.GetGraveyardsForMap=empty
 
 FILES = [
  "Foundation/CompassClientFeatures.lua", "Foundation/CompassConstants.lua", "Foundation/CompassArtwork.lua",
- "Foundation/CompassText.lua", "Plugin/CompassDefaults.lua", "Discovery/CompassSourceUtils.lua",
+ "Foundation/CompassText.lua", "Plugin/CompassDefaults.lua", "Plugin/CompassStandaloneStore.lua",
+ "Discovery/CompassSourceUtils.lua",
  "Discovery/CompassPointVisibility.lua", "Navigation/CompassAutoAdvance.lua", "Navigation/CompassLocations.lua",
  "Navigation/CompassWaypoint.lua", "Navigation/CompassTargets.lua", "Discovery/Sources/CompassTravelSources.lua",
  "Discovery/Sources/CompassContentSources.lua", "Discovery/Sources/CompassOfferSources.lua",
  "Discovery/Sources/CompassMapSources.lua", "Discovery/Sources/CompassQuestSources.lua", "Discovery/CompassDiscovery.lua",
+ "Integrations/CompassNavigationRoute.lua",
  "Search/CompassMapScope.lua", "Search/CompassLandmarkCatalog.lua", "Search/CompassLandmarkSearch.lua",
   "Integrations/CompassSearchProvider.lua", "Plugin/Compass.lua", "Config/CompassSettings.lua",
 ]
@@ -697,6 +700,219 @@ for i=1,31 do Tick(1) end
 assert(Completed("content")==count+1)
 ''', "retail")
 
+
+NAVIGATION_PROVIDER = r'''
+local callbacks=Addon.LibOrbitUI.Callbacks
+callbacks.Wrap=function(_, fn) return fn end
+callbacks.LogError=function() mock.navErrors=(mock.navErrors or 0)+1 end
+mock.nav={sets={},releases=0,unregisters=0,queries=0}
+OrbitNavigation={API_VERSION=1,
+ SetDestination=function(owner,destination) mock.nav.sets[#mock.nav.sets+1]={owner=owner,destination=destination} end,
+ ReleaseDestination=function(owner) mock.nav.releases=mock.nav.releases+1; mock.nav.releaseOwner=owner end,
+ GetGuidance=function(mapID) mock.nav.queries=mock.nav.queries+1; mock.nav.mapID=mapID; return mock.guidance end,
+ RegisterCallback=function(owner,callback) mock.nav.owner=owner; mock.nav.callback=callback end,
+ UnregisterCallback=function(owner) mock.nav.unregisters=mock.nav.unregisters+1; mock.nav.callback=nil end,
+ GetWaypointLabel=function() if mock.navLabel then return mock.navLabel,"Nearest by travel time" end end}
+mock.guidance={x=.4,y=.6,name="Goal",text="Walk 40 yd",destination={mapID=3,x=.9,y=.9},key="quest:7"}
+P.compassIntegrationsEnabled=true
+function Published() local last=mock.nav.sets[#mock.nav.sets]; return last and last.destination end
+'''
+WAYPOINT_MARKER = 'P.markers={{key="waypoint",kind="waypoint",x=.505,y=.5,name="Home",destination={mapID=3,x=.505,y=.5}}}; '
+NAVIGATION_MARKER = '{key="navigation",kind="route",x=.5,y=.3,name="Goal",source="navigation",destination={mapID=3,x=.9,y=.9}}'
+
+for family in ("retail", "forever"):
+    check(f"{family} Navigation provider wakes on availability", DISCOVERY_RUNTIME + NAVIGATION_PROVIDER + '''
+local source=P.compassSources.navigation
+assert(source.status=="pending" and source.reason=="provider" and source.nextRefresh>=30 and mock.nav.queries==0)
+mock.loaded.Orbit_Navigation=true
+P:InvalidateCompassSource("ORBIT_COMPASS_NAVIGATION_ROUTE")
+Tick(.001)
+assert(Completed("navigation")==1 and source.status=="ready" and mock.nav.mapID==3)
+assert(mock.nav.owner=="Orbit_Compass" and type(mock.nav.callback)=="function")
+Tick(.3); local before=Completed("navigation"); mock.guidance.x=.45; mock.nav.callback("Orbit_Compass"); Tick(.3)
+assert(Completed("navigation")==before+1 and source.markers[1].x==.45)
+''', family)
+check("Navigation provider absent stays pending", NAVIGATION_PROVIDER + 'Drain(); local s=P.compassSources.navigation; assert(s.status=="pending" and s.reason=="provider" and mock.nav.queries==0 and not P.compassNavigationProvider)')
+check("Navigation source follows the client family", 'assert(Addon.ClientFeatures.sources.navigation==false)', "unknown")
+check("Navigation source declared on supported families", 'assert(Addon.ClientFeatures.sources.navigation==true)', "retail")
+check("Navigation guidance marker shape", NAVIGATION_PROVIDER + '''
+mock.loaded.Orbit_Navigation=true; Drain()
+local m=P.compassSources.navigation.markers[1]
+assert(m and m.key=="navigation" and m.kind=="route" and m.source=="navigation" and m.name=="Goal")
+assert(m.description=="Walk 40 yd" and m.routeDestination and m.routeTracking==nil)
+assert(m.destination.mapID==3 and m.destination.x==.9 and m.destination.y==.9)
+local markers={}; mock.guidance={x=.1,y=.2,name="",destination={mapID=3.5,x=.5,y=.5},key="waypoint"}
+P:CollectCompassNavigationRoute(markers)
+assert(markers[1].name=="PLU_COMPASS_WAYPOINT" and not markers[1].routeDestination and markers[1].description==nil)
+assert(markers[1].destination.x==.1 and markers[1].routeTracking==Enum.SuperTrackingType.UserWaypoint)
+markers={}; mock.guidance=nil; P:CollectCompassNavigationRoute(markers); assert(#markers==0)
+''')
+check("Navigation steps read like quest objectives", NAVIGATION_PROVIDER + """
+mock.loaded.Orbit_Navigation=true
+mock.guidance.steps={"Walk 40 yd to the lift","Take the lift up","Walk 90 yd to Goal|n"}; mock.guidance.step=2
+Drain()
+local lines={}
+for line in (P.compassSources.navigation.markers[1].description.."\\n"):gmatch("(.-)\\n") do lines[#lines+1]=line end
+assert(#lines==3 and lines[1]:find("ui-questtracker-tracker-check",1,true) and lines[1]:find("|cff8c8c8cWalk 40 yd",1,true))
+assert(lines[2]:find("ui-questtracker-objective-nub",1,true) and lines[2]:sub(-16)=="Take the lift up")
+assert(lines[3]:find("|cffbfbfbfWalk 90 yd to Goal||n|r",1,true))
+local markers={}; mock.guidance.step=4; P:CollectCompassNavigationRoute(markers)
+assert(select(2,markers[1].description:gsub("ui%-questtracker%-tracker%-check",""))==3)
+local long={}; for k=1,10 do long[k]="Step "..k end
+markers={}; mock.guidance.steps,mock.guidance.step=long,6; P:CollectCompassNavigationRoute(markers)
+local shown=markers[1].description
+assert(shown:find("Step 4",1,true) and shown:find("Step 9",1,true) and not shown:find("Step 3",1,true)
+    and not shown:find("Step 10",1,true))
+markers={}; mock.guidance.steps={"Walk 40 yd",7}; P:CollectCompassNavigationRoute(markers)
+assert(markers[1].description=="Walk 40 yd")
+""")
+check("Navigation provider outranks the native route step", '''
+P.markers={{key="route:1",kind="route",x=.5,y=.52,name="Native",source="route",destination={mapID=3,x=.9,y=.9}},
+''' + NAVIGATION_MARKER + '''}
+P:SelectCompassNavigation(); assert(P.navigationKey=="navigation")
+P.markers[2].source="route"; P:SelectCompassNavigation(); assert(P.navigationKey=="route:1")
+''')
+check("Navigation arrival keeps the destination identity", WAYPOINT_MARKER + '''
+P.markers[2]={key="navigation",kind="route",x=.5,y=.505,name="Goal",source="navigation",destination={mapID=3,x=.505,y=.5}}
+P:SelectCompassNavigation(); assert(P.navigationKey=="waypoint")
+P.markers[2].y=.3; P:SelectCompassNavigation(); assert(P.navigationKey=="navigation")
+''')
+for family in ("retail", "forever"):
+    check(f"{family} Navigation final walk keeps provider steps until player arrival", NAVIGATION_PROVIDER + '''
+mock.loaded.Orbit_Navigation=true; P:ConnectCompassNavigationRoute()
+mock.guidance={x=.75,y=.5,name="Home",steps={"Walk to Home"},step=1,
+    destination={mapID=3,x=.75,y=.5},key="waypoint"}
+Drain()
+P.markers={{key="waypoint",kind="waypoint",x=.75,y=.5,name="Home",destination={mapID=3,x=.75,y=.5}}}
+P.markers[2]=P.compassSources.navigation.markers[1]
+P.mapWidth,P.mapHeight=1024,1024
+local playerX,reads=.5,0
+C_Map.GetPlayerMapPosition=function() reads=reads+1; return {x=playerX,y=.5} end
+P:SelectCompassNavigation()
+assert(P.navigationKey=="navigation" and P.markers[2].navigation and not P.markers[1].navigation)
+assert(P.markers[2].description:find("Walk to Home",1,true) and reads==1)
+playerX=.75-16/1024; P:SelectCompassNavigation(); assert(P.navigationKey=="navigation")
+playerX=.75-15/1024; P:SelectCompassNavigation()
+assert(P.navigationKey=="waypoint" and P.markers[1].navigation and not P.markers[2].navigation)
+assert(reads==3 and Published().key=="waypoint" and #mock.nav.sets==1)
+''', family)
+    check(f"{family} Navigation arrival rejects missing position and preserves native substitution", WAYPOINT_MARKER + '''
+P.markers[2]={key="navigation",kind="route",x=.505,y=.5,name="Goal",source="navigation"}
+local positions={false,{secret=true},{x={secret=true},y=.5},{x=.5,y={secret=true}}}
+for _,position in ipairs(positions) do
+    C_Map.GetPlayerMapPosition=function()return position or nil end
+    P:SelectCompassNavigation()
+    assert(P.navigationKey=="navigation","unreadable player position completed the provider's final walk")
+end
+P.markers[2].source="route"
+P:SelectCompassNavigation()
+assert(P.navigationKey=="waypoint","native destination identity changed during a position gap")
+C_Map.GetPlayerMapPosition=function()return {x=.1,y=.1}end
+P:SelectCompassNavigation()
+assert(P.navigationKey=="waypoint","native routing acquired the provider-only arrival restriction")
+''', family)
+check("Navigation destination publishes once per change", NAVIGATION_PROVIDER + WAYPOINT_MARKER + '''
+P:SelectCompassNavigation(); assert(#mock.nav.sets==0)
+mock.loaded.Orbit_Navigation=true; P:ConnectCompassNavigationRoute(); assert(P.waypointDirty)
+P:SelectCompassNavigation(); P:SelectCompassNavigation()
+local d=Published(); assert(#mock.nav.sets==1 and mock.nav.sets[1].owner=="Orbit_Compass")
+assert(d.mapID==3 and d.x==.505 and d.y==.5 and d.name=="Home" and d.key=="waypoint")
+P.markers[1].destination={mapID=3,x=.6,y=.5}; P:SelectCompassNavigation(); assert(#mock.nav.sets==2 and Published().x==.6)
+P.markers[1].destination={mapID=3,x=1.5,y=.5}; P:SelectCompassNavigation(); assert(#mock.nav.sets==2 and mock.nav.releases==1)
+P.markers={}; P:SelectCompassNavigation(); P:SelectCompassNavigation(); assert(#mock.nav.sets==2 and mock.nav.releases==1)
+P.markers={{key="waypoint",kind="waypoint",x=.5,y=.5,name="Home",destination={mapID=3,x=.5,y=.5}}}
+P:SelectCompassNavigation(); assert(#mock.nav.sets==3 and Published().x==.5 and mock.nav.releases==1)
+''')
+check("Off-continent user waypoint still publishes", NAVIGATION_PROVIDER + '''
+P:ConnectCompassNavigationRoute(); P.markers={}; P.showWaypoint=false
+P.userWaypointMapID, P.userWaypointX, P.userWaypointY = 7, .2, .3
+P:SelectCompassNavigation(); assert(#mock.nav.sets==0 and mock.nav.releases==0)
+P.showWaypoint=true; P:SelectCompassNavigation()
+local d=Published(); assert(d.mapID==7 and d.x==.2 and d.y==.3 and d.key=="waypoint" and d.name=="PLU_COMPASS_WAYPOINT")
+mock.navLabel="Innkeeper"; P.userWaypointX=.25; P:SelectCompassNavigation(); assert(Published().name=="Innkeeper")
+P.waypointLabel={mapID=7,x=.25,y=.3,title="Booty Bay"}; P.userWaypointY=.35; P:SelectCompassNavigation()
+assert(Published().name=="Booty Bay")
+C_SuperTrack.GetHighestPrioritySuperTrackingType=function() return Enum.SuperTrackingType.Quest end
+function P:FollowsCompassPin() return true end
+local sets=#mock.nav.sets; P:SelectCompassNavigation()
+assert(#mock.nav.sets==sets and mock.nav.releases==1 and mock.nav.releaseOwner=="Orbit_Compass")
+''')
+QUEST_TRACKING = r'''
+C_SuperTrack.GetHighestPrioritySuperTrackingType=function() return Enum.SuperTrackingType.Quest end
+mock.questID=7; C_SuperTrack.GetSuperTrackedQuestID=function() return mock.questID end
+'''
+QUEST_MARKER = '{key="quest:7",kind="quest",x=.6,y=.5,name="Quest",destination={mapID=3,x=.6,y=.5}}'
+check("Tracked quest publishes its marker, else releases to Navigation", NAVIGATION_PROVIDER + QUEST_TRACKING + '''
+function P:FollowsCompassPin() return true end
+P:ConnectCompassNavigationRoute(); P.markers={''' + QUEST_MARKER + '''}
+P:SelectCompassNavigation(); local d=Published()
+assert(d.key=="quest:7" and d.x==.6 and d.name=="Quest" and P.navigationKey=="quest:7")
+P.markers={}; P:SelectCompassNavigation(); P:SelectCompassNavigation(); assert(#mock.nav.sets==1 and mock.nav.releases==1)
+P.markers={''' + QUEST_MARKER + '''}; P:SelectCompassNavigation(); assert(#mock.nav.sets==2)
+P.navigationTarget=P.markers[1]; P:DismissCompassNavigation(); P:SelectCompassNavigation()
+assert(Published()==false and #mock.nav.sets==3 and P.navigationKey==nil)
+P.markers={}; P:SelectCompassNavigation(); assert(#mock.nav.sets==3 and mock.nav.releases==1)
+mock.questID=8; P:SelectCompassNavigation(); assert(P.dismissedNavigationKey==nil and mock.nav.releases==2)
+''')
+check("Route dismissal without Follow Targets resets on a new super-track", NAVIGATION_PROVIDER + QUEST_TRACKING + '''
+P:ConnectCompassNavigationRoute(); P.markers={''' + NAVIGATION_MARKER + '''}
+P:SelectCompassNavigation(); assert(P.navigationKey=="navigation" and #mock.nav.sets==0 and mock.nav.releases==0)
+P.navigationTarget=P.markers[1]; P:DismissCompassNavigation(); P:SelectCompassNavigation()
+assert(Published()==false and P.navigationKey==nil)
+mock.questID=8; P:SelectCompassNavigation(); assert(mock.nav.releases==1 and P.navigationKey=="navigation")
+P.markers[2]={key="corpse",kind="corpse",x=.5,y=.5,name="Corpse",destination={mapID=3,x=.5,y=.5}}
+P:SelectCompassNavigation(); assert(P.navigationKey=="corpse")
+P.navigationTarget=P.markers[2]; P:DismissCompassNavigation(); P:SelectCompassNavigation()
+assert(P.navigationKey=="navigation" and #mock.nav.sets==1 and mock.nav.releases==1)
+''')
+check("Navigation dismissal publishes no destination", NAVIGATION_PROVIDER + WAYPOINT_MARKER + '''
+P:ConnectCompassNavigationRoute(); P.markers[2]=''' + NAVIGATION_MARKER + '''
+P.userWaypointMapID, P.userWaypointX, P.userWaypointY = 3, .505, .5
+P:SelectCompassNavigation(); assert(P.navigationKey=="navigation" and Published().key=="waypoint")
+P.navigationTarget=P.markers[2]; P:DismissCompassNavigation(); P:SelectCompassNavigation()
+assert(Published()==false and P.navigationKey==nil)
+P.markers[2].routeTracking=Enum.SuperTrackingType.UserWaypoint; P.dismissedNavigationKey=nil
+mock.waypoint={uiMapID=3,position={x=.505,y=.5}}; P:SelectCompassNavigation(); P.navigationTarget=P.markers[2]
+P:DismissCompassNavigation(); assert(mock.waypoint==nil)
+''')
+check("Navigation disconnect releases the destination", NAVIGATION_PROVIDER + WAYPOINT_MARKER + '''
+P:ConnectCompassNavigationRoute(); P:SelectCompassNavigation(); assert(#mock.nav.sets==1)
+P.compassSources.navigation.markers={{key="navigation"}}
+P:DisconnectCompassNavigationRoute()
+assert(mock.nav.releases==1 and mock.nav.unregisters==1 and mock.nav.releaseOwner=="Orbit_Compass")
+assert(not P.compassNavigationProvider and #P.compassSources.navigation.markers==0)
+P:SelectCompassNavigation(); P:DisconnectCompassNavigationRoute(); assert(#mock.nav.sets==1 and mock.nav.releases==1)
+P.compassIntegrationsEnabled=false; P:ConnectCompassNavigationRoute(); assert(not P.compassNavigationProvider)
+''')
+check("Incompatible Navigation API stays disconnected", NAVIGATION_PROVIDER + '''
+OrbitNavigation.API_VERSION=2; P:ConnectCompassNavigationRoute(); assert(not P.compassNavigationProvider)
+OrbitNavigation.API_VERSION=1; OrbitNavigation.GetGuidance=nil; P:ConnectCompassNavigationRoute()
+assert(not P.compassNavigationProvider)
+''')
+check("Navigation provider failures report once", NAVIGATION_PROVIDER + '''
+OrbitNavigation.GetGuidance=function() error("provider failure") end
+P:ConnectCompassNavigationRoute(); local markers={}
+P:CollectCompassNavigationRoute(markers); P:CollectCompassNavigationRoute(markers)
+assert(#markers==0 and mock.navErrors==1)
+''')
+check("Navigation labels its own waypoints", NAVIGATION_PROVIDER + '''
+assert(P:GetWaypointTitle(3,.5,.5)=="PLU_COMPASS_WAYPOINT")
+P:ConnectCompassNavigationRoute(); mock.navLabel="Innkeeper"
+local title, description=P:GetWaypointTitle(3,.5,.5); assert(title=="Innkeeper" and description=="Nearest by travel time")
+P.waypointLabel={mapID=3,x=.5,y=.5,title="Home"}; assert(P:GetWaypointTitle(3,.5,.5)=="Home")
+''')
+check("Retired standalone route settings are stripped", '''
+local function Data()
+  return {version=1,collections={},settings={[1]={RouteGuidance=true,RouteMap=false,RouteFootprints="paws",Width=500},
+    [2]={RouteAvoid=true,RoutePanel=true,RouteMinimap=false}}}
+end
+local function Store() return Addon.LibOrbitUI.SettingsStore:Create(Addon.Definition.defaults,Addon.Definition.indexDefaults) end
+assert(not Store():Initialize(Data()))
+local data=Addon.MigrateStandaloneStore(Data()); local store=Store()
+assert(store:Initialize(data) and store:Get(1,"Width")==500 and data.settings[1].RouteGuidance==nil and next(data.settings[2])==nil)
+assert(Addon.MigrateStandaloneStore(nil)==nil and Store():Initialize(Addon.MigrateStandaloneStore(nil)))
+''')
+
 for family in ("retail", "forever"):
     check(f"{family} canonical settings tabs and owned reset", r'''
         Addon.App={Apply=function()end};Addon.OrbitBridge={}
@@ -709,13 +925,16 @@ for family in ("retail", "forever"):
         local tabs=Addon.SettingsTabs(2,function()refreshes=refreshes+1 end)
         assert(#tabs==3 and tabs[1].id=="layout" and tabs[2].id=="appearance" and tabs[3].id=="behaviour")
         for _,tab in ipairs(tabs) do assert(tab.scopeText==Addon.L.CFG_SETTINGS_SCOPE_LAYOUT) end
-        local controls=tabs[3].controls
+        local showArrow,autoAdvance,sameType=unpack(tabs[3].controls)
+        assert(showArrow.key=="ShowArrow" and showArrow.type=="checkbox" and showArrow.default and showArrow.getValue())
+        showArrow.onChange(false);assert(P:GetSetting(2,"ShowArrow")==false and not showArrow.getValue())
+        showArrow.onReset();assert(P:GetSetting(2,"ShowArrow")==true)
         P:SetSetting(1,"AutoAdvanceMode","off");P:SetSetting(1,"AutoAdvanceSameType",false)
-        assert(controls[2].disabled() and not controls[2].visibleIf and controls[2].disabledReason)
-        controls[1].onChange(true)
-        assert(not controls[2].disabled() and refreshes==1 and not P:GetSetting(1,"AutoAdvanceSameType"))
+        assert(sameType.disabled() and not sameType.visibleIf and sameType.disabledReason)
+        autoAdvance.onChange(true)
+        assert(not sameType.disabled() and refreshes==1 and not P:GetSetting(1,"AutoAdvanceSameType"))
         P:SetSetting(2,"Position",{point="CENTER",x=123,y=45})
-        controls[1].onReset();assert(P:GetSetting(1,"AutoAdvanceMode")==Addon.Definition.defaults.AutoAdvanceMode)
+        autoAdvance.onReset();assert(P:GetSetting(1,"AutoAdvanceMode")==Addon.Definition.defaults.AutoAdvanceMode)
         assert(P:GetSetting(2,"Position").x==123)
         P:SetSetting(2,"DisabledComponents",{"Name","Distance","Unrelated"})
         for _,control in ipairs(tabs[2].controls) do
@@ -729,6 +948,42 @@ for family in ("retail", "forever"):
         assert(not positions.Distance.overrides.DistanceUnits)
         local ribbon=Addon.SettingsTabs(1)
         assert(#ribbon==4 and ribbon[1].id=="layout" and ribbon[2].id=="appearance" and ribbon[3].id=="behaviour" and ribbon[4].id=="points")
+    ''', family)
+
+NAVIGATION_RENDER = "\n".join(
+    f'assert(loadstring([==[{(ROOT / "Core" / file).read_text(encoding="utf-8")}]==],"{file}"))("Orbit_Compass",Addon)'
+    for file in ("Foundation/CompassMath.lua", "Navigation/CompassNavigationSettings.lua",
+                 "Navigation/CompassNavigationView.lua")
+)
+for family in ("retail", "forever"):
+    check(f"{family} hidden arrow renders only as an Edit Mode preview", NAVIGATION_RENDER + r'''
+        local function Region()
+            local region={}
+            function region:Show() self.shown=true end
+            function region:Hide() self.shown=false end
+            function region:SetShown(shown) self.shown=shown end
+            function region:IsShown() return self.shown end
+            function region:SetRotation(rotation) self.rotation=rotation end
+            function region:SetText(text) self.text=text end
+            return region
+        end
+        local editMode=false
+        Addon.Services.IsEditMode=function() return editMode end
+        P.frame=Region();P.frame:Show();P.navigationFrame=Region()
+        P.navigationView={arrow=Region(),distance=Region(),title=Region(),description=Region()}
+        P.navigationDisabled,P.distanceUnits={},"yards"
+        P.navigationPreview={name="Arrow",distance=40,bearing=0}
+        P.navigationTarget={name="Target",distance=200,bearing=90}
+        assert(Addon.Definition.indexDefaults[2].ShowArrow==true)
+        P.showArrow=false
+        assert(not P:RenderNavigation(0) and not P.navigationFrame.shown and P.navigationTarget)
+        editMode=true
+        assert(P:RenderNavigation(0) and P.navigationFrame.shown and P.navigationView.arrow.shown)
+        assert(P.navigationView.title.text=="Arrow")
+        editMode=false
+        assert(not P:RenderNavigation(0) and not P.navigationFrame.shown and not P.navigationView.arrow.shown)
+        P.showArrow=true
+        assert(P:RenderNavigation(0) and P.navigationFrame.shown and P.navigationView.title.text=="Target")
     ''', family)
 
 failures = []

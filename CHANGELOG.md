@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Show Arrow, at the top of the Arrow's Behaviour settings, hides the destination arrow while you play. Waypoints, auto
+  advance and Orbit Navigation keep working, and the arrow still appears in Edit Mode so you can turn it back on.
+
+- Sharper, lit destination arrow: the gold arrow is rendered as a 3D relief at 256×256, with bevel highlights, a
+  recessed channel, a faceted gem and a soft shadow. Its shape and colours are unchanged, and it is sampled with mipmaps
+  so small sizes stay smooth.
+
+- With Orbit Navigation, the arrow lists the whole route under its destination like quest objectives: each step (walk to
+  a lift, take it down, fly, walk on) on its own line, finished steps ticked and greyed, the current one bright and the
+  rest dimmed. Long trips show the last two finished steps and the next ones.
+
+- Optional Orbit Navigation support: Compass hands its selected destination, including a user waypoint on another
+  continent, to Orbit Navigation and points the arrow at the planned route's next step, ahead of the game's own route
+  step. Waypoints placed by Navigation's nearest-service buttons keep their names. With nothing selected in Compass,
+  Navigation follows the game's own tracking, so quests tracked from the quest log or world map are routed even when
+  they lie off the current map; dismissing the route in Compass still stops it until the tracked target changes.
+
 - Avoid redundant discovery wakeups and tracked-content collection on navigation path updates, while preserving source deadlines and delayed addon readiness.
 
 - Spread child-map preparation and duplicate cleanup across catalog frames, and separate build phases in performance captures, including native map reads and search-index string assembly.

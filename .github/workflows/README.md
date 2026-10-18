@@ -14,7 +14,7 @@ output. The packager must be v2.6.0 or newer to classify interface `16001` as Fo
 retain a ZIP artifact for 14 days; artifact collection allows the hidden `.release` directory and selects only its ZIP
 files.
 
-`suites` runs beside `package` on the same pushes and pull requests. It checks the addon out into `Orbit-Compass/`,
+`suites` gates `package` on the same pushes and pull requests. It checks the addon out into `Orbit-Compass/`,
 fetches the same pinned libraries, symlinks `Orbit-Libs/LibOrbitUI/LibOrbitUI-1.0` to the fetched `Libs/LibOrbitUI-1.0`
 (the sibling path `.scripts/check-client-features.py` reads, mirroring the workspace layout), then runs the client suite
 and `.scripts/check-landmark-budget.py` for cooperative work bounds and balanced profiler phases. These use simulated
@@ -29,14 +29,16 @@ validated package with `-o -c -e`, uploading to the TOC's CurseForge project ID 
 assets are downloaded and compared with the local artifacts. The same run handles publication, so tags created with
 `GITHUB_TOKEN` do not need to trigger another workflow. LF bytes are preserved.
 
+`.pkgmeta` selects the repository's full `CHANGELOG.md` as a manual Markdown changelog. The packager uses its contents
+for CurseForge's file changelog and GitHub's release body; release notes come from the authored file.
+
 ## Gotchas
 - `CURSE_API_KEY` authorizes CurseForge upload; `ORBIT_PAT` retains the GitHub CLI credential-helper policy for public
   Orbit-Libs in both jobs. The repository-scoped `GITHUB_TOKEN` publishes tags and GitHub releases. Checkout credentials
   are not persisted.
 - Fork/Dependabot pull requests receive no dependency credentials: both jobs skip, and `unavailable-library-coverage`
   only reports that full coverage is unavailable. This workflow never uses `pull_request_target`.
-- `suites` does not gate `package`: a failing suite turns the run red without blocking the tag or upload. Making it a
-  release gate is one `needs: suites` line on `package`, at the cost of serializing the two jobs.
+- `package` requires successful `suites`; failed behavioural or packaging regressions prevent tagging and publication.
 - `.pkgmeta` pins the LibOrbitUI and LibOrbitSearch release commits and nested runtime paths, and its comments name each
   release and the API or revision it provides; those releases carry the widget-registration and provider contracts
   Points requires, and both jobs fetch exactly those commits. Source and staged-package validation check fetched commits

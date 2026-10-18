@@ -1,5 +1,6 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
     <Script file="CompassDefaults.lua"/>
+    <Script file="CompassStandaloneStore.lua"/>
     <Script file="CompassServices.lua"/>
     <Script file="..\Integrations\Orbit\Orbit.lua"/>
     <Script file="CompassController.lua"/>

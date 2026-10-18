@@ -12,6 +12,7 @@ Addon.Definition = {
         [C.NAVIGATION_SYSTEM_INDEX] = {
             Anchor = false,
             Position = false,
+            ShowArrow = true,
             NavigationSize = C.DEFAULT_NAVIGATION_SIZE,
             FontSize = C.DEFAULT_FONT_SIZE,
             DisabledComponents = {},

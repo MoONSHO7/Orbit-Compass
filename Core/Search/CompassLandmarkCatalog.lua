@@ -23,6 +23,8 @@ local MICRO_MAP = Enum.UIMapType.Micro
 local MAP_DEPTH = { [CONTINENT_MAP] = 1, [MICRO_MAP] = 2, [ZONE_MAP] = 3 }
 local PRIMARY_MAP_BONUS = 4
 local DUPLICATE_YARDS = 100
+-- Zones outrank micro maps, which outrank continents, so later passes skip reads that cannot win.
+local COLLECT_PASSES = { ZONE_MAP, MICRO_MAP, CONTINENT_MAP }
 local TELEPORT_ATLAS_PREFIX = "taxinode_continent"
 local CAVE_ATLAS_PATTERN = "cave"
 local DIG_SITE_ATLAS = "ArchBlob"
@@ -175,7 +177,8 @@ local function AddAreaPOI(add, id, mapID, info, kind, place, rank)
     add(Landmark(PIN_KEYS[AREA_POI], AREA_POI, id, mapID, info.position, info.name, atlas, kind, place), rank)
 end
 
-local function CollectAreaPOIs(mapID, place, depth, add, checkpoint, seen)
+local function CollectAreaPOIs(mapID, place, depth, add, checkpoint, seen, wins)
+    local prefix = PIN_KEYS[AREA_POI]
     for _, info in
         ipairs(ReadList(F.dungeonEntrances and C_EncounterJournal.GetDungeonEntrancesForMap(mapID), checkpoint))
     do
@@ -183,15 +186,17 @@ local function CollectAreaPOIs(mapID, place, depth, add, checkpoint, seen)
         local id = type(info) == "table" and Number(info.areaPoiID)
         if id and not seen[id] then
             seen[id] = true
-            local journalID = Number(info.journalInstanceID)
-            local kind = "instance"
-            if F.journalClassification and journalID then
-                local isRaid = Readable(select(RAID_INFO_INDEX, EJ_GetInstanceInfo(journalID)))
-                if isRaid ~= nil then
-                    kind = isRaid and "raid" or "dungeon"
+            if wins(prefix, id, depth) then
+                local journalID = Number(info.journalInstanceID)
+                local kind = "instance"
+                if F.journalClassification and journalID then
+                    local isRaid = Readable(select(RAID_INFO_INDEX, EJ_GetInstanceInfo(journalID)))
+                    if isRaid ~= nil then
+                        kind = isRaid and "raid" or "dungeon"
+                    end
                 end
+                AddAreaPOI(add, id, mapID, info, kind, place, depth)
             end
-            AddAreaPOI(add, id, mapID, info, kind, place, depth)
         end
         checkpoint()
     end
@@ -203,7 +208,8 @@ local function CollectAreaPOIs(mapID, place, depth, add, checkpoint, seen)
             if id and not seen[id] then
                 -- Claim category membership first; the generic list repeats categorized IDs.
                 seen[id] = true
-                local info = Readable(C_AreaPoiInfo.GetAreaPOIInfo(mapID, id))
+                local info = wins(prefix, id, depth + PRIMARY_MAP_BONUS)
+                    and Readable(C_AreaPoiInfo.GetAreaPOIInfo(mapID, id))
                 if type(info) == "table" then
                     local rank = depth + (Readable(info.isPrimaryMapForPOI) == true and PRIMARY_MAP_BONUS or 0)
                     AddAreaPOI(add, id, mapID, info, AreaKind(group.kind, Readable(info.atlasName)), place, rank)
@@ -217,9 +223,11 @@ local function CollectAreaPOIs(mapID, place, depth, add, checkpoint, seen)
         local id = type(info) == "table" and Number(info.areaPoiID)
         if id and not seen[id] then
             seen[id] = true
-            local atlas = Readable(info.atlasName)
-            local isCave = type(atlas) == "string" and string.find(string.lower(atlas), CAVE_ATLAS_PATTERN, 1, true)
-            AddAreaPOI(add, id, mapID, info, isCave and "cave" or AreaKind("mapLink", atlas), place, depth)
+            if wins(prefix, id, depth) then
+                local atlas = Readable(info.atlasName)
+                local isCave = type(atlas) == "string" and string.find(string.lower(atlas), CAVE_ATLAS_PATTERN, 1, true)
+                AddAreaPOI(add, id, mapID, info, isCave and "cave" or AreaKind("mapLink", atlas), place, depth)
+            end
         end
         checkpoint()
     end
@@ -228,17 +236,16 @@ local function CollectAreaPOIs(mapID, place, depth, add, checkpoint, seen)
         local id = type(info) == "table" and Number(info.areaPoiID)
         if id and not seen[id] then
             seen[id] = true
-            local atlas = ReadAtlas(info.atlasName, PET_TAMER_ATLAS)
-            add(
-                Landmark(PIN_KEYS[AREA_POI], AREA_POI, id, mapID, info.position, info.name, atlas, "petTamer", place),
-                depth
-            )
+            if wins(prefix, id, depth) then
+                local atlas = ReadAtlas(info.atlasName, PET_TAMER_ATLAS)
+                add(Landmark(prefix, AREA_POI, id, mapID, info.position, info.name, atlas, "petTamer", place), depth)
+            end
         end
         checkpoint()
     end
 end
 
-local function CollectTaxiNodes(mapID, place, depth, add, checkpoint)
+local function CollectTaxiNodes(mapID, place, depth, add, checkpoint, wins)
     if not F.taxi then
         return
     end
@@ -250,8 +257,8 @@ local function CollectTaxiNodes(mapID, place, depth, add, checkpoint)
         local friendly = side == Enum.FlightPathFaction.Neutral
             or (side == Enum.FlightPathFaction.Alliance and faction == "Alliance")
             or (side == Enum.FlightPathFaction.Horde and faction == "Horde")
-        if id and friendly then
-            local key = PIN_KEYS[TAXI_NODE]
+        local key = PIN_KEYS[TAXI_NODE]
+        if id and friendly and wins(key, id, depth) then
             add(
                 Landmark(key, TAXI_NODE, id, mapID, node.position, node.name, node.atlasName, "flightMaster", place),
                 depth
@@ -261,29 +268,30 @@ local function CollectTaxiNodes(mapID, place, depth, add, checkpoint)
     end
 end
 
-local function CollectDigSites(mapID, place, depth, add, checkpoint)
+local function CollectDigSites(mapID, place, depth, add, checkpoint, wins)
     if not F.digSites then
         return
     end
     for _, info in ipairs(ReadList(C_ResearchInfo.GetDigSitesForMap(mapID), checkpoint)) do
         info = Readable(info)
         local id = type(info) == "table" and Number(info.researchSiteID)
-        if id then
-            local key = PIN_KEYS[DIG_SITE]
+        local key = PIN_KEYS[DIG_SITE]
+        if id and wins(key, id, depth) then
             add(Landmark(key, DIG_SITE, id, mapID, info.position, info.name, DIG_SITE_ATLAS, "digSite", place), depth)
         end
         checkpoint()
     end
 end
 
-local function CollectTaskQuests(mapID, place, depth, add, checkpoint)
+local function CollectTaskQuests(mapID, place, depth, add, checkpoint, wins)
     if not F.tasks then
         return
     end
     for _, info in ipairs(ReadList(C_TaskQuest.GetQuestsOnMap(mapID), checkpoint)) do
         info = Readable(info)
         local questID = type(info) == "table" and Number(info.questID)
-        if questID and Readable(info.isMapIndicatorQuest) ~= true then
+        local rank = questID and depth - (Number(info.childDepth) or 0)
+        if questID and Readable(info.isMapIndicatorQuest) ~= true and wins(QUEST_KEY, questID, rank) then
             local title = Readable(C_TaskQuest.GetQuestInfoByQuestID(questID))
             local kind, atlas = "bonusObjective", BONUS_OBJECTIVE_ATLAS
             if Number(info.questTagType) == Enum.QuestTagType.WorldBoss then
@@ -291,7 +299,6 @@ local function CollectTaskQuests(mapID, place, depth, add, checkpoint)
             elseif Readable(C_QuestLog.IsWorldQuest(questID)) == true then
                 kind, atlas = "worldQuest", WORLD_QUEST_ATLAS
             end
-            local rank = depth - (Number(info.childDepth) or 0)
             local position = { x = info.x, y = info.y }
             add(Landmark(QUEST_KEY, nil, questID, mapID, position, title, atlas, kind, place), rank)
         end
@@ -299,27 +306,27 @@ local function CollectTaskQuests(mapID, place, depth, add, checkpoint)
     end
 end
 
-local function CollectGraveyards(mapID, place, depth, add, checkpoint)
+local function CollectGraveyards(mapID, place, depth, add, checkpoint, wins)
     if not F.graveyards then
         return
     end
     for _, info in ipairs(ReadList(C_DeathInfo.GetGraveyardsForMap(mapID), checkpoint)) do
         info = Readable(info)
         local id = type(info) == "table" and Number(info.graveyardID)
-        if id then
+        if id and wins(GRAVEYARD_KEY, id, depth) then
             add(Landmark(GRAVEYARD_KEY, nil, id, mapID, info.position, info.name, nil, "graveyard", place), depth)
         end
         checkpoint()
     end
 end
 
-local function CollectInvasion(mapID, place, depth, add, checkpoint)
+local function CollectInvasion(mapID, place, depth, add, checkpoint, wins)
     if not F.invasions then
         return
     end
     local id = Number(C_InvasionInfo.GetInvasionForUiMapID(mapID))
     checkpoint()
-    local info = id and Readable(C_InvasionInfo.GetInvasionInfo(id))
+    local info = id and wins(INVASION_KEY, id, depth) and Readable(C_InvasionInfo.GetInvasionInfo(id))
     if type(info) == "table" then
         add(Landmark(INVASION_KEY, nil, id, mapID, info.position, info.name, info.atlasName, "invasion", place), depth)
     end
@@ -463,21 +470,32 @@ local function BuildCatalog(catalog, target)
             coroutine.yield()
         end
     end
+    -- Collection is not in map order, so an equal rank still goes to the map the native list returned first.
+    local owners, mapIndex = {}, 0
+    local function Outranks(key, rank)
+        local current = target.ranks[key]
+        return not current or rank > current or (rank == current and mapIndex < owners[key])
+    end
+    local function Wins(prefix, id, rank)
+        return Outranks(prefix .. id, rank)
+    end
     local function Add(landmark, rank)
         if not landmark then
             return
         end
-        local position = target.positions[landmark.key]
-        if position and rank <= target.ranks[landmark.key] then
+        local key = landmark.key
+        local position = target.positions[key]
+        if position and not Outranks(key, rank) then
             return
         end
         landmark = Finalize(landmark, placeWords)
         if not position then
             target.entries[#target.entries + 1] = landmark
-            target.positions[landmark.key], target.ranks[landmark.key] = #target.entries, rank
+            target.positions[key], target.ranks[key] = #target.entries, rank
         else
-            target.entries[position], target.ranks[landmark.key] = landmark, rank
+            target.entries[position], target.ranks[key] = landmark, rank
         end
+        owners[key] = mapIndex
         if target == catalog then
             catalog.revision = catalog.revision + 1
         end
@@ -508,25 +526,43 @@ local function BuildCatalog(catalog, target)
     local function Lookup(mapID)
         return maps[mapID]
     end
+    local continents = {}
+    local function Continent(mapID)
+        local name = continents[mapID]
+        if name == nil then
+            name = ContinentName(mapID, Lookup) or false
+            continents[mapID] = name
+        end
+        return name or nil
+    end
     Checkpoint()
     local areas = {}
     Phase(PHASE.COLLECT)
-    for _, mapID in ipairs(order) do
+    for index, mapID in ipairs(order) do
         local details = maps[mapID]
-        local depth = MAP_DEPTH[details.mapType]
-        if depth and details.parentMapID then
-            local continent = ContinentName(mapID, Lookup)
+        if MAP_DEPTH[details.mapType] and details.parentMapID then
+            mapIndex = index
             local parent = maps[details.parentMapID]
-            CollectMapArea(details, { zone = parent and parent.name, continent = continent }, Add, areas)
-            local place = { zone = details.name, continent = continent }
-            CollectAreaPOIs(mapID, place, depth, Add, Checkpoint, {})
-            CollectTaxiNodes(mapID, place, depth, Add, Checkpoint)
-            CollectDigSites(mapID, place, depth, Add, Checkpoint)
-            CollectTaskQuests(mapID, place, depth, Add, Checkpoint)
-            CollectGraveyards(mapID, place, depth, Add, Checkpoint)
-            CollectInvasion(mapID, place, depth, Add, Checkpoint)
+            CollectMapArea(details, { zone = parent and parent.name, continent = Continent(mapID) }, Add, areas)
         end
         Checkpoint()
+    end
+    for _, mapType in ipairs(COLLECT_PASSES) do
+        local depth = MAP_DEPTH[mapType]
+        for index, mapID in ipairs(order) do
+            local details = maps[mapID]
+            if details.mapType == mapType and details.parentMapID then
+                mapIndex = index
+                local place = { zone = details.name, continent = Continent(mapID) }
+                CollectAreaPOIs(mapID, place, depth, Add, Checkpoint, {}, Wins)
+                CollectTaxiNodes(mapID, place, depth, Add, Checkpoint, Wins)
+                CollectDigSites(mapID, place, depth, Add, Checkpoint, Wins)
+                CollectTaskQuests(mapID, place, depth, Add, Checkpoint, Wins)
+                CollectGraveyards(mapID, place, depth, Add, Checkpoint, Wins)
+                CollectInvasion(mapID, place, depth, Add, Checkpoint, Wins)
+            end
+            Checkpoint()
+        end
     end
     local entries, positions, ranks = RemoveDuplicates(target, maps, Checkpoint, Phase)
     local queryIndex
@@ -773,12 +809,15 @@ function Plugin:FindCompassLandmarkOnMap(mapID, pinType, id)
             found = Finalize(landmark, {})
         end
     end
+    local function Wanted(prefix, candidate)
+        return prefix .. candidate == key
+    end
     if pinType == AREA_POI then
-        CollectAreaPOIs(mapID, place, 0, Add, NoCheckpoint, {})
+        CollectAreaPOIs(mapID, place, 0, Add, NoCheckpoint, {}, Wanted)
     elseif pinType == TAXI_NODE then
-        CollectTaxiNodes(mapID, place, 0, Add, NoCheckpoint)
+        CollectTaxiNodes(mapID, place, 0, Add, NoCheckpoint, Wanted)
     elseif pinType == DIG_SITE then
-        CollectDigSites(mapID, place, 0, Add, NoCheckpoint)
+        CollectDigSites(mapID, place, 0, Add, NoCheckpoint, Wanted)
     end
     return found
 end
