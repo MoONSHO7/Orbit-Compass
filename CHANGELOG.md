@@ -5,6 +5,13 @@
 - Check catalogue work budgets after empty map queries and share map metadata within each search
   on both clients, preserving results, destination checks, filters and artwork.
 
+- Reduce idle resource-discovery allocations while keeping the same checks for new herb and ore observations.
+
+- On Forever with Orbit, show the live herb and ore icons detected by the minimap/HUD as circular icons with thin gold borders
+  below the compass. These display-only markers follow Orbit's existing resource switch; no new setting or scan is required.
+  Expired nodes are also cleared when the compass reappears or another discovery source is busy. Direction labels reserve
+  space for the gold rings while live resources are present.
+
 - Show Arrow, at the top of the Arrow's Behaviour settings, hides the destination arrow while you play. Waypoints, auto
   advance and Orbit Navigation keep working, and the arrow still appears in Edit Mode so you can turn it back on.
 

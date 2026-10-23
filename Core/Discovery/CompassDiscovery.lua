@@ -6,6 +6,15 @@ local SOURCE_RETRY_INTERVAL = 30
 local QUEST_DATA_DIRTY = "questData"
 local SOURCES = {
     {
+        key = "resources",
+        collect = "CollectCompassResources",
+        reuse = "ReuseEmptyCompassResources",
+        validate = "ValidateCompassResources",
+        label = "Compass.Discovery.Resources",
+        interval = C.DISCOVERY_MIN_INTERVAL,
+        provider = "Orbit",
+    },
+    {
         key = "gathermate",
         fields = { "showGatherMate" },
         collect = "CollectCompassGatherMate",
@@ -234,6 +243,8 @@ function Plugin:InitializeCompassDiscovery()
     self.discoveryClock, self.discoveryNext = 0, 0
     self.bearingSampleX = nil
     self.selectionKeys = {}
+    self.compassResourceIDs, self.compassResourceSequence = setmetatable({}, { __mode = "k" }), 0
+    self.compassResourceValidationAt = nil
     self.compassSources = {}
     for _, definition in ipairs(SOURCES) do
         self.compassSources[definition.key] = { markers = {}, dirty = true, nextAllowed = 0, nextRefresh = 0 }
@@ -349,8 +360,10 @@ end
 local function ReconcileSource(plugin, definition)
     local source = plugin.compassSources[definition.key]
     local enabled = definition.fields == nil
-    for _, field in ipairs(definition.fields or {}) do
-        enabled = enabled or not not plugin[field]
+    if definition.fields then
+        for _, field in ipairs(definition.fields) do
+            enabled = enabled or not not plugin[field]
+        end
     end
     local status, reason
     if not Addon.ClientFeatures.sources[definition.key] then
@@ -399,6 +412,18 @@ function Plugin:RegisterCompassDiscoveryEvents()
     end
 end
 
+local function FailSource(plugin, source, key, pathOnly, message)
+    source.status, source.reason = "failed", "collector"
+    local profiler = Addon.Services.profiler
+    if profiler and profiler.active then
+        profiler:Count(plugin, "Discovery/Failed/" .. key)
+    end
+    if not pathOnly then
+        source.nextRefresh = plugin.discoveryClock + SOURCE_RETRY_INTERVAL
+    end
+    error(message, 0)
+end
+
 local function NextSource(plugin)
     local nextRefresh = math.huge
     for _, definition in ipairs(SOURCES) do
@@ -407,7 +432,29 @@ local function NextSource(plugin)
             local due = (source.dirty or source.pathDirty) and math.min(source.nextAllowed, source.nextRefresh)
                 or source.nextRefresh
             if plugin.discoveryClock >= due then
-                return source, definition
+                local reused, interval
+                if definition.reuse then
+                    -- Provider failures before job creation need the same retry boundary as collector failures.
+                    local ok
+                    ok, reused, interval = pcall(plugin[definition.reuse], plugin, source.markers)
+                    if not ok then
+                        source.dirty, source.pathDirty = false, false
+                        source.nextAllowed = plugin.discoveryClock + C.DISCOVERY_MIN_INTERVAL
+                        FailSource(plugin, source, definition.key, false, reused)
+                    end
+                end
+                if not reused then
+                    return source, definition
+                end
+                source.status, source.reason = "ready", nil
+                source.dirty, source.pathDirty = false, false
+                source.nextAllowed = plugin.discoveryClock + C.DISCOVERY_MIN_INTERVAL
+                source.nextRefresh = plugin.discoveryClock + (interval or definition.interval)
+                due = source.nextRefresh
+                local profiler = Addon.Services.profiler
+                if profiler and profiler.active then
+                    profiler:Count(plugin, "Discovery/EmptyReused/" .. definition.key)
+                end
             end
             nextRefresh = math.min(nextRefresh, due)
         elseif source.reason == "provider" then
@@ -473,7 +520,12 @@ function Plugin:DiscoverCompassMarkers()
                     if job.pending then
                         RetainPendingSnapshot(job)
                     end
-                    return SourceChanged(self, source.markers, markers)
+                    local previous = source.markers
+                    local changed = SourceChanged(self, previous, markers)
+                    if definition.validate then
+                        changed = self[definition.validate](self, markers) or changed
+                    end
+                    return source.markers ~= previous or changed
                 end),
             }
             self.discoveryJob = job
@@ -499,14 +551,7 @@ function Plugin:DiscoverCompassMarkers()
         end
         if not ok then
             self.discoveryJob = nil
-            job.source.status, job.source.reason = "failed", "collector"
-            if profiler and profiler.active then
-                profiler:Count(self, "Discovery/Failed/" .. job.countKey)
-            end
-            if not job.pathOnly then
-                job.source.nextRefresh = self.discoveryClock + SOURCE_RETRY_INTERVAL
-            end
-            error(result, 0)
+            FailSource(self, job.source, job.countKey, job.pathOnly, result)
         end
         if coroutine.status(job.thread) ~= "dead" then
             break

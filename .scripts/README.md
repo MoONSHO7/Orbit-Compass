@@ -26,7 +26,8 @@ version metadata. Python needs `lupa==2.8`.
 `check-client-features.py` loads real Compass policy, collectors, scheduler, map scope, Search, navigation and
 LibOrbitUI client/store code into Lua 5.1. It checks client families, withheld APIs, partial data, retained preferences,
 destination provenance, query-local map-read sharing/recovery, Navigation route guidance, stale actions and readiness, including event storms at
-different frame rates. Run `python .scripts/check-client-features.py`; it reads LibOrbitUI from the sibling
+different frame rates. Hosted resource cases cover borrowed-array mutation, expiry, bounded identity retention and
+display-only action exclusions. Run `python .scripts/check-client-features.py`; it reads LibOrbitUI from the sibling
 `../Orbit-Libs/LibOrbitUI/LibOrbitUI-1.0` path, which is the workspace checkout locally and, in the workflow's `suites`
 job, a symlink to the fetched `Libs/LibOrbitUI-1.0`. It does not simulate native rendering or security.
 
@@ -34,6 +35,13 @@ job, a symlink to the fetched `Libs/LibOrbitUI-1.0`. It does not simulate native
 pause/resume, cancellation/root replacement, equivalent publication and balanced phase spans across yields. Run
 `python .scripts/check-landmark-budget.py`; native map calls and final string concatenation remain indivisible, so these
 bounds do not certify an in-game millisecond limit. Release CI runs both suites.
+
+`check-resource-audit.py` exercises live-resource publication, hidden resume, paused comparisons, mixed marker actions
+and Retail isolation. Pooled mask/ring checks cover scale geometry, unchanged setter counts, bounded region allocation
+and released marker ownership through full-pool replacements and clear/reopen cycles.
+`check-resource-performance.py` measures bounded work, unchanged reuse and retained ownership through dense replacements
+and enable/disable cycles. Empty-resource checks bound job allocations and provider reads while exercising projection
+recovery and unknown counts. Both reuse the client suite's harness and run in release CI.
 
 ## Gotchas
 - Compass pins verified UI 1.12/API 1.15 and Search 1.4/revision 7 releases. Linked checks do not establish release

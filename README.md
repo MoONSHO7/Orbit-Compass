@@ -41,6 +41,9 @@ place of the standalone store.
 - **GatherMate2.** One GatherMate2 row in Points shows recorded locations for every category enabled in GatherMate2;
   import GatherMate2_Data there for a prebuilt database. Records are possible spawn locations, and arrival-based
   auto-advance can visit them in sequence.
+- **Live resources.** On Forever with a compatible Orbit host, the ribbon mirrors the herb/ore item icons detected by
+  Orbit's active minimap/HUD resource scanner. These temporary, approximate observations appear below the line and
+  cannot be selected for navigation. They follow Orbit's resource switch and do not start another minimap scan.
 - **Orbit Navigation.** With Orbit Navigation enabled, Compass sends its selected destination (or an off-continent
   user waypoint) through the versioned `_G.OrbitNavigation` API and points at the current destination step, such as a
   flightmaster, portal entrance or final goal, ahead of the game's own route step. Detailed paths stay on the maps

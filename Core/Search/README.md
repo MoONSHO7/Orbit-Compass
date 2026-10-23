@@ -74,7 +74,8 @@ uses, so Blizzard's route shortcuts guide the arrow.
 - Indexed selections require current catalog membership; live markers require current identity, and their search rows
   are reused by marker identity, so never change a published marker's `kind`, `key`, `name`, `atlas` or art fields
   (replace the marker instead); saved choices reread their coordinates/provenance and native map metadata. Query map-info
-  tables are not retained by scratch, results or later actions.
+  tables are not retained by scratch, results or later actions. Display-only resource observations
+  never enter Search results or activate through its live-marker dispatch.
 - Choice dispatch: map-pin landmarks track natively (`SetSuperTrackedMapPin`); quests are watched, then super-tracked
   (`compassQuestSelection` lets the quest source ignore hidden quest Points); live markers select exactly like a ribbon
   click; everything else, including refused pins, becomes a labelled user waypoint at the zone centre, the micro rect

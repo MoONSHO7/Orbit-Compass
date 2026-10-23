@@ -206,3 +206,9 @@ jobs:
       - name: Check landmark work budgets and profiler phases
         working-directory: Orbit-Compass
         run: python .scripts/check-landmark-budget.py
+
+      - name: Audit resource publication, client isolation and lifetimes
+        working-directory: Orbit-Compass
+        run: |
+          python .scripts/check-resource-audit.py
+          python .scripts/check-resource-performance.py

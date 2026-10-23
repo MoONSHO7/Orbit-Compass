@@ -4,6 +4,12 @@ local Pixel = Addon.Services.pixel
 local Plugin = Addon.Controller
 local GATHERMATE_KIND_PREFIX = "gathermate:"
 
+function Plugin:CalculateCompassResourceSizes(iconSize, outline, scale)
+    local borderOutset = Pixel:Snap(iconSize * (C.MARKER_RESOURCE_BORDER_SCALE - 1) / 2, scale)
+    local borderSize = iconSize + borderOutset * 2
+    return math.max(iconSize + outline, borderSize), borderSize
+end
+
 local function LeftBefore(a, b)
     if a.projectedBelowLine ~= b.projectedBelowLine then
         return not a.projectedBelowLine
@@ -58,7 +64,8 @@ function Plugin:LayoutCompassMarkerGroups(selection)
         wipe(group.markers)
     end
     for index, marker in ipairs(selection) do
-        marker.projectedBelowLine = marker.kind:sub(1, #GATHERMATE_KIND_PREFIX) == GATHERMATE_KIND_PREFIX
+        marker.projectedBelowLine = marker.kind == "resource"
+            or marker.kind:sub(1, #GATHERMATE_KIND_PREFIX) == GATHERMATE_KIND_PREFIX
         local distanceFraction = math.max(
             0,
             math.min(1, (marker.distance - C.MARKER_NEAR_DISTANCE) / (C.MARKER_FAR_DISTANCE - C.MARKER_NEAR_DISTANCE))
@@ -66,6 +73,11 @@ function Plugin:LayoutCompassMarkerGroups(selection)
         local distanceScale = C.MARKER_FAR_SCALE + (1 - distanceFraction) * (C.MARKER_NEAR_SCALE - C.MARKER_FAR_SCALE)
         marker.projectedIconSize = Pixel:Snap(self.iconSize * marker.sizeScale * distanceScale, scale)
         marker.projectedHitSize = marker.projectedIconSize + outline
+        marker.projectedResourceBorderSize = nil
+        if marker.kind == "resource" then
+            marker.projectedHitSize, marker.projectedResourceBorderSize =
+                self:CalculateCompassResourceSizes(marker.projectedIconSize, outline, scale)
+        end
         local left = Pixel:Snap(centerX + marker.projectedX - marker.projectedHitSize / 2, scale)
         marker.projectedLeft = left
         marker.projectedLeftPx = Pixel:ToCount(left, scale)

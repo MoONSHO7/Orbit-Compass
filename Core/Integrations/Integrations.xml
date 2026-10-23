@@ -4,5 +4,6 @@
     <Script file="CompassGatherMate.lua"/>
     <Script file="CompassSearchProvider.lua"/>
     <Script file="CompassNavigationRoute.lua"/>
+    <Script file="Orbit\CompassResources.lua"/>
     <Script file="Orbit\OrbitCanvas.lua"/>
 </Ui>

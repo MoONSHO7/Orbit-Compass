@@ -547,7 +547,7 @@ local function CompassMarkers(plugin, consider, indexed, readMapInfo)
     local zone = MapName(plugin.mapID and readMapInfo(plugin.mapID))
     local rows = plugin.compassLiveMarkers
     for _, marker in ipairs(plugin.markers) do
-        if not LIVE_MARKER_EXCLUDED[marker.kind] then
+        if not marker.displayOnly and not LIVE_MARKER_EXCLUDED[marker.kind] then
             local entry = rows.previous[marker]
             if entry and entry.zone ~= zone then
                 entry = nil
@@ -859,6 +859,9 @@ function Plugin:ChooseCompassSearchResult(result)
     end
     local marker = result.marker
     if marker then
+        if marker.displayOnly then
+            return false, L.CMD_COMPASS_UNAVAILABLE
+        end
         local current = false
         for _, candidate in ipairs(self.markers) do
             if candidate == marker then

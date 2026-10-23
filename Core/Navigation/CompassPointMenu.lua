@@ -65,6 +65,7 @@ function Plugin:FindCompassPoint(centered, query)
             and marker.distance
             and marker.key ~= self.navigationKey
             and marker.kind ~= "route"
+            and not marker.displayOnly
             and (not query or marker.name:lower():find(query, 1, true))
             and marker.distance <= self.range
             and (not centered or (marker.renderShown and angle <= CENTER_ANGLE))
@@ -113,6 +114,7 @@ function Plugin:ShowCompassNearby()
             and marker.distance <= self.range
             and marker.key ~= self.navigationKey
             and marker.kind ~= "route"
+            and not marker.displayOnly
         then
             markers[#markers + 1] = marker
         end
@@ -155,7 +157,7 @@ function Plugin:ShowCompassOverlapMenu(markers)
     end
     local points = {}
     for _, marker in ipairs(markers) do
-        if marker.kind ~= "route" then
+        if marker.kind ~= "route" and not marker.displayOnly then
             points[#points + 1] = SnapshotPoint(self, marker)
         end
     end

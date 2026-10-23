@@ -141,6 +141,7 @@ features.points = table.freeze({
     ShowPOIs = features.genericPOIs or features.dungeonEntrances or features.delves,
 })
 features.sources = table.freeze({
+    resources = family == "forever",
     gathermate = known,
     handynotes = known,
     navigation = known,
@@ -164,6 +165,7 @@ features.sources = table.freeze({
         or features.dungeonEntrances,
 })
 features.kinds = table.freeze({
+    resource = family == "forever",
     quest = features.quests,
     questOffer = features.offers,
     flightMaster = features.taxi,

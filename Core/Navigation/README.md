@@ -67,7 +67,8 @@ Own destinations and guidance independently of how the ribbon chooses visible ic
   that source; pending, failed and disabled sources cannot confirm disappearance. Next targets come only from ready
   sources, and ownership follows the new target. Arrival remains separate. It pauses for other native tracking, ignores
   ribbon facing and clears its waypoint when no eligible unvisited point remains. Automatic choices never invoke
-  provider clicks. Source disappearance is not proof of harvesting; ordinary minimap gathering dots expose no positions.
+  provider clicks. Source disappearance is not proof of harvesting. Live Forever resources are approximate minimap
+  observations; clicks, menus, target commands and auto-advance exclude these display-only markers.
 - Description text uses small white PT Sans Narrow with a gap below the name. Provider markup survives independently of
   name styling; name alignment and visibility still govern the description.
 - The arrow inherits its immutable click-through template from Foundation. Do not reintroduce protected mouse-routing

@@ -135,7 +135,7 @@ FILES = [
  "Navigation/CompassWaypoint.lua", "Navigation/CompassTargets.lua", "Discovery/Sources/CompassTravelSources.lua",
  "Discovery/Sources/CompassContentSources.lua", "Discovery/Sources/CompassOfferSources.lua",
  "Discovery/Sources/CompassMapSources.lua", "Discovery/Sources/CompassQuestSources.lua", "Discovery/CompassDiscovery.lua",
- "Integrations/CompassNavigationRoute.lua",
+ "Integrations/CompassNavigationRoute.lua", "Integrations/Orbit/CompassResources.lua",
  "Search/CompassMapScope.lua", "Search/CompassLandmarkCatalog.lua", "Search/CompassLandmarkSearch.lua",
   "Integrations/CompassSearchProvider.lua", "Plugin/Compass.lua", "Config/CompassSettings.lua",
 ]
@@ -985,6 +985,160 @@ for family in ("retail", "forever"):
         P.showArrow=true
         assert(P:RenderNavigation(0) and P.navigationFrame.shown and P.navigationView.title.text=="Target")
     ''', family)
+
+RESOURCE_HOST = r'''
+mock.loaded.Orbit=true
+mock.nodes={{north=300,west=200,icon=134414,name="Peacebloom",lastSeen=mock.now}}
+mock.resourceReads,mock.resourceProjects=0,0
+Addon.OrbitHost={MapDots={GetResourceObservations=function()
+ mock.resourceReads=mock.resourceReads+1;return mock.nodes,#mock.nodes,42
+end},MapWorldCoordinates={WorldToMap=function(_,instance,north,west,mapID)
+ assert(instance==42);mock.resourceProjects=mock.resourceProjects+1;return mapID,west/1000,north/1000
+end}}
+function P:CompassDiscoveryCheckpoint() end
+'''
+
+check("Forever resources preserve artwork and copied observation identity", RESOURCE_HOST + r'''
+local node=mock.nodes[1]
+mock.nodes[2]={north=400,west=300,icon=134419,name="Silverleaf",lastSeen=mock.now}
+local second=mock.nodes[2]
+local checkpoints=0
+function P:CompassDiscoveryCheckpoint()
+ checkpoints=checkpoints+1
+ if checkpoints==1 then second.name="Changed";second.west=800;mock.nodes[2]=nil end
+end
+local markers={};P:CollectCompassResources(markers)
+assert(#markers==2 and markers[1].texture==134414 and markers[1].x==0.2 and markers[1].y==0.3)
+assert(markers[1].displayOnly and markers[1].kind=="resource" and markers[1].sizeScale==0.6)
+assert(markers[2].name=="Silverleaf" and markers[2].x==0.3)
+local key=markers[1].key
+node.north=350;markers={};P:CollectCompassResources(markers)
+assert(#markers==1 and markers[1].key==key and markers[1].y==0.35)
+''')
+
+check("Forever resources bound snapshots and reject expired or unreadable records", RESOURCE_HOST + r'''
+mock.nodes={}
+for i=1,80 do mock.nodes[i]={north=i,west=i,icon=123,name="Node",lastSeen=mock.now} end
+local markers={};P:CollectCompassResources(markers)
+assert(#markers==64 and mock.resourceProjects==64)
+mock.nodes={
+ {north=1,west=1,icon=123,name="Old",lastSeen=mock.now-2.001},
+ {north=1,west=1,icon=123,name="Removed",lastSeen=mock.now,removed=true},
+ {north=1,west=1,icon=123,name="Future",lastSeen=mock.now+1},
+ {north={secret=true},west=1,icon=123,name="Secret",lastSeen=mock.now},
+ {north=1,west=1,icon=0,name="No icon",lastSeen=mock.now},
+ {north=1,west=1,icon=123,name="Fresh",lastSeen=mock.now-2},
+}
+markers={};P:CollectCompassResources(markers);assert(#markers==1 and markers[1].name=="Fresh")
+Addon.OrbitHost.MapWorldCoordinates.WorldToMap=function()return 999,0.5,0.5 end
+markers={};P:CollectCompassResources(markers);assert(#markers==0)
+Addon.OrbitHost.MapWorldCoordinates.WorldToMap=function()return P.mapID,-0.1,0.5 end
+markers={};P:CollectCompassResources(markers);assert(#markers==0)
+Addon.OrbitHost.MapWorldCoordinates.WorldToMap=function()return P.mapID,{secret=true},0.5 end
+markers={};P:CollectCompassResources(markers);assert(#markers==0)
+''')
+
+for family in ("retail", "forever"):
+    check(f"{family} resource provider admission and absence", RESOURCE_HOST + r'''
+local markers={};P:CollectCompassResources(markers)
+if Addon.ClientFeatures.family=="retail" then
+ assert(#markers==0 and mock.resourceReads==0 and mock.resourceProjects==0)
+else assert(#markers==1) end
+Addon.OrbitHost=nil;markers={};P:CollectCompassResources(markers);assert(#markers==0)
+Addon.OrbitHost={};P:CollectCompassResources(markers);assert(#markers==0)
+Addon.OrbitHost={MapDots={GetResourceObservations=function()error("must not read")end}}
+P:CollectCompassResources(markers);assert(#markers==0)
+''', family)
+
+check("Resource identities release observations over repeated scans and context resets", RESOURCE_HOST + r'''
+for i=1,1000 do
+ mock.nodes={{north=100,west=200,icon=123,name="Node",lastSeen=mock.now}}
+ P:CollectCompassResources({})
+end
+collectgarbage("collect");collectgarbage("collect")
+local count=0;for node,id in pairs(P.compassResourceIDs) do count=count+1;assert(type(id)=="number") end
+assert(count==1)
+mock.nodes={};collectgarbage("collect");collectgarbage("collect")
+assert(next(P.compassResourceIDs)==nil)
+P:InitializeCompassDiscovery();assert(next(P.compassResourceIDs)==nil and P.compassResourceSequence==0)
+''')
+
+for fps in (30, 240):
+    check(f"Resource discovery stays bounded at {fps} FPS and clears unavailable observations", RESOURCE_HOST + rf'''
+assert(loadstring([==[{(ROOT / 'Core/Discovery/CompassDiscovery.lua').read_text(encoding='utf-8')}]==]))("Orbit_Compass",Addon)
+for i=1,{fps * 2} do
+ P.discoveryClock=i/{fps};mock.now=1+P.discoveryClock;mock.nodes[1].lastSeen=mock.now
+ if P.discoveryClock>=P.discoveryNext or P.discoveryJob or P.discoveryPending then P:DiscoverCompassMarkers() end
+end
+assert(mock.resourceProjects>=8 and mock.resourceProjects<=11, tostring(mock.resourceProjects))
+-- Only the first positive poll checks the empty published source before collection.
+assert(mock.resourceReads==mock.resourceProjects*2+1, tostring(mock.resourceReads))
+assert(#P.compassSources.resources.markers==1 and P.compassSources.resources.status=="ready")
+mock.nodes={{}};P.discoveryClock=P.discoveryClock+0.21;Drain()
+assert(#P.compassSources.resources.markers==0 and P.compassSources.resources.status=="ready")
+''')
+
+for phase in ("collection", "comparison"):
+    for invalidation in ("expire", "clear", "replace"):
+        check(f"Resource publication rejects {invalidation} after suspended {phase}", RESOURCE_HOST + rf'''
+mock.nodes={{}}
+for i=1,64 do mock.nodes[i]={{north=i,west=i,icon=123,name="Node",lastSeen=mock.now}} end
+assert(loadstring([==[{(ROOT / 'Core/Discovery/CompassDiscovery.lua').read_text(encoding='utf-8')}]==]))("Orbit_Compass",Addon)
+if "{phase}"=="comparison" then
+ Drain();assert(#P.compassSources.resources.markers==64)
+ P.discoveryClock=0.21
+ P:DiscoverCompassMarkers();P:DiscoverCompassMarkers();P:DiscoverCompassMarkers()
+ assert(mock.resourceProjects==128 and P.discoveryJob and P.discoveryJob.definition.key=="resources")
+else
+ P:DiscoverCompassMarkers()
+ assert(mock.resourceProjects==32 and P.discoveryJob and P.discoveryJob.definition.key=="resources")
+end
+if "{invalidation}"=="expire" then mock.now=10
+elseif "{invalidation}"=="clear" then mock.nodes={{}}
+else
+ mock.nodes={{}}
+ for i=1,64 do mock.nodes[i]={{north=i,west=i,icon=123,name="Node",lastSeen=mock.now}} end
+end
+for i=1,8 do if P.discoveryJob then P:DiscoverCompassMarkers() end end
+assert(not P.discoveryJob and #P.compassSources.resources.markers==0)
+''')
+
+POINT_ACTIONS = "\n".join(
+    f'assert(loadstring([==[{(ROOT / "Core" / file).read_text(encoding="utf-8")}]==],"{file}"))("Orbit_Compass",Addon)'
+    for file in ("Foundation/CompassMath.lua", "Navigation/CompassPointMenu.lua")
+)
+check("Display-only resource markers never become targets or menu actions", POINT_ACTIONS + r'''
+local resource={key="resource:1",kind="resource",name="Peacebloom",displayOnly=true,
+ destination={mapID=3,x=0.2,y=0.3},x=0.2,y=0.3,bearing=0,distance=5,renderShown=true}
+P.markers={resource};P.range=100;P:TargetCompassPoint()
+assert(not P:FindCompassPoint(false) and not P:FindCompassPoint(true) and mock.waypoints==0)
+local results={};P:SearchCompassLandmarks("Peacebloom",results,P:NewCompassSearchScratch())
+assert(#results==0 and not P:ChooseCompassSearchResult({kind="resource",marker=resource}) and mock.waypoints==0)
+local menuButtons=0
+MenuUtil={CreateContextMenu=function(_,callback)
+ callback(nil,{CreateTitle=function()end,SetScrollMode=function()end,CreateButton=function()
+  menuButtons=menuButtons+1;return{AddInitializer=function()end}
+ end})
+end}
+Addon.Services.pixel={Snap=function(_,n)return n end};UIParent={GetEffectiveScale=function()return 1 end}
+P:ShowCompassNearby();P:ShowCompassOverlapMenu(P.markers);assert(menuButtons==0)
+''')
+
+check("Auto-advance skips live resources while retaining ordinary points", r'''
+local original={key="poi:1",kind="poi",source="map",x=0.5,y=0.5,distance=1,
+ destination={mapID=3,x=0.5,y=0.5}}
+local resource={key="resource:1",kind="resource",source="resources",displayOnly=true,x=0.501,y=0.5,
+ destination={mapID=3,x=0.501,y=0.5}}
+local ordinary={key="poi:2",kind="poi",source="map",name="Next",x=0.51,y=0.5,
+ destination={mapID=3,x=0.51,y=0.5}}
+P.markers={original,resource,ordinary};P.range=100;P.autoAdvanceMode="arrival";P.autoAdvanceSameType=false
+P.bearingPlayerX,P.bearingPlayerY=0.5,0.5;P.navigationKey="waypoint";P.navigationTarget=original
+P.waypointLabel={sourceKey="poi:1"};P.discoveryClock=10
+P.discoveryDirty,P.waypointDirty=false,false
+P.compassSources.map.status="ready";P.compassSources.resources.status="ready"
+for _,source in pairs(P.compassSources)do source.enabled=false end
+P:UpdateCompassAutoAdvance();assert(mock.waypoint.position.x==0.51)
+''')
 
 SEARCH_MAP_READS = r'''
 local family=Addon.ClientFeatures.family

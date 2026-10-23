@@ -244,6 +244,9 @@ function Plugin:UpdateCompass(elapsed)
             profiler:End(self, "Compass.Discovery", start, startKB)
         end
     end
+    if Addon.ClientFeatures.sources.resources then
+        self:RefreshCompassResources()
+    end
     start, startKB = nil, nil
     if profiler and profiler.active then
         start, startKB = profiler:Begin()

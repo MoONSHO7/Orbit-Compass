@@ -118,6 +118,8 @@ function Plugin:LayoutCompassArtwork()
         return false
     end
     local thickness = Pixel:Multiple(C.LINE_THICKNESS, scale)
+    local resource = Addon.ClientFeatures.sources.resources and self.compassSources.resources.markers[1]
+    local resourceScale = resource and resource.sizeScale
     local layout = self.artworkLayout
     if
         layout.width == frameWidth
@@ -128,12 +130,14 @@ function Plugin:LayoutCompassArtwork()
         and layout.thickness == thickness
         and layout.headingHeight == self.headingHeight
         and layout.iconSize == self.iconSize
+        and layout.resourceScale == resourceScale
     then
         return true
     end
     layout.width, layout.height, layout.centerX, layout.centerY = frameWidth, frameHeight, centerX, centerY
     layout.scale, layout.thickness = scale, thickness
     layout.headingHeight, layout.iconSize = self.headingHeight, self.iconSize
+    layout.resourceScale = resourceScale
     self.renderDirty, self.selectionDirty, self.headingsDirty = true, true, true
     self.detail:SetWidth(frameWidth)
     local width = math.max(0, frameWidth - Pixel:Multiple(C.EDGE_INSET * 2, scale))
@@ -149,6 +153,13 @@ function Plugin:LayoutCompassArtwork()
     local markerBottom = layout.markerY
         - maxMarkerSize * (1 + C.SELECTION_MARKER_SCALE) / 2
         - Pixel:Multiple(C.MARKER_OUTLINE, scale)
+    if resourceScale then
+        local resourceIconSize = Pixel:Snap(self.iconSize * resourceScale * C.MARKER_NEAR_SCALE, scale)
+        local resourceHitSize =
+            self:CalculateCompassResourceSizes(resourceIconSize, Pixel:Multiple(C.MARKER_OUTLINE * 2, scale), scale)
+        local resourceBottom = lineY - thickness - Pixel:Multiple(C.MARKER_BELOW_LINE_GAP, scale) - resourceHitSize
+        markerBottom = math.min(markerBottom, resourceBottom)
+    end
     layout.headingY = Pixel:Snap(
         centerY + math.min(pointerY - pointerHeight, markerBottom) - Pixel:Multiple(C.HEADING_GAP, scale),
         scale
