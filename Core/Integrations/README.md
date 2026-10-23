@@ -20,7 +20,8 @@ catalog revisions; records wrap frozen landmarks with a stable `id` and the sear
 `IsCompassSearchHosted` is true while an enabled search in another addon lists and enables places (Orbit's Spotlight),
 which hides the ribbon's own magnifier and field; `InclusionChanged` marks the ribbon dirty. The inclusion callback
 caches that answer so ribbon rendering never enumerates searches or settings, and provider startup, cleanup and
-activation are timed at LibOrbitSearch's protected call boundary.
+activation are timed at LibOrbitSearch's protected call boundary. Inclusion subscription requires successful provider
+registration; a conflicting owner leaves no callback after Compass disconnects.
 
 `CompassGatherMate.lua` snapshots GatherMate2's current-map iterators for every registered category, localized names and
 node artwork. Discovery consumes validated records under one GatherMate2 Points filter, on by default. Icons use 60% of

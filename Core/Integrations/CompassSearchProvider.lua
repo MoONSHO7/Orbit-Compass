@@ -108,7 +108,9 @@ function Plugin:ConnectCompassSearchProvider()
         return
     end
     self.compassSearchProviderConnected = LibOrbitSearch:RegisterProvider(PROVIDER_KEY, Provider) == true
-    LibOrbitSearch.RegisterCallback(Provider, "InclusionChanged", MarkRenderDirty)
+    if self.compassSearchProviderConnected then
+        LibOrbitSearch.RegisterCallback(Provider, "InclusionChanged", MarkRenderDirty)
+    end
     MarkRenderDirty()
 end
 
