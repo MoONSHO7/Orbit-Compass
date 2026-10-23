@@ -25,13 +25,13 @@ version metadata. Python needs `lupa==2.8`.
 
 `check-client-features.py` loads real Compass policy, collectors, scheduler, map scope, Search, navigation and
 LibOrbitUI client/store code into Lua 5.1. It checks client families, withheld APIs, partial data, retained preferences,
-destination provenance, Navigation route guidance, stale actions and source readiness, including event storms at
+destination provenance, query-local map-read sharing/recovery, Navigation route guidance, stale actions and readiness, including event storms at
 different frame rates. Run `python .scripts/check-client-features.py`; it reads LibOrbitUI from the sibling
 `../Orbit-Libs/LibOrbitUI/LibOrbitUI-1.0` path, which is the workspace checkout locally and, in the workflow's `suites`
 job, a symlink to the fetched `Libs/LibOrbitUI-1.0`. It does not simulate native rendering or security.
 
-`check-landmark-budget.py` exercises the shipped catalog with large synthetic map/landmark sets, deterministic work
-bounds, pause/resume and publication checks, and balanced phase spans across yields. Run
+`check-landmark-budget.py` exercises large synthetic catalogs, costly empty native lists, deterministic work bounds,
+pause/resume, cancellation/root replacement, equivalent publication and balanced phase spans across yields. Run
 `python .scripts/check-landmark-budget.py`; native map calls and final string concatenation remain indivisible, so these
 bounds do not certify an in-game millisecond limit. Release CI runs both suites.
 

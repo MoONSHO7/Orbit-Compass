@@ -296,11 +296,99 @@ def repeated_records(family):
     print(f"PASS {family}: repeated records skip losing reads and keep native-order ties")
 
 
+EMPTY_LIST_COSTS = r'''
+mock.clock,mock.nativeCalls,mock.overdueCalls=0,0,0
+local specs={
+ {C_EncounterJournal,"GetDungeonEntrancesForMap"},
+ {C_AreaPoiInfo,"GetDelvesForMap"},{C_AreaPoiInfo,"GetEventsForMap"},
+ {C_AreaPoiInfo,"GetDragonridingRacesForMap"},{C_AreaPoiInfo,"GetQuestHubsForMap"},
+ {C_AreaPoiInfo,"GetAreaPOIForMap"},{C_Map,"GetMapLinksForMap"},
+ {C_PetInfo,"GetPetTamersForMap"},{C_TaxiMap,"GetTaxiNodesForMap"},
+ {C_ResearchInfo,"GetDigSitesForMap"},{C_TaskQuest,"GetQuestsOnMap"},
+ {C_DeathInfo,"GetGraveyardsForMap"},{C_InvasionInfo,"GetInvasionForUiMapID"},
+}
+for _,spec in ipairs(specs) do
+ local base=spec[1][spec[2]]
+ spec[1][spec[2]]=function(...)
+  if P.compassLandmarks and mock.clock>=P.compassLandmarks.deadline then
+   mock.overdueCalls=mock.overdueCalls+1
+  end
+  mock.clock=mock.clock+.8;mock.nativeCalls=mock.nativeCalls+1
+  return base(...)
+ end
+end
+debugprofilestop=function() return mock.clock end
+'''
+
+
+def empty_list_boundaries(family):
+    for focused, budget in ((False, 1), (True, 4)):
+        lua = harness["client"](family, EMPTY_LIST_COSTS)
+        lua.globals().focused = focused
+        lua.globals().budget = budget
+        lua.execute(r'''
+CountWalks()
+P:AcquireCompassLandmarkDemand("test",focused)
+local c=P.compassLandmarks
+local function Step()
+ local before=mock.clock
+ P:StepCompassLandmarkDemand(.01)
+ assert(mock.clock-before<budget+.800001,"empty native queries accumulated past the slice budget")
+end
+Step()
+local thread,reads=c.thread,mock.nativeCalls
+P:ReleaseCompassLandmarkDemand("test")
+assert(P.compassLandmarkDriver.OnUpdate==nil)
+Drive(3)
+assert(c.thread==thread and mock.nativeCalls==reads,"paused list retrieval resumed")
+P:AcquireCompassLandmarkDemand("test",focused)
+assert(c.thread==thread,"resuming an empty-list yield restarted the walk")
+local steps=0
+while c.state=="building" do Step();steps=steps+1;assert(steps<100) end
+assert(c.state=="complete" and c.queryIndex.entries==c.entries)
+assert(mock.walks==1 and mock.overdueCalls==0,"another native query ran after budget exhaustion")
+assert(#c.entries==2,"ready-empty lists changed the area catalog")
+
+mock.now=mock.now+301
+P:AcquireCompassLandmarkDemand("test",focused)
+Step()
+local previous=c.entries
+local retired=setmetatable({c.thread,c.target},{__mode="v"})
+P:StopCompassLandmarks()
+thread=nil
+collectgarbage("collect");collectgarbage("collect")
+assert(next(retired)==nil and c.entries==previous,"cancelled refresh retained its suspended list or target")
+assert(P.compassLandmarkDriver.OnUpdate==nil)
+
+P:AcquireCompassLandmarkDemand("test",focused)
+Step()
+local retiredThread=setmetatable({c.thread},{__mode="v"})
+mock.maps[110]={mapID=110,mapType=0,parentMapID=0,name="Other cosmos"}
+mock.maps[101]={mapID=101,mapType=1,parentMapID=110,name="Other world"}
+mock.maps[102]={mapID=102,mapType=2,parentMapID=101,name="Other continent"}
+mock.maps[103]={mapID=103,mapType=3,parentMapID=102,name="Other zone"}
+mock.playerMap=103
+C_Map.GetMapChildrenInfo=function(root)
+ assert(root==(Addon.ClientFeatures.family=="retail" and 110 or 101),"old root resumed after replacement")
+ return {mock.maps[102],mock.maps[103]}
+end
+P:InvalidateCompassLandmarkScope()
+collectgarbage("collect");collectgarbage("collect")
+assert(next(retiredThread)==nil,"root replacement retained the suspended native list")
+steps=0
+while c.state=="building" do Step();steps=steps+1;assert(steps<100) end
+assert(c.state=="complete" and #c.entries==2 and c.queryIndex.entries==c.entries)
+for _,entry in ipairs(c.entries) do assert(entry.mapID>=100,"retired root published a landmark") end
+''')
+    print(f"PASS {family}: empty native lists respect budgets, pause, cancellation and root replacement")
+
+
 for family in ("retail", "forever"):
     check("large build, pause, refresh cancellation and equivalent publication", LIFECYCLE, family)
     check("focused budget and indivisible native/blob attribution", FOCUSED, family)
     check("collector failure closes all phase spans", FAILURE, family)
     check("standalone build without profiler", ABSENT_PROFILER, family)
     repeated_records(family)
+    empty_list_boundaries(family)
 
-print("10/10 landmark budget scenarios passed (large builds: 12640 POIs and 12642 child records each)")
+print("12/12 landmark budget scenarios passed (large builds: 12640 POIs and 12642 child records each)")

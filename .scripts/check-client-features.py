@@ -986,6 +986,104 @@ for family in ("retail", "forever"):
         assert(P:RenderNavigation(0) and P.navigationFrame.shown and P.navigationView.title.text=="Target")
     ''', family)
 
+SEARCH_MAP_READS = r'''
+local family=Addon.ClientFeatures.family
+for i=1,20 do
+ P.compassLocations:Insert({id=family..":home"..i,name="Home "..i,mapID=3,x=.2,y=.3,
+  clientFamily=family,destinationVersion=1,worldInstance=42})
+end
+P.compassLocations:Insert({id=family..":wrongworld",name="Home wrong world",mapID=3,x=.2,y=.3,
+ clientFamily=family,destinationVersion=1,worldInstance=43})
+for _,record in ipairs({
+ {id="foreign",name="Home foreign",mapID=99,x=.2,y=.3,clientFamily="other",destinationVersion=1},
+ {id="legacy",name="Home legacy",mapID=99,x=.2,y=.3,clientFamily=family},
+ {id="coordinates",name="Home bad coordinates",mapID=99,x=2,y=.3,clientFamily=family,destinationVersion=1},
+}) do P.compassLocations:Insert(record) end
+local base=C_Map.GetMapInfo
+local reads,worldReads=0,0
+C_Map.GetMapInfo=function(id) reads=reads+1;assert(id~=99,"invalid provenance reached a native map lookup");return base(id) end
+C_Map.GetWorldPosFromMapPos=function(id,position)
+ worldReads=worldReads+1;assert(id==3 and position.x==.2 and position.y==.3)
+ return mock.instance or 42,{x=200,y=300}
+end
+local results,scratch={},P:NewCompassSearchScratch()
+for i=1,3 do
+ P:SearchCompassLandmarks("home",results,scratch)
+ assert(#results==20 and reads==i and worldReads==21*i,"map reads were duplicated or world validation was skipped")
+ for _,entry in ipairs(results) do assert(entry.zone=="Zone" and entry.kind=="saved" and entry.atlas==Addon.Constants.FALLBACK_ATLAS) end
+end
+local selected=results[1]
+mock.maps[3].name="Renamed zone";mock.instance=43
+P:SearchCompassLandmarks("home",results,scratch)
+assert(#results==1 and results[1].name=="Home wrong world" and results[1].zone=="Renamed zone")
+assert(reads==4 and worldReads==84,"query metadata survived a context change")
+assert(not P:ChooseCompassSearchResult(selected),"cached metadata bypassed activation validation")
+'''
+
+SEARCH_MAP_RECOVERY = r'''
+local family=Addon.ClientFeatures.family
+P.compassLocations:Insert({id=family..":home",name="Home",mapID=3,x=.2,y=.3,
+ clientFamily=family,destinationVersion=1,worldInstance=42})
+P.markers={{key="poi:1",kind="poi",name="Home marker",atlas="test",destination={mapID=3,x=.2,y=.3}}}
+local base=C_Map.GetMapInfo
+local reads,worldReads=0,0
+C_Map.GetMapInfo=function(id)
+ reads=reads+1
+ if mock.mapState=="missing" then return nil end
+ if mock.mapState=="secret" then return {secret=true} end
+ return base(id)
+end
+C_Map.GetWorldPosFromMapPos=function() worldReads=worldReads+1;return 42,{x=200,y=300} end
+local results,scratch={},P:NewCompassSearchScratch()
+for _,state in ipairs({"missing","secret","ready"}) do
+ mock.mapState=state
+ P:SearchCompassLandmarks("home",results,scratch)
+ assert(reads==(state=="missing" and 1 or state=="secret" and 2 or 3),"unknown map metadata was reread within one query")
+ assert(#results==(state=="ready" and 2 or 1),"unknown map metadata became saved-location admission")
+ assert(worldReads==(state=="ready" and 1 or 0))
+ for _,entry in ipairs(results) do assert(entry.zone==(state=="ready" and "Zone" or nil)) end
+end
+mock.maps[3].name={secret=true}
+P:SearchCompassLandmarks("home",results,scratch)
+assert(reads==4 and #results==2 and worldReads==2)
+for _,entry in ipairs(results) do assert(entry.zone==nil,"unreadable map name entered matching") end
+mock.maps[3].name="Recovered"
+P:SearchCompassLandmarks("home",results,scratch)
+assert(reads==5 and #results==2 and worldReads==3)
+for _,entry in ipairs(results) do assert(entry.zone=="Recovered") end
+'''
+
+SEARCH_MAP_KEYS = r'''
+local family=Addon.ClientFeatures.family
+for _,mapID in ipairs({3,4}) do
+ P.compassLocations:Insert({id=family..":home"..mapID,name="Home "..mapID,mapID=mapID,x=.2,y=.3,
+  clientFamily=family,destinationVersion=1,worldInstance=mapID+40})
+end
+local reads,worldReads={},0
+local borrowed=setmetatable({},{__mode="v"})
+C_Map.GetMapInfo=function(id)
+ reads[id]=(reads[id] or 0)+1
+ local info={mapID=id,name="Place "..id}
+ borrowed[id]=info
+ return info
+end
+C_Map.GetWorldPosFromMapPos=function(id) worldReads=worldReads+1;return id+40,{x=200,y=300} end
+local results,scratch={},P:NewCompassSearchScratch()
+P:SearchCompassLandmarks("home",results,scratch)
+assert(#results==2 and reads[3]==1 and reads[4]==1 and worldReads==2)
+for _,entry in ipairs(results) do assert(entry.zone=="Place "..entry.mapID) end
+collectgarbage("collect");collectgarbage("collect")
+assert(next(borrowed)==nil,"completed query retained borrowed native map info")
+local selected=results[1]
+C_Map.GetMapInfo=function() return nil end
+assert(not P:ChooseCompassSearchResult(selected),"saved action reused its query's available map metadata")
+'''
+
+for family in ("retail", "forever"):
+    check(f"{family} search shares query map metadata and keeps destination validation", SEARCH_MAP_READS, family)
+    check(f"{family} search unknown map metadata recovers on the next query", SEARCH_MAP_RECOVERY, family)
+    check(f"{family} search keeps map metadata separate and releases query ownership", SEARCH_MAP_KEYS, family)
+
 failures = []
 for name, code, family, before in tests:
     try:

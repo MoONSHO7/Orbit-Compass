@@ -484,8 +484,7 @@ local function Score(entry, query, rows)
     return name, nameTier
 end
 
-local function MapName(mapID)
-    local info = mapID and Readable(C_Map.GetMapInfo(mapID))
+local function MapName(info)
     local name = type(info) == "table" and Readable(info.name)
     return type(name) == "string" and name or nil
 end
@@ -495,11 +494,15 @@ local function LiveEntry(fields, zone)
     return AddSearchFields(fields, fields.name, zone)
 end
 
-local function SavedLocations(plugin, consider)
+local function SavedLocations(plugin, consider, readMapInfo)
     for _, location in pairs(plugin.compassLocations:Records()) do
         local name = type(location) == "table" and Readable(location.name)
         local mapID = type(name) == "string" and Number(location.mapID)
-        if mapID and plugin:IsCompassLocationUsable(location) then
+        local usable, info
+        if mapID then
+            usable, info = plugin:IsCompassLocationUsable(location, readMapInfo)
+        end
+        if usable then
             consider(LiveEntry({
                 kind = "saved",
                 key = "saved:" .. location.id,
@@ -510,7 +513,7 @@ local function SavedLocations(plugin, consider)
                 x = location.x,
                 y = location.y,
                 atlas = C.FALLBACK_ATLAS,
-            }, MapName(mapID)))
+            }, MapName(info)))
         end
     end
 end
@@ -540,8 +543,8 @@ local function QuestLog(plugin, consider, indexed)
     end
 end
 
-local function CompassMarkers(plugin, consider, indexed)
-    local zone = MapName(plugin.mapID)
+local function CompassMarkers(plugin, consider, indexed, readMapInfo)
+    local zone = MapName(plugin.mapID and readMapInfo(plugin.mapID))
     local rows = plugin.compassLiveMarkers
     for _, marker in ipairs(plugin.markers) do
         if not LIVE_MARKER_EXCLUDED[marker.kind] then
@@ -767,6 +770,15 @@ function Plugin:SearchCompassLandmarks(text, results, scratch, options)
         rest = rest,
     }
     local live = {}
+    local maps = {}
+    local function ReadMapInfo(mapID)
+        local info = maps[mapID]
+        if info == nil then
+            info = Readable(C_Map.GetMapInfo(mapID))
+            maps[mapID] = type(info) == "table" and info or false
+        end
+        return info
+    end
     local function Collect(entry)
         if Addon.ClientFeatures.AllowsKind(entry.kind) then
             live[#live + 1] = entry
@@ -776,8 +788,8 @@ function Plugin:SearchCompassLandmarks(text, results, scratch, options)
     if Addon.ClientFeatures.quests then
         QuestLog(self, Collect, indexed)
     end
-    CompassMarkers(self, Collect, indexed)
-    SavedLocations(self, Collect)
+    CompassMarkers(self, Collect, indexed, ReadMapInfo)
+    SavedLocations(self, Collect, ReadMapInfo)
     local landmarks = self:GetCompassLandmarks()
     local queryIndex = self.compassLandmarks.queryIndex
     local function Visit(entry, rows)

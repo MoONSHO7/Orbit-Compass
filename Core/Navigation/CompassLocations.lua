@@ -19,7 +19,7 @@ local function LocationName(name)
     end
 end
 
-function Plugin:IsCompassLocationUsable(location)
+function Plugin:IsCompassLocationUsable(location, readMapInfo)
     if
         type(location) ~= "table"
         or location.destinationVersion ~= DESTINATION_VERSION
@@ -29,7 +29,14 @@ function Plugin:IsCompassLocationUsable(location)
         return false
     end
     local mapID = Utils.Number(location.mapID)
-    local info = mapID and Utils.Readable(C_Map.GetMapInfo(mapID))
+    local info
+    if mapID then
+        if readMapInfo then
+            info = readMapInfo(mapID)
+        else
+            info = Utils.Readable(C_Map.GetMapInfo(mapID))
+        end
+    end
     if type(info) ~= "table" then
         return false
     end
@@ -39,7 +46,7 @@ function Plugin:IsCompassLocationUsable(location)
             return false
         end
     end
-    return true
+    return true, info
 end
 
 function Plugin:FindCompassLocation(name)

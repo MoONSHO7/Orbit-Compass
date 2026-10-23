@@ -84,9 +84,7 @@ local function NoCheckpoint() end
 
 local function ReadList(value, checkpoint)
     value = Readable(value)
-    if value ~= false and type(value) ~= "table" then
-        checkpoint(true)
-    end
+    checkpoint(value ~= false and type(value) ~= "table")
     return type(value) == "table" and value or {}
 end
 
@@ -202,7 +200,6 @@ local function CollectAreaPOIs(mapID, place, depth, add, checkpoint, seen, wins)
     end
     for _, group in ipairs(AREA_GROUPS) do
         local ids = ReadList(group.enabled and group.query(mapID), checkpoint)
-        checkpoint()
         for _, id in ipairs(ids) do
             id = Number(id)
             if id and not seen[id] then

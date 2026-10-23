@@ -38,7 +38,8 @@ Own destinations and guidance independently of how the ribbon chooses visible ic
 ## Gotchas
 - Destination version 1 uses IDs `<clientFamily>:<lowercase name>` and stores family, map, coordinates and readable
   `worldInstance`. Collection handles keep their standalone/profile ownership. Reads require the current family, map and
-  recorded world instance. Foreign, legacy and unknown-version records remain stored but dormant; no migration guesses
+  recorded world instance. Search may share a query-local map reader; per-location world validation and fresh action
+  validation remain independent. Foreign, legacy and unknown-version records remain stored but dormant; no migration guesses
   origin. Re-save a confirmed place to create a qualified record. `/oway list` identifies dormant records;
   `/oway forget retail:name` deletes one explicitly. The `MAX_LOCATIONS` limit of 100 includes dormant records.
 - Indexed Search actions require current catalog membership, live marker actions require current identity, and saved

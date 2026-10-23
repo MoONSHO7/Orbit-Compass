@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Check catalogue work budgets after empty map queries and share map metadata within each search
+  on both clients, preserving results, destination checks, filters and artwork.
+
 - Show Arrow, at the top of the Arrow's Behaviour settings, hides the destination arrow while you play. Waypoints, auto
   advance and Orbit Navigation keep working, and the arrow still appears in Edit Mode so you can turn it back on.
 

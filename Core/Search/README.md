@@ -18,8 +18,8 @@ uses, so Blizzard's route shortcuts guide the arrow.
   world entry only re-resolve and retire the root; release pauses the walk and the next acquire resumes it. Listeners
   receive revisions every 0.25 s and on completion. Budgets are 1 ms, or 4 ms with focused demand. Under demand, an
   index older than five minutes refreshes into a side table that replaces the live index only when complete. The walk's
-  child-copy, duplicate comparison/compaction and query-entry loops check that budget per record; native child-map
-  retrieval and the final folded-name concatenation remain indivisible. Final steps build a query index (word postings,
+  native list reads check the budget even for ready-empty lists; child-copy, duplicate and query-entry loops check per
+  record. Individual native calls and final folded-name concatenation remain indivisible. Final steps build an index (word postings,
   a folded-name blob and kind lists) and publish it with the entries in one step, except after an incomplete refresh; a
   root change or a build into the live index clears it, so none exists while a first build runs.
 - **Collectors.** Policy-enabled collectors contribute area records for each continent, zone and micro map, walked in
@@ -35,7 +35,9 @@ uses, so Blizzard's route shortcuts guide the arrow.
   score and a match tier per result (5 exact to 1 typo/loose) so Orbit can merge places with its own results;
   `fuzzy = false` skips the fuzzy pass and `limit` trims the list. It adds live results at query time (quest-log quests,
   the current map's Compass markers such as rares, treasures, quest offers, HandyNotes and GatherMate2, and saved
-  locations), skipping anything the index already holds. Queries fold through `Addon.Text.Fold`. With a query index each
+  locations), skipping anything the index already holds. Live markers and saved locations share one validated map-info
+  lookup per map/query, including unavailable results; each saved location still validates its provenance and world instance.
+  Queries fold through `Addon.Text.Fold`. With a query index each
   pass scores only its candidates, visited in entry order so results and ties equal a full scan; without one it scans
   every entry. Category phrases come from English aliases, localized type labels, Blizzard's client-localized
   `MAP_LEGEND_*` names and the localized `PLU_COMPASS_SEARCH_ALIASES`. Relevance order, highest first: exact name, name
@@ -71,7 +73,8 @@ uses, so Blizzard's route shortcuts guide the arrow.
   independent of Points visibility so a supported explicit choice can still be tracked.
 - Indexed selections require current catalog membership; live markers require current identity, and their search rows
   are reused by marker identity, so never change a published marker's `kind`, `key`, `name`, `atlas` or art fields
-  (replace the marker instead); saved choices reread their coordinates/provenance.
+  (replace the marker instead); saved choices reread their coordinates/provenance and native map metadata. Query map-info
+  tables are not retained by scratch, results or later actions.
 - Choice dispatch: map-pin landmarks track natively (`SetSuperTrackedMapPin`); quests are watched, then super-tracked
   (`compassQuestSelection` lets the quest source ignore hidden quest Points); live markers select exactly like a ribbon
   click; everything else, including refused pins, becomes a labelled user waypoint at the zone centre, the micro rect
