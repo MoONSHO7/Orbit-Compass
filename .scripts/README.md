@@ -36,7 +36,7 @@ bounds, pause/resume and publication checks, and balanced phase spans across yie
 bounds do not certify an in-game millisecond limit. Release CI runs both suites.
 
 ## Gotchas
-- Compass pins verified UI 1.10/API 1.14 and Search 1.2/revision 5 releases. Linked checks do not establish release
+- Compass pins verified UI 1.12/API 1.15 and Search 1.4/revision 7 releases. Linked checks do not establish release
   delivery; validate ordinary fetched packages. The automatic latest-release resolver is not implemented.
 - `fetch-libs.py` and `check-package.py` remain byte-identical between both addon repositories; keep their changes
   synchronized. `check-client-features.py` is product-specific despite sharing its name with Status's suite.

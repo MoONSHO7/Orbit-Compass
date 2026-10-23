@@ -47,7 +47,7 @@ and before consumers capture service hooks. Its `OrbitCanvas.lua` companion load
 ## Gotchas
 - Optional integrations must remain inert while Compass is disabled, including hooks that cannot be uninstalled.
   Lifecycle owns activation and retirement.
-- LibOrbitSearch loads after LibStub. Packaging pins its verified 1.1 release through the `Libs/LibOrbitSearch-1.0`
+- LibOrbitSearch loads after LibStub. Packaging pins its verified 1.4 release through the `Libs/LibOrbitSearch-1.0`
   external in `.pkgmeta`; release-mode `.scripts/check-package.py` verifies the loaded provider APIs. Local links cannot
   satisfy delivery. Provider functions read Compass through controller methods; landmarks stay frozen. Missing native
   atlases present the bundled arrow to the shared Search host.
