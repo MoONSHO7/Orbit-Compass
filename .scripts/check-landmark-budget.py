@@ -1,16 +1,6 @@
 """Check shipped landmark coroutine work bounds and publication with deterministic Lua instruction costs."""
 
-import ast
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[1]
-HARNESS = ROOT / ".scripts/check-client-features.py"
-tree = ast.parse(HARNESS.read_text(encoding="utf-8"), filename=str(HARNESS))
-boundary = next(i for i, node in enumerate(tree.body) if isinstance(node, ast.Assign)
-                and any(isinstance(target, ast.Name) and target.id == "tests" for target in node.targets))
-tree.body = tree.body[:boundary]
-harness = {"__file__": str(HARNESS)}
-exec(compile(tree, str(HARNESS), "exec"), harness)
+from compass_harness import client
 
 CORPUS = r'''
 mock.clock, mock.childrenReads, mock.entryCount = 0, 0, 12640
@@ -39,7 +29,8 @@ table.concat=function(list,separator,...)
   return concat(list,separator,...)
 end
 debugprofilestop=function() return mock.clock end
-mock.profiler={active=true, stack={}, records={}, nextID=0, exclusive=0, outer=0}
+mock.profiler={active=true, stack={}, records={}, counts={}, nextID=0, exclusive=0, outer=0}
+function mock.profiler:Count(_,label,amount) self.counts[label]=(self.counts[label] or 0)+(amount or 1) end
 function mock.profiler:Begin()
   self.nextID=self.nextID+1
   self.stack[#self.stack+1]={id=self.nextID,started=mock.clock,children=0}
@@ -127,7 +118,7 @@ end
 
 
 def fixture(family):
-    lua = harness["client"](family, "C_AreaPoiInfo.GetAreaPOIForMap=function(mapID) return mapID==3 and mock.poiIDs or {} end")
+    lua = client(family, "C_AreaPoiInfo.GetAreaPOIForMap=function(mapID) return mapID==3 and mock.poiIDs or {} end")
     lua.execute(CORPUS)
     return lua
 
@@ -208,6 +199,47 @@ assert(not ok and string.find(message,"synthetic collector failure",1,true))
 assert(P.compassLandmarks.state=="failed" and P.compassLandmarks.thread==nil)
 assert(#mock.profiler.stack==0,"error left phase span open")
 assert(math.abs(mock.profiler.exclusive-mock.profiler.outer)<.00001)
+'''
+
+# Spotlight re-runs every hosted search on each notification, so an unindexed first build must not notify per slice.
+FIRST_BUILD_SEARCH = r'''
+SetBudgeted(true)
+local c,counts,records=P.compassLandmarks,mock.profiler.counts,mock.profiler.records
+local notices={}
+P:SetCompassLandmarkListener("spotlight",function()
+  notices[#notices+1]={now=mock.now,unindexed=P:IsCompassLandmarkSearchUnindexed()}
+end)
+local function Search(text)
+  local results=P:SearchCompassLandmarks(text,{},P:NewCompassSearchScratch())
+  return #results
+end
+P:AcquireCompassLandmarkDemand("test",false)
+local slices,searched=0,false
+while c.state=="building" do
+  if c.thread then debug.sethook(c.thread,function() mock.clock=mock.clock+.01 end,"",100) end
+  mock.now=mock.now+.25
+  P:StepCompassLandmarkDemand(.25)
+  slices=slices+1; assert(slices<30000,"build did not settle")
+  if not searched and #c.entries>=100 and P:IsCompassLandmarkSearchUnindexed() then
+    searched=true
+    assert(Search("Seperate")==0,"an unindexed first build ran the typo pass")
+    assert(Search("Separate")>=12,"strict matches were withheld during the first build")
+  end
+end
+debug.sethook()
+assert(c.state=="complete" and searched and not P:IsCompassLandmarkSearchUnindexed())
+assert(counts["Search/Unindexed"]==2 and counts["Search/FuzzySkipped"]==1 and records["Compass.Search.Fuzzy"]==nil)
+assert(#notices==counts["Landmarks/Notify"],"listener notifications were not counted")
+local unindexed,previous=0,nil
+for _,notice in ipairs(notices) do
+  if notice.unindexed then
+    unindexed=unindexed+1
+    assert(not previous or notice.now-previous>=1,"first-build notifications came less than a second apart")
+    previous=notice.now
+  end
+end
+assert(unindexed>10 and not notices[#notices].unindexed,"completion did not notify with its index")
+assert(Search("Seperate")>0 and records["Compass.Search.Fuzzy"].calls==1,"the finished index did not restore typo matches")
 '''
 
 ABSENT_PROFILER = r'''
@@ -291,7 +323,7 @@ assert(Reads()=="3:104" and mock.reads.journal==journal,"a map click reads only 
 
 
 def repeated_records(family):
-    lua = harness["client"](family, REPEATED_WORLD)
+    lua = client(family, REPEATED_WORLD)
     lua.execute(REPEATED_RECORDS)
     print(f"PASS {family}: repeated records skip losing reads and keep native-order ties")
 
@@ -323,7 +355,7 @@ debugprofilestop=function() return mock.clock end
 
 def empty_list_boundaries(family):
     for focused, budget in ((False, 1), (True, 4)):
-        lua = harness["client"](family, EMPTY_LIST_COSTS)
+        lua = client(family, EMPTY_LIST_COSTS)
         lua.globals().focused = focused
         lua.globals().budget = budget
         lua.execute(r'''
@@ -387,8 +419,9 @@ for family in ("retail", "forever"):
     check("large build, pause, refresh cancellation and equivalent publication", LIFECYCLE, family)
     check("focused budget and indivisible native/blob attribution", FOCUSED, family)
     check("collector failure closes all phase spans", FAILURE, family)
+    check("unindexed first-build searches skip typo scans and notify at most once a second", FIRST_BUILD_SEARCH, family)
     check("standalone build without profiler", ABSENT_PROFILER, family)
     repeated_records(family)
     empty_list_boundaries(family)
 
-print("12/12 landmark budget scenarios passed (large builds: 12640 POIs and 12642 child records each)")
+print("14/14 landmark budget scenarios passed (large builds: 12640 POIs and 12642 child records each)")

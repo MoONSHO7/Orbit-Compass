@@ -602,6 +602,10 @@ end
 
 local function NotifyListeners(catalog)
     catalog.notifiedRevision, catalog.listenerClock = catalog.revision, 0
+    local profiler = Addon.Services.profiler
+    if profiler and profiler.active and next(catalog.listeners) then
+        profiler:Count(Plugin, "Landmarks/Notify")
+    end
     for _, listener in pairs(catalog.listeners) do
         listener()
     end
@@ -658,7 +662,8 @@ function Plugin:StepCompassLandmarkDemand(elapsed)
     local catalog = self.compassLandmarks
     self:StepCompassLandmarkCatalog()
     catalog.listenerClock = catalog.listenerClock + elapsed
-    if catalog.listenerClock >= LISTENER_INTERVAL and catalog.revision ~= catalog.notifiedRevision then
+    local interval = self:IsCompassLandmarkSearchUnindexed() and C.UNINDEXED_SEARCH_REFRESH or LISTENER_INTERVAL
+    if catalog.listenerClock >= interval and catalog.revision ~= catalog.notifiedRevision then
         NotifyListeners(catalog)
     end
     if catalog.state ~= "building" then
@@ -783,6 +788,12 @@ end
 
 function Plugin:IsCompassLandmarkCatalogBuilding()
     return self.compassLandmarks.state == "building" or self.compassLandmarks.state == "pending"
+end
+
+-- A first build publishes entries before their index, so each search meanwhile scans every collected entry.
+function Plugin:IsCompassLandmarkSearchUnindexed()
+    local catalog = self.compassLandmarks
+    return catalog.queryIndex == nil and #catalog.entries > 0 and self:IsCompassLandmarkCatalogBuilding()
 end
 
 function Plugin:CompassLandmarksInclude(pinType)

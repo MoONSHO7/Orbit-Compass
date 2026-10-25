@@ -205,7 +205,8 @@ function Plugin:CreateCompassSearch()
     local elapsedSinceRefresh = 0
     list:SetScript("OnUpdate", function(_, elapsed)
         elapsedSinceRefresh = elapsedSinceRefresh + elapsed
-        if elapsedSinceRefresh < REFRESH_INTERVAL then
+        local interval = self:IsCompassLandmarkSearchUnindexed() and C.UNINDEXED_SEARCH_REFRESH or REFRESH_INTERVAL
+        if elapsedSinceRefresh < interval then
             return
         end
         elapsedSinceRefresh = 0

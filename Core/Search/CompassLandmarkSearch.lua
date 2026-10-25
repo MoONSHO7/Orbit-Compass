@@ -792,6 +792,9 @@ function Plugin:SearchCompassLandmarks(text, results, scratch, options)
     SavedLocations(self, Collect, ReadMapInfo)
     local landmarks = self:GetCompassLandmarks()
     local queryIndex = self.compassLandmarks.queryIndex
+    -- The first build's completion notice re-runs this query with the fuzzy pass and the new index.
+    local unindexed = self:IsCompassLandmarkSearchUnindexed()
+    local counting = profiler and profiler.active
     local function Visit(entry, rows)
         if Addon.ClientFeatures.AllowsKind(entry.kind) and not scores[entry] then
             local score, tier = Score(entry, query, rows)
@@ -816,11 +819,27 @@ function Plugin:SearchCompassLandmarks(text, results, scratch, options)
             Visit(entry, rows)
         end
     end
+    if unindexed and counting then
+        profiler:Count(self, "Search/Unindexed")
+    end
     Pass(nil)
     if fuzzy and #results < FUZZY_RESULT_THRESHOLD then
-        self.compassSearchRows.matches = {}
-        Pass(self.compassSearchRows)
-        self.compassSearchRows.matches = nil
+        if unindexed then
+            if counting then
+                profiler:Count(self, "Search/FuzzySkipped")
+            end
+        else
+            local fuzzyStart, fuzzyKB
+            if profiler then
+                fuzzyStart, fuzzyKB = profiler:Begin()
+            end
+            self.compassSearchRows.matches = {}
+            Pass(self.compassSearchRows)
+            self.compassSearchRows.matches = nil
+            if fuzzyStart then
+                profiler:End(self, "Compass.Search.Fuzzy", fuzzyStart, fuzzyKB)
+            end
+        end
     end
     table.sort(results, function(a, b)
         if scores[a] ~= scores[b] then

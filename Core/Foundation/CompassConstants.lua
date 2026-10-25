@@ -68,6 +68,8 @@ Addon.Constants = table.freeze({
     DISCOVERY_STEPS = 32,
     DISCOVERY_MIN_INTERVAL = 0.2,
     SORT_INTERVAL = 0.1,
+    -- Searches without a landmark index scan every collected entry; first-build refreshes run at most this often.
+    UNINDEXED_SEARCH_REFRESH = 1,
     BEARING_REFRESH_INTERVAL = 0.05,
     BEARING_RESET_DISTANCE = 64,
     TICK_STEP = 15,

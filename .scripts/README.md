@@ -23,6 +23,12 @@ Run `python .scripts/check-package.py` for linked sources. Release CI fetches li
 requires Compass Search/LibStub externals and rejects filesystem links; a different root also requires substituted
 version metadata. Python needs `lupa==2.8`.
 
+`compass_harness.py` is the suites' shared Lua 5.1 client: native namespace doubles, the loaded Compass files and the
+LibOrbitUI client/store, read from the sibling `../Orbit-Libs/LibOrbitUI/LibOrbitUI-1.0` path (the workspace checkout
+locally and, in the workflow's `suites` job, a symlink to the fetched `Libs/LibOrbitUI-1.0`). It also holds a double of
+Orbit's documented resource-observation capability; it simulates no native rendering or security. Its `table.freeze`
+double records frozen tables so `table.sort` rejects them, as the strictest client may.
+
 `check-client-features.py` loads real Compass policy, collectors, scheduler, map scope, Search, navigation and
 LibOrbitUI client/store code into Lua 5.1. It checks client families, withheld APIs, partial data, retained preferences,
 destination provenance, query-local map-read sharing/recovery, Navigation route guidance, stale actions and readiness, including event storms at
@@ -32,9 +38,10 @@ display-only action exclusions. Run `python .scripts/check-client-features.py`; 
 job, a symlink to the fetched `Libs/LibOrbitUI-1.0`. It does not simulate native rendering or security.
 
 `check-landmark-budget.py` exercises large synthetic catalogs, costly empty native lists, deterministic work bounds,
-pause/resume, cancellation/root replacement, equivalent publication and balanced phase spans across yields. Run
-`python .scripts/check-landmark-budget.py`; native map calls and final string concatenation remain indivisible, so these
-bounds do not certify an in-game millisecond limit. Release CI runs both suites.
+pause/resume, cancellation/root replacement, equivalent publication, balanced phase spans across yields and unindexed
+first-build search cadence. Run `python .scripts/check-landmark-budget.py`; native map calls and final string
+concatenation remain indivisible, so these bounds do not certify an in-game millisecond limit.
+Release CI runs both suites.
 
 `check-resource-audit.py` exercises live-resource publication, hidden resume, paused comparisons, mixed marker actions
 and Retail isolation. Pooled mask/ring checks cover scale geometry, unchanged setter counts, bounded region allocation
