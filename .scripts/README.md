@@ -51,7 +51,7 @@ and enable/disable cycles. Empty-resource checks bound job allocations and provi
 recovery and unknown counts. Both reuse the client suite's harness and run in release CI.
 
 ## Gotchas
-- Compass pins verified UI 1.12/API 1.15 and Search 1.4/revision 7 releases. Linked checks do not establish release
+- Compass pins verified UI 1.14/API 1.17 and Search 1.4/revision 7 releases. Linked checks do not establish release
   delivery; validate ordinary fetched packages. The automatic latest-release resolver is not implemented.
 - `fetch-libs.py` and `check-package.py` remain byte-identical between both addon repositories; keep their changes
   synchronized. `check-client-features.py` is product-specific despite sharing its name with Status's suite.
