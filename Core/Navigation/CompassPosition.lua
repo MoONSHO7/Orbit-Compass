@@ -40,8 +40,12 @@ function Plugin:ReadCompassPosition()
             return
         end
     end
-    if self.positionMapX and self.positionMapY then
-        -- UnitPosition axes run north/west; periodic map samples reconcile phases and map availability.
+    return self:ProjectCompassWorldPoint(instance, north, west)
+end
+
+-- UnitPosition axes run north/west; periodic map samples reconcile phases and map availability.
+function Plugin:ProjectCompassWorldPoint(instance, north, west)
+    if instance ~= nil and instance == self.positionInstance then
         return self.positionMapX - (west - self.positionWest) / self.mapWidth,
             self.positionMapY - (north - self.positionNorth) / self.mapHeight
     end

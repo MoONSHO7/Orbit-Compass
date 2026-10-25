@@ -27,6 +27,8 @@ end
 function Plugin:SelectCompassPin(landmark)
     self.compassPinSelection = { pinType = landmark.pinType, id = landmark.id }
     self.compassPinDestination = landmark
+    -- Selecting an already-tracked pin raises no native event, yet it decides whether that pin routes.
+    self.compassSources.route.dirty, self.discoveryPending = true, true
 end
 
 function Plugin:ResolveCompassPinDestination(pinType, id)

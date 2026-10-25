@@ -9,9 +9,9 @@ owners.
 
 ## Implementation
 `Integrations.xml` loads the [HandyNotes module](HandyNotes/README.md), optional-addon lifecycle methods, the
-GatherMate2 adapter, the LibOrbitSearch provider, the Orbit Navigation adapter and the late
-[Orbit Canvas adapter](Orbit/README.md). `CompassIntegrations.lua` connects enabled providers and observes late addon
-loads.
+GatherMate2 adapter, the LibOrbitSearch provider, the Orbit Navigation adapter, then the Orbit live-resource and late
+Canvas adapters ([Orbit/](Orbit/README.md)). `CompassIntegrations.lua` connects enabled providers and observes late
+addon loads.
 
 `CompassSearchProvider.lua` registers Compass as the `locations` provider of the shared LibOrbitSearch library whenever
 Compass is enabled, with or without Orbit. Each search session owns scratch, acquires catalog demand and invalidates on

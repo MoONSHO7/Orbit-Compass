@@ -62,6 +62,7 @@ function Plugin:LayoutCompassMarkerGroups(selection)
     wipe(members)
     for _, group in ipairs(groups) do
         wipe(group.markers)
+        wipe(group.actions)
     end
     for index, marker in ipairs(selection) do
         marker.projectedBelowLine = marker.kind == "resource"
@@ -91,7 +92,7 @@ function Plugin:LayoutCompassMarkerGroups(selection)
         if belowLine ~= marker.projectedBelowLine or not right or marker.projectedLeftPx >= right then
             group = group + 1
             right = marker.projectedRightPx
-            groups[group] = groups[group] or { markers = {} }
+            groups[group] = groups[group] or { markers = {}, actions = {} }
         else
             right = math.max(right, marker.projectedRightPx)
         end
@@ -109,6 +110,10 @@ function Plugin:LayoutCompassMarkerGroups(selection)
     for index, marker in ipairs(order) do
         local record = marker.overlapGroup
         record.markers[#record.markers + 1] = marker
+        -- Clicks, counts and choice menus offer only these members; display-only observations stay visual.
+        if not marker.displayOnly then
+            record.actions[#record.actions + 1] = marker
+        end
         marker.depthLevel = C.MARKER_BASE_LEVEL + #order - index
     end
 end

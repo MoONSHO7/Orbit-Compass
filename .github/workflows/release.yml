@@ -207,8 +207,6 @@ jobs:
         working-directory: Orbit-Compass
         run: python .scripts/check-landmark-budget.py
 
-      - name: Audit resource publication, client isolation and lifetimes
+      - name: Check live resources against the Orbit capability contract
         working-directory: Orbit-Compass
-        run: |
-          python .scripts/check-resource-audit.py
-          python .scripts/check-resource-performance.py
+        run: python .scripts/check-resources.py

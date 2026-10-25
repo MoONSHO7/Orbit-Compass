@@ -17,9 +17,9 @@ files.
 `suites` gates `package` on the same pushes and pull requests. It checks the addon out into `Orbit-Compass/`,
 fetches the same pinned libraries, symlinks `Orbit-Libs/LibOrbitUI/LibOrbitUI-1.0` to the fetched `Libs/LibOrbitUI-1.0`
 (the sibling path `.scripts/check-client-features.py` reads, mirroring the workspace layout), then runs the client suite
-and `.scripts/check-landmark-budget.py` for cooperative work bounds and balanced profiler phases. Resource audit and
-performance suites cover publication, actions, client isolation and retained ownership. All use simulated native
-boundaries and need no fixtures beyond the libraries.
+and `.scripts/check-landmark-budget.py` for cooperative work bounds and balanced profiler phases, then
+`.scripts/check-resources.py` against a double of Orbit's documented resource capability. All use simulated native
+boundaries and need no Orbit checkout or fixtures beyond the libraries.
 
 Successful `main` pushes choose the next `MAJOR.MINOR` tag, starting at `1.0`; later automatic releases increment the
 minor number. Stable tag pushes package that exact revision. Manual runs release only when targeting `main` or a stable

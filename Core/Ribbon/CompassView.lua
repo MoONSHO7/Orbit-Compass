@@ -11,6 +11,7 @@ local MINOR_TICK_ALPHA = 0.1
 local POINTER_ALPHA = 0.4
 local WHITE = { r = 0.8, g = 0.82, b = 0.84 }
 local PEEK_DESTINATION_EPSILON = 0.00001
+local RESOURCE_KIND = "resource"
 
 local function IsTrackedPoint(marker, target)
     if marker.navigation then
@@ -109,6 +110,17 @@ function Plugin:CreateCompassView()
     self:CreateCompassPeek()
 end
 
+-- Display lists change membership only by replacement, so their identity keys the below-line ring reservation.
+local function ResourceScale(markers)
+    local scale
+    for _, marker in ipairs(markers) do
+        if marker.kind == RESOURCE_KIND then
+            scale = math.max(scale or 0, marker.sizeScale)
+        end
+    end
+    return scale
+end
+
 function Plugin:LayoutCompassArtwork()
     local frame = self.frame
     local scale = frame:GetEffectiveScale()
@@ -118,9 +130,11 @@ function Plugin:LayoutCompassArtwork()
         return false
     end
     local thickness = Pixel:Multiple(C.LINE_THICKNESS, scale)
-    local resource = Addon.ClientFeatures.sources.resources and self.compassSources.resources.markers[1]
-    local resourceScale = resource and resource.sizeScale
     local layout = self.artworkLayout
+    if layout.displayMarkers ~= self.displayMarkers then
+        layout.displayMarkers, layout.displayResourceScale = self.displayMarkers, ResourceScale(self.displayMarkers)
+    end
+    local resourceScale = layout.displayResourceScale
     if
         layout.width == frameWidth
         and layout.height == frameHeight

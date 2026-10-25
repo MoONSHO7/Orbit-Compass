@@ -14,7 +14,7 @@ runtime subdirectories. Omitted `path` means the repository root. Existing junct
 
 `check-package.py` walks the TOC/XML load order, including Bindings.xml. It strips development blocks, compiles Lua 5.1,
 checks product metadata/assets and required APIs in the loaded libraries. Compass requires UI API 1.11 with client
-identity/widget registration and LibOrbitSearch revision 2 with provider contract 1; Status requires UI API 1.11 and
+identity/widget registration and LibOrbitSearch revision 2 with provider contract 1; Events requires UI API 1.11 and
 picker revision 10. Interface metadata accepts distinct positive integers including Retail 120100; this does not certify
 loader behavior. API checks inspect declarations without executing addon code.
 
@@ -29,32 +29,27 @@ locally and, in the workflow's `suites` job, a symlink to the fetched `Libs/LibO
 Orbit's documented resource-observation capability; it simulates no native rendering or security. Its `table.freeze`
 double records frozen tables so `table.sort` rejects them, as the strictest client may.
 
-`check-client-features.py` loads real Compass policy, collectors, scheduler, map scope, Search, navigation and
-LibOrbitUI client/store code into Lua 5.1. It checks client families, withheld APIs, partial data, retained preferences,
-destination provenance, query-local map-read sharing/recovery, Navigation route guidance, stale actions and readiness, including event storms at
-different frame rates. Hosted resource cases cover borrowed-array mutation, expiry, bounded identity retention and
-display-only action exclusions. Run `python .scripts/check-client-features.py`; it reads LibOrbitUI from the sibling
-`../Orbit-Libs/LibOrbitUI/LibOrbitUI-1.0` path, which is the workspace checkout locally and, in the workflow's `suites`
-job, a symlink to the fetched `Libs/LibOrbitUI-1.0`. It does not simulate native rendering or security.
+`check-client-features.py` checks client families, withheld APIs, partial data, retained preferences, destination
+provenance, query-local map-read sharing/recovery, Navigation route guidance, stale actions and readiness, including
+event storms at different frame rates. Run `python .scripts/check-client-features.py`.
 
 `check-landmark-budget.py` exercises large synthetic catalogs, costly empty native lists, deterministic work bounds,
-pause/resume, cancellation/root replacement, equivalent publication, balanced phase spans across yields and unindexed
-first-build search cadence. Run `python .scripts/check-landmark-budget.py`; native map calls and final string
-concatenation remain indivisible, so these bounds do not certify an in-game millisecond limit.
-Release CI runs both suites.
+pause/resume, cancellation/root replacement, equivalent publication, balanced phase spans across yields, unindexed
+first-build search cadence and aged refreshes that skip fixed sources. Run `python .scripts/check-landmark-budget.py`;
+native map calls and final string concatenation remain indivisible, so these bounds do not certify an in-game
+millisecond limit.
 
-`check-resource-audit.py` exercises live-resource publication, hidden resume, paused comparisons, mixed marker actions
-and Retail isolation. Pooled mask/ring checks cover scale geometry, unchanged setter counts, bounded region allocation
-and released marker ownership through full-pool replacements and clear/reopen cycles.
-`check-resource-performance.py` measures bounded work, unchanged reuse and retained ownership through dense replacements
-and enable/disable cycles. Empty-resource checks bound job allocations and provider reads while exercising projection
-recovery and unknown counts. Both reuse the client suite's harness and run in release CI.
+`check-resources.py` drives live resources through that capability double: version admission, Retail and standalone
+silence, allocation-free unchanged polls, refinement without gaps, failure backoff, ownership release and auto-advance
+latency equal to the empty baseline. Rendering cases cover mask/ring geometry, heading reservation, pooled-slot reuse
+and actionable overlap groups. Orbit's producer suite checks the same contract against its scanner, so neither CI needs
+the other repository; native detection, CPU and heap still need in-game verification. Release CI runs all three suites.
 
 ## Gotchas
 - Compass pins verified UI 1.14/API 1.17 and Search 1.4/revision 7 releases. Linked checks do not establish release
   delivery; validate ordinary fetched packages. The automatic latest-release resolver is not implemented.
 - `fetch-libs.py` and `check-package.py` remain byte-identical between both addon repositories; keep their changes
-  synchronized. `check-client-features.py` is product-specific despite sharing its name with Status's suite.
+  synchronized. `check-client-features.py` is product-specific despite sharing its name with Events' suite.
 - Compilation and static API checks cannot validate combat permissions, native ownership, taint or rendering.
   Dynamically assembled asset names still need client verification.
 - Fetches use configured Git credentials without an interactive prompt. No token is written into `.pkgmeta` or the

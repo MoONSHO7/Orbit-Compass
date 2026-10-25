@@ -8,12 +8,25 @@ local Readable, Number, AddMarker = Utils.Readable, Utils.Number, Utils.AddMarke
 local DIRECTIONS_ATLAS = C.DIRECTIONS_ATLAS
 local DIG_SITE_ATLAS = "worldquest-icon-archaeology"
 local PET_TAMER_ATLAS = "worldquest-icon-petbattle"
+local UNREADABLE = table.freeze({})
 local ROUTED_TRACKING = {}
 for name, enabled in pairs({ UserWaypoint = true, MapPin = true, Content = F.content, Vignette = F.vignettes }) do
     local value = Enum.SuperTrackingType[name]
     if enabled and value ~= nil then
         ROUTED_TRACKING[value] = true
     end
+end
+
+-- Distinguishes an absent native value from one that exists but cannot be inspected.
+local function Reading(value)
+    if type(value) == "nil" then
+        return nil
+    end
+    local readable = Readable(value)
+    if readable == nil then
+        return UNREADABLE
+    end
+    return readable
 end
 
 local function CollectMapRecords(plugin, markers, records, idField, kind, fallbackAtlas)
@@ -91,6 +104,9 @@ function Plugin:CollectCompassRoute(markers)
     end
     local tracking = Number(C_SuperTrack.GetHighestPrioritySuperTrackingType())
     if not ROUTED_TRACKING[tracking] then
+        if tracking then
+            self:SetCompassPathReceipt({ tracking = tracking })
+        end
         return
     end
     local target, name, artwork = RouteTarget(self, tracking)
@@ -99,8 +115,10 @@ function Plugin:CollectCompassRoute(markers)
     end
     local x, y, text = C_Navigation.GetNextWaypointForMap(self.mapID)
     self:CompassDiscoveryCheckpoint()
+    local namedByItem, itemName = false, nil
     if type(name) ~= "string" or name == "" then
-        name = Readable(C_SuperTrack.GetSuperTrackedItemName())
+        namedByItem, itemName = true, Reading(C_SuperTrack.GetSuperTrackedItemName())
+        name = itemName
     end
     if type(name) ~= "string" or name == "" then
         name = L.PLU_COMPASS_WAYPOINT
@@ -121,8 +139,8 @@ function Plugin:CollectCompassRoute(markers)
         target or nil
     )
     if marker then
-        text = Readable(text)
-        marker.description = type(text) == "string" and text ~= "" and text or nil
+        local hopX, hopY, hopText = Reading(x), Reading(y), Reading(text)
+        marker.description = type(hopText) == "string" and hopText ~= "" and hopText or nil
         marker.routeTracking, marker.routeDestination = tracking, target ~= false
         if artwork then
             for _, field in ipairs(C.MARKER_ART_FIELDS) do
@@ -131,7 +149,32 @@ function Plugin:CollectCompassRoute(markers)
                 end
             end
         end
+        if hopX ~= UNREADABLE and hopY ~= UNREADABLE and hopText ~= UNREADABLE and itemName ~= UNREADABLE then
+            self:SetCompassPathReceipt({
+                tracking = tracking,
+                routed = true,
+                x = hopX,
+                y = hopY,
+                text = hopText,
+                namedByItem = namedByItem,
+                itemName = itemName,
+            })
+        end
     end
+end
+
+-- A path update can move only the next hop or rename the tracked item; every other route input has its own event.
+function Plugin:CompassRoutePathUnchanged(receipt)
+    if Number(C_SuperTrack.GetHighestPrioritySuperTrackingType()) ~= receipt.tracking then
+        return false
+    elseif not receipt.routed then
+        return true
+    end
+    local x, y, text = C_Navigation.GetNextWaypointForMap(self.mapID)
+    if Reading(x) ~= receipt.x or Reading(y) ~= receipt.y or Reading(text) ~= receipt.text then
+        return false
+    end
+    return not receipt.namedByItem or Reading(C_SuperTrack.GetSuperTrackedItemName()) == receipt.itemName
 end
 
 function Plugin:CollectCompassMapLinks(markers)

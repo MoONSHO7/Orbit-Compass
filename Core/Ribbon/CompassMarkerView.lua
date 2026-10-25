@@ -22,16 +22,6 @@ local QUEST_SYMBOL_ATLASES = {
     ["Worldquest-icon"] = true,
 }
 
-local function ActionGroupCount(markers)
-    local count = 0
-    for _, marker in ipairs(markers) do
-        if not marker.displayOnly then
-            count = count + 1
-        end
-    end
-    return count
-end
-
 local function LeaveMarker(button)
     Plugin:HideCompassHandyNotesTooltip(button)
     if Plugin.hoveredCompassMarker == button then
@@ -53,7 +43,7 @@ local function ShowMarkerTooltip(button)
     button.tooltipMarker = marker
     button.tooltipDistance = Plugin:CompassDisplayDistance(marker.distance)
     button.tooltipUnits = Plugin.distanceUnits
-    button.tooltipGroupCount = ActionGroupCount(marker.overlapGroup.markers)
+    button.tooltipGroupCount = #marker.overlapGroup.actions
     Plugin.hoveredCompassMarker = button
     if
         not button.failureReason
@@ -102,10 +92,10 @@ local function ClickMarker(button)
     then
         return
     end
-    local markers = marker.overlapGroup.markers
-    if ActionGroupCount(markers) > 1 then
+    local actions = marker.overlapGroup.actions
+    if #actions > 1 then
         LeaveMarker(button)
-        Plugin:ShowCompassOverlapMenu(markers)
+        Plugin:ShowCompassOverlapMenu(actions)
         return
     end
     if marker.kind == "route" then
@@ -374,7 +364,7 @@ function Plugin:RefreshCompassTooltip()
             button.tooltipMarker ~= marker
             or button.tooltipDistance ~= self:CompassDisplayDistance(marker.distance)
             or button.tooltipUnits ~= self.distanceUnits
-            or button.tooltipGroupCount ~= ActionGroupCount(marker.overlapGroup.markers)
+            or button.tooltipGroupCount ~= #marker.overlapGroup.actions
         then
             ShowMarkerTooltip(button)
         end

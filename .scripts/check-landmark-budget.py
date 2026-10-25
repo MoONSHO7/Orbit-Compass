@@ -322,6 +322,135 @@ assert(Reads()=="3:104" and mock.reads.journal==journal,"a map click reads only 
 '''
 
 
+# Each map read counts per source; taxi lists repeat the continent's nodes on every map, as the client returns them.
+SOURCE_WORLD = r'''
+mock.reads, mock.generic = {}, {}
+local function Read(source) mock.reads[source]=(mock.reads[source] or 0)+1 end
+local children, zonesOf, continentOf = {}, {}, {}
+for c=1,2 do
+  local cid=1000+c
+  mock.maps[cid]={mapID=cid,mapType=2,parentMapID=1,name="Continent "..c}
+  children[#children+1]=mock.maps[cid]
+  zonesOf[cid]={}
+  for z=1,3 do
+    local zid=10000+c*100+z
+    mock.maps[zid]={mapID=zid,mapType=3,parentMapID=cid,name="Zone "..zid}
+    children[#children+1]=mock.maps[zid]
+    zonesOf[cid][z],continentOf[zid]=zid,cid
+    mock.generic[zid]={zid*100+41,zid*100+42}
+    for m=1,2 do
+      local mid=zid*10+m
+      mock.maps[mid]={mapID=mid,mapType=5,parentMapID=zid,name="Micro "..mid}
+      children[#children+1]=mock.maps[mid]
+      continentOf[mid]=cid
+    end
+  end
+end
+ZONE=10101
+local function ZonesFor(mapID)
+  if zonesOf[mapID] then return zonesOf[mapID] end
+  return mock.maps[mapID] and mock.maps[mapID].mapType==3 and {mapID} or {}
+end
+local function Pos(mapID, zid, n)
+  if mapID==zid then return {x=(n%9+1)/10,y=.5} end
+  return {x=(zid%100)/4,y=(n%9+1)/10}
+end
+local function List(source, mapID, per, build)
+  Read(source)
+  local list={}
+  for _,zid in ipairs(ZonesFor(mapID)) do for n=1,per do list[#list+1]=build(zid,n,Pos(mapID,zid,n)) end end
+  return list
+end
+local function Ids(source, mapID, values)
+  Read(source)
+  local ids={}
+  for _,zid in ipairs(ZonesFor(mapID)) do for _,id in ipairs(values(zid)) do ids[#ids+1]=id end end
+  return ids
+end
+C_Map.GetMapChildrenInfo=function() Read("children") return children end
+C_Map.GetMapRectOnMap=function() Read("mapRect") return .4,.6,.4,.6 end
+C_Map.CanSetUserWaypointOnMap=function() Read("canWaypoint") return true end
+C_Map.IsCityMap=function() Read("isCity") return false end
+C_EncounterJournal.GetDungeonEntrancesForMap=function(mapID)
+  return List("entrances",mapID,1,function(zid,n,p) return {areaPoiID=zid*100+n,name="Dungeon "..zid,position=p} end)
+end
+C_Map.GetMapLinksForMap=function(mapID)
+  return List("links",mapID,1,function(zid,n,p) return {areaPoiID=zid*100+20+n,name="Link "..zid,position=p} end)
+end
+C_DeathInfo.GetGraveyardsForMap=function(mapID)
+  return List("graveyards",mapID,2,function(zid,n,p) return {graveyardID=zid*10+n,name="Rest "..zid.."-"..n,position=p} end)
+end
+C_TaxiMap.GetTaxiNodesForMap=function(mapID)
+  Read("taxi")
+  local cid,list=continentOf[mapID] or mapID,{}
+  for _,zid in ipairs(zonesOf[cid] or {}) do
+    local shown=mapID==zid or mapID==cid
+    list[#list+1]={nodeID=zid,name="Roost "..zid,faction=0,position=shown and Pos(mapID,zid,7) or {x=2,y=2}}
+  end
+  return list
+end
+C_PetInfo.GetPetTamersForMap=function(mapID)
+  return List("tamers",mapID,1,function(zid,n,p) return {areaPoiID=zid*100+30+n,name="Tamer "..zid,position=p} end)
+end
+C_AreaPoiInfo.GetAreaPOIForMap=function(mapID) return Ids("generic",mapID,function(zid) return mock.generic[zid] end) end
+C_AreaPoiInfo.GetEventsForMap=function(mapID) return Ids("events",mapID,function(zid) return {zid*100+60} end) end
+C_AreaPoiInfo.GetAreaPOIInfo=function(mapID,id)
+  Read("poiInfo")
+  local zid=math.floor(id/100)
+  return {areaPoiID=id,name="Place "..id,position=Pos(mapID,zid,id%100),atlasName="poi",isPrimaryMapForPOI=mapID==zid}
+end
+C_TaskQuest.GetQuestsOnMap=function(mapID)
+  return List("tasks",mapID,1,function(zid,n,p) return {questID=zid*10+n,x=p.x,y=p.y,questTagType=0} end)
+end
+C_TaskQuest.GetQuestInfoByQuestID=function(id) return "Task "..id end
+'''
+
+AGED_REFRESH = r'''
+local FIXED={"children","canWaypoint","isCity","mapRect","entrances","links","taxi","graveyards"}
+local function Build()
+  local c,steps=P.compassLandmarks,0
+  while c.state=="building" or c.state=="pending" do
+    steps=steps+1;assert(steps<1000,"build did not settle")
+    mock.now=mock.now+.01
+    if P.compassLandmarkDriver.OnUpdate then P:StepCompassLandmarkDemand(.01) end
+  end
+  assert(c.state=="complete",c.state)
+end
+local function Snapshot()
+  local c,rows=P.compassLandmarks,{}
+  for i,entry in ipairs(c.entries) do
+    rows[i]=entry.key..":"..entry.name..":"..entry.mapID..":"..entry.x..":"..entry.y..":"..entry.kind
+  end
+  return table.concat(rows,"|").."#"..c.queryIndex.blob
+end
+local function Refresh()
+  wipe(mock.reads);mock.now=mock.now+301
+  P:AcquireCompassLandmarkDemand("test",false);Build()
+end
+P:AcquireCompassLandmarkDemand("test",false);Build()
+for _,source in ipairs(FIXED) do assert(mock.reads[source],"the first build skipped "..source) end
+local first=Snapshot()
+Refresh()
+for _,source in ipairs(FIXED) do assert(not mock.reads[source],"an aged refresh re-read fixed "..source) end
+assert(mock.reads.generic and mock.reads.poiInfo and mock.reads.events,"an aged refresh skipped changing places")
+assert(Snapshot()==first,"a refresh over unchanged data changed the catalog")
+mock.generic[ZONE][#mock.generic[ZONE]+1]=ZONE*100+49
+Refresh()
+local refreshed=Snapshot()
+assert(P.compassLandmarks.positions["poi:"..(ZONE*100+49)],"an aged refresh missed a new place")
+P:StopCompassLandmarks();P:InitializeCompassLandmarks();wipe(mock.reads)
+P:AcquireCompassLandmarkDemand("test",false);Build()
+assert(mock.reads.children,"a stopped catalog kept its fixed layer")
+assert(Snapshot()==refreshed,"an aged refresh differs from a full rebuild")
+'''
+
+
+def aged_refresh_sources(family):
+    lua = client(family, SOURCE_WORLD)
+    lua.execute(AGED_REFRESH)
+    print(f"PASS {family}: aged refreshes re-read only changing sources and equal a full rebuild")
+
+
 def repeated_records(family):
     lua = client(family, REPEATED_WORLD)
     lua.execute(REPEATED_RECORDS)
@@ -423,5 +552,6 @@ for family in ("retail", "forever"):
     check("standalone build without profiler", ABSENT_PROFILER, family)
     repeated_records(family)
     empty_list_boundaries(family)
+    aged_refresh_sources(family)
 
-print("14/14 landmark budget scenarios passed (large builds: 12640 POIs and 12642 child records each)")
+print("16/16 landmark budget scenarios passed (large builds: 12640 POIs and 12642 child records each)")

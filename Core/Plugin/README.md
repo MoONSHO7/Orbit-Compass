@@ -35,8 +35,7 @@ them. `CompassDefaults.lua` owns both surfaces' defaults; settings continue thro
 - Standalone visibility applies when pet/vehicle hiding changes. Edit Mode transitions redraw without restarting
   discovery. Disabling or entering an instance stops scans and hides both surfaces without clearing the player's native
   waypoint.
-- Forever live resources revalidate before bearings/rendering on wall-clock deadlines, so hiding or another source's
-  suspended discovery cannot extend the lifetime of published nodes. Retail skips that provider path.
+- `UpdateCompass` refreshes Discovery's display-only sources before bearings without naming them; Retail declares none.
 - The event/update owner exists before hosted activation, but frame construction waits for the lifecycle. All methods
   must be declared before boot starts that lifecycle.
 

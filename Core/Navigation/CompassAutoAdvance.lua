@@ -32,7 +32,6 @@ local function FindNext(plugin, route)
             marker.key ~= "waypoint"
             and marker.kind ~= "corpse"
             and marker.kind ~= "route"
-            and not marker.displayOnly
             and source
             and source.status == "ready"
             and not route.visited[marker.key]

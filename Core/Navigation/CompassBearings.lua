@@ -4,8 +4,10 @@ local Plugin = Addon.Controller
 local Number = Addon.SourceUtils.Number
 
 local function MarkerBefore(a, b)
-    if a.navigation ~= b.navigation then
-        return a.navigation
+    -- Display-only markers carry no navigation flag; they rank with ordinary markers.
+    local aNavigation, bNavigation = a.navigation == true, b.navigation == true
+    if aNavigation ~= bNavigation then
+        return aNavigation
     end
     if a.priority ~= b.priority then
         return a.priority < b.priority
@@ -16,14 +18,23 @@ local function MarkerBefore(a, b)
     return a.key < b.key
 end
 
+local function SortMarkers(plugin, markers)
+    for _, marker in ipairs(markers) do
+        local bias = plugin.selectionKeys[marker.key] and C.MARKER_RETAINED_DISTANCE_SQUARED or 1
+        marker.selectionDistanceSquared = marker.distanceSquared * bias
+    end
+    -- Empty display lists are frozen sentinels; only a real ordering ever writes to the array.
+    if #markers > 1 then
+        table.sort(markers, MarkerBefore)
+    end
+end
+
 local function OrderBearings(plugin, forceSort, profiler)
     plugin.selectionDirty = true
+    local markers, display = plugin.markers, plugin.displayMarkers
     if forceSort or plugin.sortElapsed >= C.SORT_INTERVAL then
-        for _, marker in ipairs(plugin.markers) do
-            local bias = plugin.selectionKeys[marker.key] and C.MARKER_RETAINED_DISTANCE_SQUARED or 1
-            marker.selectionDistanceSquared = marker.distanceSquared * bias
-        end
-        table.sort(plugin.markers, MarkerBefore)
+        SortMarkers(plugin, markers)
+        SortMarkers(plugin, display)
         plugin.sortElapsed, plugin.sortPending = 0, false
         if profiler then
             profiler:Count(plugin, "Bearings/OrderSorted")
@@ -34,10 +45,22 @@ local function OrderBearings(plugin, forceSort, profiler)
             profiler:Count(plugin, "Bearings/OrderDeferred")
         end
     end
-    wipe(plugin.bearings)
-    for _, marker in ipairs(plugin.markers) do
-        if marker.bearing then
-            plugin.bearings[#plugin.bearings + 1] = marker
+    -- Display-only markers join the ribbon here, merged in order; actionable consumers read `plugin.markers` alone.
+    local bearings = plugin.bearings
+    wipe(bearings)
+    local index, displayIndex = 1, 1
+    local marker, displayMarker = markers[1], display[1]
+    while marker or displayMarker do
+        local chosen
+        if marker and (not displayMarker or not MarkerBefore(displayMarker, marker)) then
+            chosen, index = marker, index + 1
+            marker = markers[index]
+        else
+            chosen, displayIndex = displayMarker, displayIndex + 1
+            displayMarker = display[displayIndex]
+        end
+        if chosen.bearing then
+            bearings[#bearings + 1] = chosen
         end
     end
 end
@@ -73,12 +96,14 @@ local function UpdateBearings(self, x, y, profiler)
         end
         return
     end
-    local forceSort = self.bearingsDirty
+    -- Membership that changed while the position was unavailable still owes one ordering before lists are merged.
+    local forceSort = self.bearingsDirty or self.bearingsUnordered
     if forceSort or x ~= self.bearingPlayerX or y ~= self.bearingPlayerY then
         self.bearingRevision = (self.bearingRevision or 0) + 1
     end
     self.bearingsDirty, self.renderDirty = false, true
     self.bearingPlayerX, self.bearingPlayerY = x, y
+    self.bearingsUnordered = forceSort and (not x or not y)
     if not x or not y then
         if profiler then
             profiler:Count(self, "Bearings/Unavailable")
@@ -106,6 +131,9 @@ local function UpdateBearings(self, x, y, profiler)
             if marker.key == self.navigationKey then
                 self.navigationTarget = marker
             end
+        end
+        for _, marker in ipairs(self.displayMarkers) do
+            self:RefreshCompassMarkerBearing(marker)
         end
         OrderBearings(self, forceSort, profiler)
     else

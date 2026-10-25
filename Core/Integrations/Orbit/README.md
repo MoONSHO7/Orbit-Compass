@@ -18,12 +18,12 @@ bridge registers the real `Orbit_Compass` plugin (`Bridge.CreateController`), it
 `OrbitCanvas.lua` after navigation and controller declarations to supply Canvas text drafts for the arrow. Product
 navigation and formatting remain outside this module.
 
-`CompassResources.lua` reads a compatible Forever host's currently admitted `MapDots` resource observations. It copies
-at most 64 live records before discovery yields, then uses `MapWorldCoordinates` to project the validated north/west
-coordinates. Existing item artwork becomes display-only ribbon markers; no additional scanner or minimap lease runs.
-Published-empty sources poll the provider at the same cadence and skip job construction only for a readable zero count.
-Empty polls use one getter; published nonempty collections retain their two getter reads. Positive or unknown counts
-after an empty publication add one preflight getter before the normal collection and validation path.
+`CompassResources.lua` is Discovery's Forever display source for Orbit's resource-observation capability. It requires
+`Orbit.ExternalUIHost.mapResourceObservationsVersion == 1` and reads `Orbit.MapDots:GetResourceSnapshot()`: nil while no
+leased Orbit view scans, else one immutable snapshot per scanner revision with session-unique record ids. The same
+snapshot table settles a poll; a new one reuses markers by record id and unchanged position, and projects new or moved
+records (at most 64) through Navigation's player world anchor, `ProjectCompassWorldPoint`. Item artwork becomes
+display-only ribbon markers; no additional scanner or minimap lease runs.
 
 Search places reach Orbit through LibOrbitSearch rather than this bridge; see `../README.md`. Presentation hooks resolve
 Orbit UI Chat from Orbit's private media catalog, while standalone Compass uses its own private catalog. Both resolve
@@ -43,21 +43,16 @@ that name to Blizzard's locale-aware font on Korean and Chinese clients.
   choices and legacy preferences; unsupported client rows retain their values.
 - The bridge must load before any feature caches service hooks or the controller. Canvas needs that controller, so it
   belongs to the later integration phase.
-- Live resources require the hosted Forever map/HUD resource scanner and follow its shared resource switch. Standalone,
-  Retail and older hosts provide none; absent host APIs retire discovery until context reset. Expired or unavailable
-  observations replace the source with an empty snapshot. Weak observation keys hold numeric marker identities,
-  reset on discovery context changes and disable.
-  Publication revalidates current ownership, identity, position and freshness after collection and snapshot comparison
-  finish. A hidden, cleared or replaced producer cannot publish the suspended job's stale observations.
-  Published records revalidate before rendering at most every 0.2 wall-clock seconds, including after hiding or while
-  another source is busy. Replacement preserves arrays borrowed by suspended comparisons; empty snapshots do no work.
-  Observation identity/count cannot prove projection unchanged: a previously unavailable map projection may recover
-  without changing the nodes. Positive observations always retain projection and post-yield validation.
+- Live resources follow the hosted Forever scanner and its shared resource switch, and never create scan demand.
+  Standalone, Retail and hosts without capability version 1 publish nothing; the source stops polling until a context
+  reset. Records carry no age because Orbit drops nodes within its own lifetime: copy no expiry, retain no scanner
+  table, and keep only the current snapshot's ids. Records that arrive before the player's first world sample retry.
 
 ## Secrets
 The bridge rebinds `Services.IsSecret` to `Orbit.SecretValueUtils.IsSecret`, so hosted gates report their source labels
-through Orbit's secret-debug helper; it reads no secret values itself.
+through Orbit's secret-debug helper; it reads no secret values itself. `CompassResources.lua` passes every snapshot field
+through `SourceUtils.Readable`/`Number` before comparing it or doing arithmetic.
 
 ## References
-`../README.md`, `../../Plugin/README.md`, `../../Config/README.md`; Orbit `Core/Plugin/README.md` and
-`Core/Plugin/ExternalUIHost.lua`.
+`../README.md`, `../../Plugin/README.md`, `../../Config/README.md`, `../../Discovery/README.md`; Orbit
+`Core/Plugin/README.md`, `Core/Plugin/ExternalUIHost.lua` and `Core/MapDisplay/Render/README.md` (resource contract).

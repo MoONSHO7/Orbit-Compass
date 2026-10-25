@@ -30,7 +30,7 @@ owns watched objectives and targeted route refreshes.
   Normal, Questline and Important offers only; Recurring, Meta, Calling, Campaign and Legendary await beta verification.
 - `SUPER_TRACKING_PATH_UPDATED` can repeat while navigating. Refresh only the supertracked quest through the budgeted
   queue, retaining other markers and the full-scan deadline. Unusable coordinates skip quest metadata reads but retain
-  map/task fallback.
+  map/task fallback. The route step records a path receipt that `CompassRoutePathUnchanged` compares (`../README.md`).
 - Route steps come from `C_Navigation.GetNextWaypointForMap` for super-tracked user waypoints, followed map pins,
   content and vignettes, one hop in current-map coordinates. Quests query per-quest waypoints; watched results, misses
   included, are reused only by passes whose sole input was `QUEST_DATA_LOAD_RESULT`, which no Blizzard waypoint consumer

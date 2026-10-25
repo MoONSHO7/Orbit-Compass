@@ -12,6 +12,7 @@ local FOCUSED_BUILD_BUDGET_MS = 4
 local REFRESH_AGE_SECONDS = 300
 local LISTENER_INTERVAL = 0.25
 local MAP_CENTER = 0.5
+local CONTINENT_CENTER = table.freeze({ x = MAP_CENTER, y = MAP_CENTER })
 local PIN_DEMAND = "pin"
 local RAID_INFO_INDEX = 12
 local AREA_POI = Enum.SuperTrackingMapPinType.AreaPOI
@@ -88,9 +89,40 @@ local function ReadList(value, checkpoint)
     return type(value) == "table" and value or {}
 end
 
+-- Fixed places are normalized once per root; `static` nil reads natively for a single map lookup.
+local function StaticRecords(static, source, mapID, checkpoint, read, normalize)
+    local cache = static and static[source]
+    local records = cache and cache[mapID]
+    if records then
+        return records
+    end
+    local value = Readable(read(mapID))
+    checkpoint(value ~= false and type(value) ~= "table")
+    if value ~= false and type(value) ~= "table" then
+        return {}
+    end
+    records = {}
+    for _, item in ipairs(value or {}) do
+        records[#records + 1] = normalize(Readable(item))
+        checkpoint()
+    end
+    if cache then
+        cache[mapID] = records
+    end
+    return records
+end
+
+local function NewStaticLayer()
+    return { areas = {}, entrances = {}, links = {}, taxi = {}, graveyards = {} }
+end
+
 local function ReadAtlas(atlas, fallback)
     atlas = Readable(atlas)
     return Addon.Artwork.Resolve(type(atlas) == "string" and atlas ~= "" and atlas or fallback)
+end
+
+local function InMap(x, y)
+    return x ~= nil and y ~= nil and x >= 0 and x <= 1 and y >= 0 and y <= 1
 end
 
 local function Landmark(key, pinType, id, mapID, position, name, atlas, kind, place)
@@ -99,7 +131,7 @@ local function Landmark(key, pinType, id, mapID, position, name, atlas, kind, pl
     end
     local x, y = Utils.ReadPosition(position)
     name = Readable(name)
-    if not x or not y or x < 0 or x > 1 or y < 0 or y > 1 or type(name) ~= "string" or name == "" then
+    if not InMap(x, y) or type(name) ~= "string" or name == "" then
         return
     end
     local zone = place.zone ~= name and place.zone or nil
@@ -175,25 +207,49 @@ local function AddAreaPOI(add, id, mapID, info, kind, place, rank)
     add(Landmark(PIN_KEYS[AREA_POI], AREA_POI, id, mapID, info.position, info.name, atlas, kind, place), rank)
 end
 
-local function CollectAreaPOIs(mapID, place, depth, add, checkpoint, seen, wins)
+-- Off-map entrances and links stay cached because their IDs still claim the map's later category lists.
+local function ReadAreaRecord(info)
+    local id = type(info) == "table" and Number(info.areaPoiID)
+    if id then
+        local x, y = Utils.ReadPosition(info.position)
+        local name, atlas = Readable(info.name), Readable(info.atlasName)
+        return { id = id, x = x, y = y, name = name, atlas = atlas, journalID = Number(info.journalInstanceID) }
+    end
+end
+
+local function ReadEntrances(mapID)
+    return F.dungeonEntrances and C_EncounterJournal.GetDungeonEntrancesForMap(mapID)
+end
+
+local function ReadLinks(mapID)
+    return F.links and C_Map.GetMapLinksForMap(mapID)
+end
+
+local function EntranceKind(record)
+    if record.kind == nil then
+        record.kind = "instance"
+        if F.journalClassification and record.journalID then
+            local isRaid = Readable(select(RAID_INFO_INDEX, EJ_GetInstanceInfo(record.journalID)))
+            if isRaid ~= nil then
+                record.kind = isRaid and "raid" or "dungeon"
+            end
+        end
+    end
+    return record.kind
+end
+
+local function AddAreaRecord(add, record, mapID, kind, place, rank)
+    add(Landmark(PIN_KEYS[AREA_POI], AREA_POI, record.id, mapID, record, record.name, record.atlas, kind, place), rank)
+end
+
+local function CollectAreaPOIs(mapID, place, depth, add, checkpoint, seen, wins, static)
     local prefix = PIN_KEYS[AREA_POI]
-    for _, info in
-        ipairs(ReadList(F.dungeonEntrances and C_EncounterJournal.GetDungeonEntrancesForMap(mapID), checkpoint))
-    do
-        info = Readable(info)
-        local id = type(info) == "table" and Number(info.areaPoiID)
-        if id and not seen[id] then
+    for _, record in ipairs(StaticRecords(static, "entrances", mapID, checkpoint, ReadEntrances, ReadAreaRecord)) do
+        local id = record.id
+        if not seen[id] then
             seen[id] = true
             if wins(prefix, id, depth) then
-                local journalID = Number(info.journalInstanceID)
-                local kind = "instance"
-                if F.journalClassification and journalID then
-                    local isRaid = Readable(select(RAID_INFO_INDEX, EJ_GetInstanceInfo(journalID)))
-                    if isRaid ~= nil then
-                        kind = isRaid and "raid" or "dungeon"
-                    end
-                end
-                AddAreaPOI(add, id, mapID, info, kind, place, depth)
+                AddAreaRecord(add, record, mapID, EntranceKind(record), place, depth)
             end
         end
         checkpoint()
@@ -215,15 +271,14 @@ local function CollectAreaPOIs(mapID, place, depth, add, checkpoint, seen, wins)
             end
         end
     end
-    for _, info in ipairs(ReadList(F.links and C_Map.GetMapLinksForMap(mapID), checkpoint)) do
-        info = Readable(info)
-        local id = type(info) == "table" and Number(info.areaPoiID)
-        if id and not seen[id] then
+    for _, record in ipairs(StaticRecords(static, "links", mapID, checkpoint, ReadLinks, ReadAreaRecord)) do
+        local id = record.id
+        if not seen[id] then
             seen[id] = true
             if wins(prefix, id, depth) then
-                local atlas = Readable(info.atlasName)
+                local atlas = record.atlas
                 local isCave = type(atlas) == "string" and string.find(string.lower(atlas), CAVE_ATLAS_PATTERN, 1, true)
-                AddAreaPOI(add, id, mapID, info, isCave and "cave" or AreaKind("mapLink", atlas), place, depth)
+                AddAreaRecord(add, record, mapID, isCave and "cave" or AreaKind("mapLink", atlas), place, depth)
             end
         end
         checkpoint()
@@ -242,24 +297,33 @@ local function CollectAreaPOIs(mapID, place, depth, add, checkpoint, seen, wins)
     end
 end
 
-local function CollectTaxiNodes(mapID, place, depth, add, checkpoint, wins)
+-- Taxi lists repeat a continent's nodes on every map, so only nodes a landmark could place are kept.
+local function ReadTaxiNode(node)
+    local id = type(node) == "table" and Number(node.nodeID)
+    local x, y = Utils.ReadPosition(id and node.position)
+    if InMap(x, y) then
+        local name, atlas = Readable(node.name), Readable(node.atlasName)
+        return { id = id, x = x, y = y, name = name, atlas = atlas, side = Number(node.faction) }
+    end
+end
+
+local function ReadTaxiNodes(mapID)
+    return C_TaxiMap.GetTaxiNodesForMap(mapID)
+end
+
+local function CollectTaxiNodes(mapID, place, depth, add, checkpoint, wins, static)
     if not F.taxi then
         return
     end
     local faction = Readable(UnitFactionGroup("player"))
-    for _, node in ipairs(ReadList(C_TaxiMap.GetTaxiNodesForMap(mapID), checkpoint)) do
-        node = Readable(node)
-        local id = type(node) == "table" and Number(node.nodeID)
-        local side = id and Number(node.faction)
+    local key = PIN_KEYS[TAXI_NODE]
+    for _, node in ipairs(StaticRecords(static, "taxi", mapID, checkpoint, ReadTaxiNodes, ReadTaxiNode)) do
+        local side = node.side
         local friendly = side == Enum.FlightPathFaction.Neutral
             or (side == Enum.FlightPathFaction.Alliance and faction == "Alliance")
             or (side == Enum.FlightPathFaction.Horde and faction == "Horde")
-        local key = PIN_KEYS[TAXI_NODE]
-        if id and friendly and wins(key, id, depth) then
-            add(
-                Landmark(key, TAXI_NODE, id, mapID, node.position, node.name, node.atlasName, "flightMaster", place),
-                depth
-            )
+        if friendly and wins(key, node.id, depth) then
+            add(Landmark(key, TAXI_NODE, node.id, mapID, node, node.name, node.atlas, "flightMaster", place), depth)
         end
         checkpoint()
     end
@@ -303,15 +367,25 @@ local function CollectTaskQuests(mapID, place, depth, add, checkpoint, wins)
     end
 end
 
-local function CollectGraveyards(mapID, place, depth, add, checkpoint, wins)
+local function ReadGraveyard(info)
+    local id = type(info) == "table" and Number(info.graveyardID)
+    local x, y = Utils.ReadPosition(id and info.position)
+    if InMap(x, y) then
+        return { id = id, x = x, y = y, name = Readable(info.name) }
+    end
+end
+
+local function ReadGraveyards(mapID)
+    return C_DeathInfo.GetGraveyardsForMap(mapID)
+end
+
+local function CollectGraveyards(mapID, place, depth, add, checkpoint, wins, static)
     if not F.graveyards then
         return
     end
-    for _, info in ipairs(ReadList(C_DeathInfo.GetGraveyardsForMap(mapID), checkpoint)) do
-        info = Readable(info)
-        local id = type(info) == "table" and Number(info.graveyardID)
-        if id and wins(GRAVEYARD_KEY, id, depth) then
-            add(Landmark(GRAVEYARD_KEY, nil, id, mapID, info.position, info.name, nil, "graveyard", place), depth)
+    for _, grave in ipairs(StaticRecords(static, "graveyards", mapID, checkpoint, ReadGraveyards, ReadGraveyard)) do
+        if wins(GRAVEYARD_KEY, grave.id, depth) then
+            add(Landmark(GRAVEYARD_KEY, nil, grave.id, mapID, grave, grave.name, nil, "graveyard", place), depth)
         end
         checkpoint()
     end
@@ -329,35 +403,49 @@ local function CollectInvasion(mapID, place, depth, add, checkpoint, wins)
     end
 end
 
-local function CollectMapArea(details, place, add, seen)
+-- A zone's waypoint kind or a micro map's centre on its parent; false when neither can take a waypoint.
+local function ReadMapArea(details)
+    local mapID, parentID = details.mapID, details.parentMapID
+    if details.mapType == ZONE_MAP then
+        if Readable(C_Map.CanSetUserWaypointOnMap(mapID)) ~= true then
+            return false
+        end
+        return { x = MAP_CENTER, y = MAP_CENTER, kind = Readable(C_Map.IsCityMap(mapID)) == true and "city" or "zone" }
+    elseif Readable(C_Map.CanSetUserWaypointOnMap(parentID)) ~= true then
+        return false
+    end
+    local left, right, top, bottom = C_Map.GetMapRectOnMap(mapID, parentID)
+    left, right, top, bottom = Number(left), Number(right), Number(top), Number(bottom)
+    return left and right and top and bottom and { x = (left + right) / 2, y = (top + bottom) / 2, kind = "area" }
+        or false
+end
+
+local function CollectMapArea(details, place, add, seen, static)
     local mapID, parentID = details.mapID, details.parentMapID
     -- Phased copies of one map share a name and parent; the first copy represents it.
     local identity = details.name .. "\0" .. parentID
     if seen[identity] then
         return
     end
-    local center = { x = MAP_CENTER, y = MAP_CENTER }
     if details.mapType == CONTINENT_MAP then
         seen[identity] = true
-        local landmark = Landmark(MAP_KEY, nil, mapID, mapID, center, details.name, nil, "continent", place)
+        local landmark = Landmark(MAP_KEY, nil, mapID, mapID, CONTINENT_CENTER, details.name, nil, "continent", place)
         add(landmark, MAP_DEPTH[CONTINENT_MAP])
         return
-    elseif details.mapType == ZONE_MAP then
-        if Readable(C_Map.CanSetUserWaypointOnMap(mapID)) == true then
-            seen[identity] = true
-            local kind = Readable(C_Map.IsCityMap(mapID)) == true and "city" or "zone"
-            add(Landmark(MAP_KEY, nil, mapID, mapID, center, details.name, nil, kind, place), MAP_DEPTH[ZONE_MAP])
-        end
-        return
-    elseif Readable(C_Map.CanSetUserWaypointOnMap(parentID)) ~= true then
-        return
     end
-    local left, right, top, bottom = C_Map.GetMapRectOnMap(mapID, parentID)
-    left, right, top, bottom = Number(left), Number(right), Number(top), Number(bottom)
-    if left and right and top and bottom then
+    local area = static and static.areas[mapID]
+    if area == nil then
+        area = ReadMapArea(details)
+        if static then
+            static.areas[mapID] = area
+        end
+    end
+    if area then
         seen[identity] = true
-        center.x, center.y = (left + right) / 2, (top + bottom) / 2
-        add(Landmark(MAP_KEY, nil, mapID, parentID, center, details.name, nil, "area", place), MAP_DEPTH[MICRO_MAP])
+        local zone = details.mapType == ZONE_MAP
+        local landmark =
+            Landmark(MAP_KEY, nil, mapID, zone and mapID or parentID, area, details.name, nil, area.kind, place)
+        add(landmark, MAP_DEPTH[details.mapType])
     end
 end
 
@@ -497,28 +585,36 @@ local function BuildCatalog(catalog, target)
             catalog.revision = catalog.revision + 1
         end
     end
-    local maps, order = {}, {}
-    Phase(PHASE.CHILDREN_NATIVE)
-    local children = Readable(C_Map.GetMapChildrenInfo(catalog.rootID, nil, true))
-    if type(children) ~= "table" then
-        return false
-    end
-    Checkpoint()
-    Phase(PHASE.CHILDREN_COPY)
-    for _, details in ipairs(children) do
-        details = Readable(details)
-        local mapID = type(details) == "table" and Number(details.mapID)
-        local name = mapID and Readable(details.name)
-        if type(name) == "string" and name ~= "" then
-            maps[mapID] = {
-                mapID = mapID,
-                name = name,
-                mapType = Number(details.mapType),
-                parentMapID = Number(details.parentMapID),
-            }
-            order[#order + 1] = mapID
+    local static = catalog.static
+    local maps, order = static.maps, static.order
+    if not maps then
+        maps, order = {}, {}
+        Phase(PHASE.CHILDREN_NATIVE)
+        local children = Readable(C_Map.GetMapChildrenInfo(catalog.rootID, nil, true))
+        if type(children) ~= "table" then
+            return false
         end
         Checkpoint()
+        Phase(PHASE.CHILDREN_COPY)
+        for _, details in ipairs(children) do
+            details = Readable(details)
+            local mapID = type(details) == "table" and Number(details.mapID)
+            local name = mapID and Readable(details.name)
+            if type(name) == "string" and name ~= "" then
+                maps[mapID] = {
+                    mapID = mapID,
+                    name = name,
+                    mapType = Number(details.mapType),
+                    parentMapID = Number(details.parentMapID),
+                }
+                order[#order + 1] = mapID
+            end
+            Checkpoint()
+        end
+        -- An empty world means the hierarchy was not available yet, so the next build reads it again.
+        if order[1] then
+            static.maps, static.order = maps, order
+        end
     end
     local function Lookup(mapID)
         return maps[mapID]
@@ -540,7 +636,7 @@ local function BuildCatalog(catalog, target)
         if MAP_DEPTH[details.mapType] and details.parentMapID then
             mapIndex = index
             local parent = maps[details.parentMapID]
-            CollectMapArea(details, { zone = parent and parent.name, continent = Continent(mapID) }, Add, areas)
+            CollectMapArea(details, { zone = parent and parent.name, continent = Continent(mapID) }, Add, areas, static)
         end
         Checkpoint()
     end
@@ -551,11 +647,11 @@ local function BuildCatalog(catalog, target)
             if details.mapType == mapType and details.parentMapID then
                 mapIndex = index
                 local place = { zone = details.name, continent = Continent(mapID) }
-                CollectAreaPOIs(mapID, place, depth, Add, Checkpoint, {}, Wins)
-                CollectTaxiNodes(mapID, place, depth, Add, Checkpoint, Wins)
+                CollectAreaPOIs(mapID, place, depth, Add, Checkpoint, {}, Wins, static)
+                CollectTaxiNodes(mapID, place, depth, Add, Checkpoint, Wins, static)
                 CollectDigSites(mapID, place, depth, Add, Checkpoint, Wins)
                 CollectTaskQuests(mapID, place, depth, Add, Checkpoint, Wins)
-                CollectGraveyards(mapID, place, depth, Add, Checkpoint, Wins)
+                CollectGraveyards(mapID, place, depth, Add, Checkpoint, Wins, static)
                 CollectInvasion(mapID, place, depth, Add, Checkpoint, Wins)
             end
             Checkpoint()
@@ -693,10 +789,12 @@ function Plugin:RequestCompassLandmarkCatalog()
         end
         catalog.rootID, catalog.state, catalog.thread, catalog.target = root, "idle", nil, nil
         catalog.entries, catalog.positions, catalog.ranks, catalog.queryIndex = {}, {}, {}, nil
+        catalog.static = nil
         catalog.revision = catalog.revision + 1
         self.compassPinDestination = nil
         NotifyListeners(catalog)
     end
+    catalog.static = catalog.static or NewStaticLayer()
     if not self:IsActive() or self:IsProfileSuppressed() or not next(catalog.demand) then
         return
     end
@@ -724,7 +822,7 @@ end
 
 function Plugin:StopCompassLandmarks()
     local catalog = self.compassLandmarks
-    catalog.state, catalog.thread, catalog.target = "idle", nil, nil
+    catalog.state, catalog.thread, catalog.target, catalog.static = "idle", nil, nil, nil
     catalog.pinAttempted = nil
     wipe(catalog.demand)
     wipe(catalog.listeners)

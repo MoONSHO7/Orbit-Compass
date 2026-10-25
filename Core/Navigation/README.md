@@ -25,10 +25,11 @@ Own destinations and guidance independently of how the ribbon chooses visible ic
   after source removal or optional arrival within `ARRIVAL_DISTANCE` (15 yards). Arrow settings cache the mode and
   same-type filter; the existing update owner checks settled discovery at a bounded cadence. Visited identities belong
   to the current selection sequence and reset with settings or discovery context.
-- **Position, bearings and the arrow.** `CompassPosition.lua` calibrates validated map/world coordinates;
-  `CompassBearings.lua` derives heading and distance. `CompassNavigation.lua` owns the root and placement,
-  `CompassNavigationView.lua` draws it, and `CompassNavigationSettings.lua` resolves component preferences and units.
-  The optional Orbit Canvas adapter stays in `../Integrations/Orbit/`.
+- **Position, bearings and the arrow.** `CompassPosition.lua` calibrates validated map/world coordinates and projects
+  north/west yards through that anchor (`ProjectCompassWorldPoint`); `CompassBearings.lua` derives heading and distance.
+  `CompassNavigation.lua` owns the root and placement, `CompassNavigationView.lua` draws it, and
+  `CompassNavigationSettings.lua` resolves component preferences and units. The optional Orbit Canvas adapter stays in
+  `../Integrations/Orbit/`.
 - **Cadence and profiling.** Selection reads the current map position only when an eligible, non-dismissed candidate
   needs ranking. Position and selected targets update per frame, full refreshes settle movement, and ordering keeps its
   interval. Under the optional profiler, `Compass.Bearings.Position` and `Compass.Bearings.Update` split
@@ -68,7 +69,8 @@ Own destinations and guidance independently of how the ribbon chooses visible ic
   sources, and ownership follows the new target. Arrival remains separate. It pauses for other native tracking, ignores
   ribbon facing and clears its waypoint when no eligible unvisited point remains. Automatic choices never invoke
   provider clicks. Source disappearance is not proof of harvesting. Live Forever resources are approximate minimap
-  observations; clicks, menus, target commands and auto-advance exclude these display-only markers.
+  observations kept in Discovery's `displayMarkers`; bearings merge them into the ribbon order, while selection, menus,
+  target commands and auto-advance read only `markers`.
 - Description text uses small white PT Sans Narrow with a gap below the name. Provider markup survives independently of
   name styling; name alignment and visibility still govern the description.
 - The arrow inherits its immutable click-through template from Foundation. Do not reintroduce protected mouse-routing

@@ -23,15 +23,15 @@ counters record depth sorts, skipped sorts and membership changes.
   levels 1–24 of the ribbon's 32-level `STRATA_FOOTPRINT`; non-interactive selection badges use level 25, the Alt
   callout 26 and Search's inline field 27.
 - Overlap preserves positions. Nearer art covers farther art, exposed portions remain clickable, and grouped clicks open
-  Navigation's choice menu with every member. Membership validation uses marker identity; distance/key order is checked
-  on every render, while snapped overlap intervals always rebuild so turning and fractional-pixel edges cannot retain
-  stale groups.
+  Navigation's choice menu with every actionable member (`group.actions`). Membership validation uses marker identity;
+  distance/key order is checked on every render, while snapped overlap intervals always rebuild so turning and
+  fractional-pixel edges cannot retain stale groups.
 - GatherMate2 and live Forever resource markers sit below the line with a two-pixel gap. Their overlap groups stay
   separate from the upper row. Live observations are display-only, with circular masks and a thin gold ring reused by each
   pooled slot; other marker kinds remove the masks and hide the ring. Its native ring/icon ratio determines the ring's
-  bounds, included in overlap/gap geometry. While live resources are published, headings reserve their maximum near
-  footprint so distance changes do not move the text. Retail keeps its prior spacing. Live observations never advertise
-  a click-to-track action.
+  bounds, included in overlap/gap geometry. While Discovery's `displayMarkers` holds a resource row, headings reserve
+  its maximum near footprint, recomputed only when that list is replaced. Display-only markers never click, count
+  toward overlap choices or advertise a click-to-track action.
 - POI size uses fixed yard distances, independent of visibility range: 1.4x through 150 yards, linearly shrinking to
   0.45x at 1,000 yards and staying there beyond (`MARKER_NEAR_*`/`MARKER_FAR_*` in Foundation). HandyNotes uses the same
   curve and icon size.

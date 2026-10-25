@@ -31,8 +31,7 @@ local function FindWaypointMarker(markers, position, sourceKey)
     if x and y then
         for _, marker in ipairs(markers) do
             if
-                not marker.displayOnly
-                and math.abs(marker.x - x) < WAYPOINT_MATCH_EPSILON
+                math.abs(marker.x - x) < WAYPOINT_MATCH_EPSILON
                 and math.abs(marker.y - y) < WAYPOINT_MATCH_EPSILON
                 and (not sourceKey or marker.key == sourceKey)
                 and (

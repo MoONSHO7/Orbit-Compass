@@ -1,175 +1,8 @@
 """Exercise Compass client policy and native boundaries with Lua 5.1 doubles; not a WoW runtime test."""
 
-from pathlib import Path
-import re
 from lupa.lua51 import LuaRuntime
 
-REPOSITORY = Path(__file__).resolve().parents[1]
-ROOT = REPOSITORY
-WORKSPACE = REPOSITORY.parent
-UI = WORKSPACE / "Orbit-Libs/LibOrbitUI/LibOrbitUI-1.0"
-NAMESPACES = sorted(set(re.findall(r"\b(C_\w+)\.", "\n".join(
-    p.read_text(encoding="utf-8") for p in (ROOT / "Core").rglob("*.lua")
-))))
-HARNESS = r'''
-mock = { now = 1, calls = {}, loaded = {}, events = {}, maps = {}, prints = {}, waypoints = 0 }
-table.freeze = function(t) return t end
-function wipe(t) for k in pairs(t) do t[k] = nil end return t end
-function CopyTable(t) local c = {} for k,v in pairs(t) do c[k] = type(v) == "table" and CopyTable(v) or v end return c end
-function Mixin(t, ...) for i = 1, select("#", ...) do for k,v in pairs(select(i,...)) do t[k] = v end end return t end
-function issecretvalue(v) return type(v) == "table" and rawget(v, "secret") == true end
-function GetTime() return mock.now end
-function debugprofilestop() return 0 end
-function strlenutf8(s) return #s end
-function UnitFactionGroup() return "Alliance" end
-function UnitIsGhost() return false end
-function CreateVector2D(x,y) return { x=x, y=y } end
-function print(s) mock.prints[#mock.prints+1] = s end
-function LibStub() return mock.search end
-mock.search = { PROVIDER_CONTRACT=1, RegisterCallback=function() end, IsKindIncluded=function() return false end,
- RegisterProvider=function(_, _, provider) mock.provider=provider; return true end }
-function CreateFrame()
-    return { SetScript = function(self,k,v) self[k]=v end,
-        RegisterEvent = function(self,event) mock.events[event]=true end,
-        UnregisterAllEvents = function() wipe(mock.events) end }
-end
-Enum = {
- UIMapType = { Cosmic=0, World=1, Continent=2, Zone=3, Micro=5 },
- SuperTrackingMapPinType = { AreaPOI=0, QuestOffer=1, TaxiNode=2, DigSite=3, HousingPlot=4 },
- SuperTrackingType = { Quest=0, UserWaypoint=1, MapPin=2, Content=3, Vignette=4 },
- FlightPathFaction = { Neutral=0, Horde=1, Alliance=2 }, VignetteType = { Treasure=1 },
- QuestTagType = { WorldBoss=5 }, QuestWatchType = { Manual=1 },
- QuestClassification = { Normal=0, Questline=1, Recurring=2, Meta=3, Calling=4, Campaign=5,
-    Legendary=6, Important=7, BonusObjective=8, Threat=9 },
-}
-function Namespace(name)
- return setmetatable({}, { __index = function(self,method)
-   local fn = function() local key=name.."."..method; mock.calls[key]=(mock.calls[key] or 0)+1 end
-   rawset(self,method,fn); return fn
- end })
-end
-Addon = { LibOrbitUI = { VERSION_MAJOR=1, VERSION_MINOR=8, Callbacks={ Wrap=function(fn) return fn end } },
- Services={ IsSecret=issecretvalue, IsEditMode=function() return false end },
- L=setmetatable({}, { __index=function(_,key) return key end }),
- HandyNotesClick={ Matches=function(_,a,b) return a==b end }, Controller={} }
-P=Addon.Controller
-function P:IsActive() return not mock.disabled end
-function P:IsProfileSuppressed() return false end
-function P:ClearCompassHandyNotesGuides() end
-function P:RetainCompassHandyNotesGuides() end
-function P:ActivateCompassHandyNotesPoint() mock.providerClicks=(mock.providerClicks or 0)+1 end
-function P:RebuildCompassMarkers()
- self.markers={}
- for _, source in pairs(self.compassSources) do for _, marker in ipairs(source.markers) do self.markers[#self.markers+1]=marker end end
-end
-function P:RefreshCompassMap() self.mapID=3; self.mapWidth=1000; self.mapHeight=1000 end
-function P:CollectCompassGatherMate() end
-function P:CollectCompassHandyNotes() end
-function P:SelectCompassPin(point) self.compassPinSelection=point end
-function P:GetCompassTrackedPin() end
-function P:FollowsCompassPin() return false end
-function P:ResolveCompassPinDestination() end
-function P:ProjectCompassDestination() end
-function P:GetCompassFacing() return 0 end
-function P:HideNavigationView() end
-'''
-
-BOUNDARIES = r'''
-local empty = function() return {} end
-mock.maps = { [10]={mapID=10,mapType=0,parentMapID=0,name="Cosmos"},
- [1]={mapID=1,mapType=1,parentMapID=10,name="World"},
- [2]={mapID=2,mapType=2,parentMapID=1,name="Continent"},
- [3]={mapID=3,mapType=3,parentMapID=2,name="Zone"} }
-mock.playerMap=3
-C_Map.GetBestMapForUnit=function() return mock.playerMap end
-C_Map.GetFallbackWorldMapID=function() return mock.fallback end
-C_Map.GetMapInfo=function(id) return mock.maps[id] end
-C_Map.GetMapChildrenInfo=function(root) mock.queriedRoot=root; if mock.noChildren then return nil end return {mock.maps[2],mock.maps[3]} end
-C_Map.GetMapWorldSize=function() return 1000,1000 end
-C_Map.GetPlayerMapPosition=function() return {x=0.5,y=0.5} end
-C_Map.GetWorldPosFromMapPos=function(id,p) return mock.instance or 42, {x=p.x*1000,y=p.y*1000} end
-C_Map.CanSetUserWaypointOnMap=function() return true end
-C_Map.IsCityMap=function() return false end
-C_Map.GetMapLinksForMap=empty
-C_Map.GetUserWaypoint=function() return mock.waypoint end
-C_Map.SetUserWaypoint=function(p) mock.waypoints=mock.waypoints+1; mock.waypoint=p; return true end
-C_Map.ClearUserWaypoint=function() mock.waypoint=nil end
-UiMapPoint={CreateFromCoordinates=function(id,x,y) return {uiMapID=id,position={x=x,y=y}} end}
-C_AddOns.DoesAddOnExist=function() return false end
-C_AddOns.IsAddOnLoaded=function(name) return mock.loaded[name]==true end
-C_EventUtils.IsEventValid=function() return true end
-C_Texture.GetAtlasInfo=function(atlas) return not (mock.missingArt and mock.missingArt[atlas]) and {width=32,height=32} or nil end
-C_SuperTrack.GetHighestPrioritySuperTrackingType=function() return Enum.SuperTrackingType.UserWaypoint end
-C_SuperTrack.GetSuperTrackedQuestID=function() return 0 end
-C_QuestLog.GetQuestsOnMap=empty
-C_QuestLog.GetNumQuestLogEntries=function() return 0 end
-C_QuestLog.IsWorldQuest=function() return false end
-C_QuestLog.IsOnQuest=function() return true end
-C_QuestLog.GetTitleForQuestID=function() return "Ordinary quest" end
-C_QuestLog.IsComplete=function() return false end
-C_QuestInfoSystem.GetQuestClassification=function() return Enum.QuestClassification.Normal end
-C_QuestLog.GetNextWaypointForMap=function() return 0.3,0.4 end
-C_AreaPoiInfo.GetEventsForMap=empty
-C_AreaPoiInfo.GetDragonridingRacesForMap=empty
-C_AreaPoiInfo.GetQuestHubsForMap=empty
-C_AreaPoiInfo.GetDelvesForMap=empty
-C_AreaPoiInfo.GetAreaPOIForMap=function() if mock.noPOIs then return nil end return mock.poiIDs or {} end
-C_AreaPoiInfo.GetAreaPOIInfo=function(_,id) return {areaPoiID=id,name="Landmark",position={x=0.2,y=0.3},atlasName="test"} end
-C_AreaPoiInfo.IsAreaPOITimed=function() return false end
-C_EncounterJournal.GetDungeonEntrancesForMap=function() return mock.entrances or {} end
-C_PetInfo.GetPetTamersForMap=empty
-C_TaxiMap.GetTaxiNodesForMap=empty
-C_ResearchInfo.GetDigSitesForMap=empty
-C_TaskQuest.GetQuestsOnMap=empty
-C_VignetteInfo.GetVignettes=empty
-C_QuestLine.GetAvailableQuestLines=empty
-C_QuestLine.GetForceVisibleQuests=empty
-C_DeathInfo.GetGraveyardsForMap=empty
-'''
-
-FILES = [
- "Foundation/CompassClientFeatures.lua", "Foundation/CompassConstants.lua", "Foundation/CompassArtwork.lua",
- "Foundation/CompassText.lua", "Plugin/CompassDefaults.lua", "Plugin/CompassStandaloneStore.lua",
- "Discovery/CompassSourceUtils.lua",
- "Discovery/CompassPointVisibility.lua", "Navigation/CompassAutoAdvance.lua", "Navigation/CompassLocations.lua",
- "Navigation/CompassWaypoint.lua", "Navigation/CompassTargets.lua", "Discovery/Sources/CompassTravelSources.lua",
- "Discovery/Sources/CompassContentSources.lua", "Discovery/Sources/CompassOfferSources.lua",
- "Discovery/Sources/CompassMapSources.lua", "Discovery/Sources/CompassQuestSources.lua", "Discovery/CompassDiscovery.lua",
- "Integrations/CompassNavigationRoute.lua", "Integrations/Orbit/CompassResources.lua",
- "Search/CompassMapScope.lua", "Search/CompassLandmarkCatalog.lua", "Search/CompassLandmarkSearch.lua",
-  "Integrations/CompassSearchProvider.lua", "Plugin/Compass.lua", "Config/CompassSettings.lua",
-]
-
-
-def client(family="forever", before=""):
-    lua = LuaRuntime(unpack_returned_tuples=True)
-    lua.execute(HARNESS)
-    lua.globals().PyCaseFold = lambda text: text.casefold()
-    lua.execute("\n".join(f'{name}=Namespace("{name}")' for name in NAMESPACES))
-    lua.execute(BOUNDARIES)
-    versions = {"retail": "12.1.0", "forever": "1.60.1", "unknown": "11.2.0"}
-    lua.execute(f'function GetBuildInfo() return "{versions[family]}", "test", "", 16001 end')
-    lua.execute(before)
-    load = lua.eval('function(code, name) assert(loadstring(code,name))("Orbit_Compass",Addon) end')
-    load((UI / "Core/Client.lua").read_text(encoding="utf-8"), "Client.lua")
-    for file in FILES:
-        load((ROOT / "Core" / file).read_text(encoding="utf-8"), file)
-    load((UI / "Core/SettingsStore.lua").read_text(encoding="utf-8"), "SettingsStore.lua")
-    lua.execute('''
-      Addon.Store=Addon.LibOrbitUI.SettingsStore:Create(Addon.Definition.defaults,Addon.Definition.indexDefaults)
-      assert(Addon.Store:Initialize())
-      function P:GetSetting(i,k) return Addon.Store:Get(i,k) end
-      function P:SetSetting(i,k,v) assert(Addon.Store:Set(i,k,v)) end
-      P.compassLocations=Addon.Store:Collection("CompassLocations")
-      P.events=CreateFrame(); P.mapID=3; P.mapWidth=1000; P.mapHeight=1000; P.markers={}
-      P:InitializeCompassDiscovery(); if Addon.ClientFeatures.supported then P:CacheCompassPointVisibility() end; P:InitializeCompassLandmarks()
-      function Drain() for i=1,30 do P:DiscoverCompassMarkers() end end
-      function Build() P:AcquireCompassLandmarkDemand("test",true); for i=1,30 do mock.now=mock.now+0.01; P:StepCompassLandmarkCatalog() end end
-      function Drive(n) for i=1,n do mock.now=mock.now+0.01; if P.compassLandmarkDriver.OnUpdate then P:StepCompassLandmarkDemand(0.01) end end end
-      function CountWalks() local base=C_Map.GetMapChildrenInfo; mock.walks=0; C_Map.GetMapChildrenInfo=function(...) mock.walks=mock.walks+1; return base(...) end end
-    ''')
-    return lua
-
+from compass_harness import ROOT, client, load_modules
 
 tests = []
 
@@ -582,6 +415,19 @@ end
 function Completed(key) return mock.counts["Discovery/Completed/"..key] or 0 end
 '''
 
+# A published user-waypoint route whose path-changeable inputs are mock-controlled; `route` is its source state.
+ROUTE_RUNTIME = r'''
+mock.waypoint={uiMapID=3,position={x=.8,y=.8}}; mock.hop={.4,.3,"Route"}
+C_Navigation.GetNextWaypointForMap=function() return mock.hop[1],mock.hop[2],mock.hop[3] end
+C_SuperTrack.GetHighestPrioritySuperTrackingType=function() return mock.tracking or Enum.SuperTrackingType.UserWaypoint end
+C_SuperTrack.GetSuperTrackedItemName=function() return mock.itemName end
+function Started(key) return mock.counts["Discovery/Started/"..key] or 0 end
+function Settled() return mock.counts["Discovery/PathUnchanged/route"] or 0 end
+Tick(.3,"USER_WAYPOINT_UPDATED")
+route=P.compassSources.route
+assert(#route.markers==1 and route.pathReceipt and route.pathReceipt.routed)
+'''
+
 for family in ("retail", "forever"):
     for fps in (60, 208):
         check(f"{family} path storm respects source deadlines at {fps} FPS", DISCOVERY_RUNTIME + f'''
@@ -617,6 +463,35 @@ local before=Completed("route")
 for i=1,10 do mock.routeX=.2+i*.01; Tick(.005,"SUPER_TRACKING_PATH_UPDATED") end
 assert(Completed("route")==before and route.markers[1].x==.2)
 Tick(.2); assert(Completed("route")==before+1 and route.markers[1].x==mock.routeX)
+''', family)
+    for fps in (60, 208):
+        check(f"{family} unchanged route settles a path storm without jobs at {fps} FPS",
+            DISCOVERY_RUNTIME + ROUTE_RUNTIME + f'''
+local published,started=route.markers,Started("route")
+local fps={fps}; local duration=1000/fps
+for i=1,1000 do Tick(1/fps,"SUPER_TRACKING_PATH_UPDATED") end
+local maximum=math.ceil(duration/Addon.Constants.DISCOVERY_MIN_INTERVAL)+1
+assert(Started("route")==started, "an unchanged path storm started "..(Started("route")-started).." route jobs")
+assert(Settled()>0 and Settled()<=maximum, Settled())
+assert(route.markers==published and Completed("questPath")>0)
+''', family)
+    check(f"{family} route path checks recollect renames, tracking, unreadable hops and deadlines",
+        DISCOVERY_RUNTIME + ROUTE_RUNTIME + '''
+local started=Started("route")
+mock.itemName="Rare"; Tick(.25,"SUPER_TRACKING_PATH_UPDATED")
+assert(Started("route")==started+1 and route.markers[1].name=="Rare", "a renamed tracked item kept its old label")
+mock.tracking=Enum.SuperTrackingType.Quest; Tick(.25,"SUPER_TRACKING_PATH_UPDATED")
+assert(Started("route")==started+2 and #route.markers==0)
+for i=1,20 do Tick(.25,"SUPER_TRACKING_PATH_UPDATED") end
+assert(Started("route")==started+2, "an unrouted tracking type kept collecting the route")
+mock.tracking=nil; Tick(.25,"SUPER_TRACKING_PATH_UPDATED")
+assert(Started("route")==started+3 and #route.markers==1)
+mock.hop={{secret=true},.3,"Route"}; Tick(.25,"SUPER_TRACKING_PATH_UPDATED")
+assert(Started("route")==started+4 and route.pathReceipt==nil)
+Tick(.25,"SUPER_TRACKING_PATH_UPDATED"); assert(Started("route")==started+5, "an unreadable hop was trusted")
+mock.hop={.4,.3,"Route"}; Tick(.25,"SUPER_TRACKING_PATH_UPDATED")
+assert(Started("route")==started+6 and route.pathReceipt)
+Tick(31,"SUPER_TRACKING_PATH_UPDATED"); assert(Started("route")==started+7, "the recovery deadline lost its refresh")
 ''', family)
     check(f"{family} disabled source events cannot wake idle discovery", DISCOVERY_RUNTIME + '''
 P.showVignettes=false; P:InvalidateCompassSourceSettings("vignettes"); P:DiscoverCompassMarkers()
@@ -986,160 +861,6 @@ for family in ("retail", "forever"):
         assert(P:RenderNavigation(0) and P.navigationFrame.shown and P.navigationView.title.text=="Target")
     ''', family)
 
-RESOURCE_HOST = r'''
-mock.loaded.Orbit=true
-mock.nodes={{north=300,west=200,icon=134414,name="Peacebloom",lastSeen=mock.now}}
-mock.resourceReads,mock.resourceProjects=0,0
-Addon.OrbitHost={MapDots={GetResourceObservations=function()
- mock.resourceReads=mock.resourceReads+1;return mock.nodes,#mock.nodes,42
-end},MapWorldCoordinates={WorldToMap=function(_,instance,north,west,mapID)
- assert(instance==42);mock.resourceProjects=mock.resourceProjects+1;return mapID,west/1000,north/1000
-end}}
-function P:CompassDiscoveryCheckpoint() end
-'''
-
-check("Forever resources preserve artwork and copied observation identity", RESOURCE_HOST + r'''
-local node=mock.nodes[1]
-mock.nodes[2]={north=400,west=300,icon=134419,name="Silverleaf",lastSeen=mock.now}
-local second=mock.nodes[2]
-local checkpoints=0
-function P:CompassDiscoveryCheckpoint()
- checkpoints=checkpoints+1
- if checkpoints==1 then second.name="Changed";second.west=800;mock.nodes[2]=nil end
-end
-local markers={};P:CollectCompassResources(markers)
-assert(#markers==2 and markers[1].texture==134414 and markers[1].x==0.2 and markers[1].y==0.3)
-assert(markers[1].displayOnly and markers[1].kind=="resource" and markers[1].sizeScale==0.6)
-assert(markers[2].name=="Silverleaf" and markers[2].x==0.3)
-local key=markers[1].key
-node.north=350;markers={};P:CollectCompassResources(markers)
-assert(#markers==1 and markers[1].key==key and markers[1].y==0.35)
-''')
-
-check("Forever resources bound snapshots and reject expired or unreadable records", RESOURCE_HOST + r'''
-mock.nodes={}
-for i=1,80 do mock.nodes[i]={north=i,west=i,icon=123,name="Node",lastSeen=mock.now} end
-local markers={};P:CollectCompassResources(markers)
-assert(#markers==64 and mock.resourceProjects==64)
-mock.nodes={
- {north=1,west=1,icon=123,name="Old",lastSeen=mock.now-2.001},
- {north=1,west=1,icon=123,name="Removed",lastSeen=mock.now,removed=true},
- {north=1,west=1,icon=123,name="Future",lastSeen=mock.now+1},
- {north={secret=true},west=1,icon=123,name="Secret",lastSeen=mock.now},
- {north=1,west=1,icon=0,name="No icon",lastSeen=mock.now},
- {north=1,west=1,icon=123,name="Fresh",lastSeen=mock.now-2},
-}
-markers={};P:CollectCompassResources(markers);assert(#markers==1 and markers[1].name=="Fresh")
-Addon.OrbitHost.MapWorldCoordinates.WorldToMap=function()return 999,0.5,0.5 end
-markers={};P:CollectCompassResources(markers);assert(#markers==0)
-Addon.OrbitHost.MapWorldCoordinates.WorldToMap=function()return P.mapID,-0.1,0.5 end
-markers={};P:CollectCompassResources(markers);assert(#markers==0)
-Addon.OrbitHost.MapWorldCoordinates.WorldToMap=function()return P.mapID,{secret=true},0.5 end
-markers={};P:CollectCompassResources(markers);assert(#markers==0)
-''')
-
-for family in ("retail", "forever"):
-    check(f"{family} resource provider admission and absence", RESOURCE_HOST + r'''
-local markers={};P:CollectCompassResources(markers)
-if Addon.ClientFeatures.family=="retail" then
- assert(#markers==0 and mock.resourceReads==0 and mock.resourceProjects==0)
-else assert(#markers==1) end
-Addon.OrbitHost=nil;markers={};P:CollectCompassResources(markers);assert(#markers==0)
-Addon.OrbitHost={};P:CollectCompassResources(markers);assert(#markers==0)
-Addon.OrbitHost={MapDots={GetResourceObservations=function()error("must not read")end}}
-P:CollectCompassResources(markers);assert(#markers==0)
-''', family)
-
-check("Resource identities release observations over repeated scans and context resets", RESOURCE_HOST + r'''
-for i=1,1000 do
- mock.nodes={{north=100,west=200,icon=123,name="Node",lastSeen=mock.now}}
- P:CollectCompassResources({})
-end
-collectgarbage("collect");collectgarbage("collect")
-local count=0;for node,id in pairs(P.compassResourceIDs) do count=count+1;assert(type(id)=="number") end
-assert(count==1)
-mock.nodes={};collectgarbage("collect");collectgarbage("collect")
-assert(next(P.compassResourceIDs)==nil)
-P:InitializeCompassDiscovery();assert(next(P.compassResourceIDs)==nil and P.compassResourceSequence==0)
-''')
-
-for fps in (30, 240):
-    check(f"Resource discovery stays bounded at {fps} FPS and clears unavailable observations", RESOURCE_HOST + rf'''
-assert(loadstring([==[{(ROOT / 'Core/Discovery/CompassDiscovery.lua').read_text(encoding='utf-8')}]==]))("Orbit_Compass",Addon)
-for i=1,{fps * 2} do
- P.discoveryClock=i/{fps};mock.now=1+P.discoveryClock;mock.nodes[1].lastSeen=mock.now
- if P.discoveryClock>=P.discoveryNext or P.discoveryJob or P.discoveryPending then P:DiscoverCompassMarkers() end
-end
-assert(mock.resourceProjects>=8 and mock.resourceProjects<=11, tostring(mock.resourceProjects))
--- Only the first positive poll checks the empty published source before collection.
-assert(mock.resourceReads==mock.resourceProjects*2+1, tostring(mock.resourceReads))
-assert(#P.compassSources.resources.markers==1 and P.compassSources.resources.status=="ready")
-mock.nodes={{}};P.discoveryClock=P.discoveryClock+0.21;Drain()
-assert(#P.compassSources.resources.markers==0 and P.compassSources.resources.status=="ready")
-''')
-
-for phase in ("collection", "comparison"):
-    for invalidation in ("expire", "clear", "replace"):
-        check(f"Resource publication rejects {invalidation} after suspended {phase}", RESOURCE_HOST + rf'''
-mock.nodes={{}}
-for i=1,64 do mock.nodes[i]={{north=i,west=i,icon=123,name="Node",lastSeen=mock.now}} end
-assert(loadstring([==[{(ROOT / 'Core/Discovery/CompassDiscovery.lua').read_text(encoding='utf-8')}]==]))("Orbit_Compass",Addon)
-if "{phase}"=="comparison" then
- Drain();assert(#P.compassSources.resources.markers==64)
- P.discoveryClock=0.21
- P:DiscoverCompassMarkers();P:DiscoverCompassMarkers();P:DiscoverCompassMarkers()
- assert(mock.resourceProjects==128 and P.discoveryJob and P.discoveryJob.definition.key=="resources")
-else
- P:DiscoverCompassMarkers()
- assert(mock.resourceProjects==32 and P.discoveryJob and P.discoveryJob.definition.key=="resources")
-end
-if "{invalidation}"=="expire" then mock.now=10
-elseif "{invalidation}"=="clear" then mock.nodes={{}}
-else
- mock.nodes={{}}
- for i=1,64 do mock.nodes[i]={{north=i,west=i,icon=123,name="Node",lastSeen=mock.now}} end
-end
-for i=1,8 do if P.discoveryJob then P:DiscoverCompassMarkers() end end
-assert(not P.discoveryJob and #P.compassSources.resources.markers==0)
-''')
-
-POINT_ACTIONS = "\n".join(
-    f'assert(loadstring([==[{(ROOT / "Core" / file).read_text(encoding="utf-8")}]==],"{file}"))("Orbit_Compass",Addon)'
-    for file in ("Foundation/CompassMath.lua", "Navigation/CompassPointMenu.lua")
-)
-check("Display-only resource markers never become targets or menu actions", POINT_ACTIONS + r'''
-local resource={key="resource:1",kind="resource",name="Peacebloom",displayOnly=true,
- destination={mapID=3,x=0.2,y=0.3},x=0.2,y=0.3,bearing=0,distance=5,renderShown=true}
-P.markers={resource};P.range=100;P:TargetCompassPoint()
-assert(not P:FindCompassPoint(false) and not P:FindCompassPoint(true) and mock.waypoints==0)
-local results={};P:SearchCompassLandmarks("Peacebloom",results,P:NewCompassSearchScratch())
-assert(#results==0 and not P:ChooseCompassSearchResult({kind="resource",marker=resource}) and mock.waypoints==0)
-local menuButtons=0
-MenuUtil={CreateContextMenu=function(_,callback)
- callback(nil,{CreateTitle=function()end,SetScrollMode=function()end,CreateButton=function()
-  menuButtons=menuButtons+1;return{AddInitializer=function()end}
- end})
-end}
-Addon.Services.pixel={Snap=function(_,n)return n end};UIParent={GetEffectiveScale=function()return 1 end}
-P:ShowCompassNearby();P:ShowCompassOverlapMenu(P.markers);assert(menuButtons==0)
-''')
-
-check("Auto-advance skips live resources while retaining ordinary points", r'''
-local original={key="poi:1",kind="poi",source="map",x=0.5,y=0.5,distance=1,
- destination={mapID=3,x=0.5,y=0.5}}
-local resource={key="resource:1",kind="resource",source="resources",displayOnly=true,x=0.501,y=0.5,
- destination={mapID=3,x=0.501,y=0.5}}
-local ordinary={key="poi:2",kind="poi",source="map",name="Next",x=0.51,y=0.5,
- destination={mapID=3,x=0.51,y=0.5}}
-P.markers={original,resource,ordinary};P.range=100;P.autoAdvanceMode="arrival";P.autoAdvanceSameType=false
-P.bearingPlayerX,P.bearingPlayerY=0.5,0.5;P.navigationKey="waypoint";P.navigationTarget=original
-P.waypointLabel={sourceKey="poi:1"};P.discoveryClock=10
-P.discoveryDirty,P.waypointDirty=false,false
-P.compassSources.map.status="ready";P.compassSources.resources.status="ready"
-for _,source in pairs(P.compassSources)do source.enabled=false end
-P:UpdateCompassAutoAdvance();assert(mock.waypoint.position.x==0.51)
-''')
-
 SEARCH_MAP_READS = r'''
 local family=Addon.ClientFeatures.family
 for i=1,20 do
@@ -1263,12 +984,27 @@ host_scenarios = (
         assert(Plugin.resets==1)
     ''') for family in ("retail", "forever")),
 )
-for name, lua, code in host_scenarios:
+
+def tracked_pin_client(family):
+    lua = client(family)
+    load_modules(lua, ["Navigation/CompassTrackedPin.lua"])
+    return lua
+
+
+module_scenarios = tuple(
+    (f"{family} choosing a tracked pin re-collects its route", tracked_pin_client(family), '''
+        local route=P.compassSources.route
+        Drain(); assert(not route.dirty)
+        P.discoveryPending=false
+        P:SelectCompassPin({pinType=Enum.SuperTrackingMapPinType.AreaPOI,id=7})
+        assert(route.dirty and P.discoveryPending, "pin selection left the route source clean")
+    ''') for family in ("retail", "forever"))
+for name, lua, code in host_scenarios + module_scenarios:
     try:
         lua.execute(code)
     except Exception as error:
         failures.append(name)
         print(f"FAIL {name}: {error}")
-total = len(tests) + len(host_scenarios)
+total = len(tests) + len(host_scenarios) + len(module_scenarios)
 print(f"{total-len(failures)}/{total} Compass client boundary scenarios passed")
 raise SystemExit(bool(failures))

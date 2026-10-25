@@ -19,21 +19,18 @@ Native collectors live in `Sources/`; optional-addon collectors stay with their 
 and their `SOURCES` rows name the `provider` addon that must be loaded. The `navigation` row has no Points field: it
 refreshes only when Orbit Navigation's callback invalidates it, and Navigation's settings decide whether it is empty.
 Navigation consumes the assembled records for guidance, and Ribbon selects and projects them for display.
-The hosted Forever `resources` source samples the existing map observations at the 0.2-second discovery cadence,
-with no native scan demand; its adapter and copied observation boundary live in `../Integrations/Orbit/`.
-An optional synchronous reuse check can settle a due empty source without allocating a collection job; it advances
-the same deadlines and clears dirty state only after the source confirms reuse. Resource reuse requires no published
-markers and a readable zero observation count; positive or unknown counts retain collection and projection. Reuse
-checks share collector error propagation and retry backoff, so a failed provider cannot retry every rendered frame.
-Optional source validators run after collection and snapshot comparison, synchronously before publication. They must
-not yield; resource validation rejects records retired while either earlier stage was suspended.
-Published live resources also revalidate before rendering on wall-clock deadlines. Snapshot replacement preserves any
-array borrowed by a suspended comparison, and publication detects that replacement even when its own result is unchanged.
-Display-only observations cannot supply a coincident waypoint's artwork or type; that destination keeps its own identity.
+`DISPLAY_SOURCES` rows (the hosted Forever `resources` adapter in `../Integrations/Orbit/`) bypass the job queue.
+`RefreshCompassDisplayMarkers` runs before bearings on every visible frame and polls each supported row on a 0.2-second
+wall-clock deadline, so hiding or a suspended collector cannot keep stale observations. Changes publish
+`displayMarkers`, a fresh array stamped `displayOnly`; `markers` stays actionable, so Navigation, Search, auto-advance
+and waypoint artwork never see observations, while Ribbon merges both lists. Context resets give each row a fresh state
+table for its caches. A failing provider publishes nothing, re-raises its error at once and next polls after
+`SOURCE_RETRY_INTERVAL`.
 
 With the optional Orbit profiler active, source timing rows count coroutine resumes. Fixed counters distinguish started,
-completed, changed, unchanged, failed and cancelled jobs, including targeted quest paths and invalidation reasons.
-`Discovery/EmptyReused/resources` counts polls settled without creating a job.
+completed, changed, unchanged, failed and cancelled jobs, including targeted quest paths and invalidation reasons;
+`Discovery/PathUnchanged/<key>` counts path wakes settled without a job.
+Display polls are timed under their row's label; `Discovery/DisplayChanged/<key>` counts publications.
 
 ## Gotchas
 - Runtime caches reset on world/map/player-phase changes. Source states distinguish unsupported, disabled, pending,
@@ -53,8 +50,12 @@ completed, changed, unchanged, failed and cancelled jobs, including targeted que
   reconciled.
 - Cancelled jobs cannot publish stale results. Changed preferences invalidate only affected sources, and visibility
   switches retain completed HandyNotes provider data. A quests pass triggered only by quest-data loads keeps the
-  full-scan deadline, like targeted path refreshes. Path events invalidate only route and targeted quest data; tracked
-  content depends on content/tracking events and its recovery deadline, not navigation-path notifications.
+  full-scan deadline, like targeted path refreshes. Path events mark only route and quests path-dirty; tracked content
+  depends on content/tracking events and its recovery deadline, not navigation-path notifications.
+- A path-dirty route settles without a job while its last completed collection's receipt (tracking type, next hop,
+  item-sourced name) still matches; unreadable reads, an unresolved target and the 30-second deadline re-collect.
+  Every other route input (waypoint, pin choice, landmark index, Follow Targets, map) raises its own invalidation, so a
+  new route input needs one too or the receipt will hide its changes.
 - City ancestry includes child maps; unknown ancestry hides normal points until retry. Unconfigured city/world cells
   inherit legacy preferences, while Toggle defaults off. Edits copy all three values through the controller.
 - The hotkey uses the cached alternate set independently of area; a second press restores the current area. Disable,
