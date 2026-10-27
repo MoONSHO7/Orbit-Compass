@@ -1,99 +1,63 @@
 # Changelog
 
-- Check catalogue work budgets after empty map queries and share map metadata within each search
-  on both clients, preserving results, destination checks, filters and artwork.
+## 2026-10-24
 
-- On Forever with Orbit, show the live herb and ore icons detected by the minimap/HUD as circular icons with thin gold borders
-  below the compass. These display-only markers follow Orbit's existing resource switch; no new setting or scan is required.
-  Direction labels reserve space for the gold rings while live resources are present.
+* On Forever with Orbit, herbs and ore spotted by the minimap or HUD now appear below the compass as round icons with thin gold borders. They follow Orbit's existing resource setting.
 
-- Show Arrow, at the top of the Arrow's Behaviour settings, hides the destination arrow while you play. Waypoints, auto
-  advance and Orbit Navigation keep working, and the arrow still appears in Edit Mode so you can turn it back on.
+## 2026-10-18
 
-- Sharper, lit destination arrow: the gold arrow is rendered as a 3D relief at 256×256, with bevel highlights, a
-  recessed channel, a faceted gem and a soft shadow. Its shape and colours are unchanged, and it is sampled with mipmaps
-  so small sizes stay smooth.
+* New Show Arrow option, at the top of the Arrow's Behaviour settings, hides the destination arrow while you play. Waypoints, Auto Advance and Orbit Navigation keep working, and the arrow still shows in Edit Mode so you can turn it back on.
+* The destination arrow is sharper, with lighting, a faceted gem and a soft shadow. Its shape and colours are unchanged, and it stays smooth at small sizes.
+* With Orbit Navigation (not yet available), the arrow points at the next step of the planned route, even for a waypoint on another continent, and lists every step under the destination like quest objectives, ticking each one off as you finish it.
+* With Orbit Navigation and nothing selected in Compass, quests you track from the quest log or world map are routed even when they lie off the current map. Dismissing the route in Compass stops it until the tracked target changes.
 
-- With Orbit Navigation, the arrow lists the whole route under its destination like quest objectives: each step (walk to
-  a lift, take it down, fly, walk on) on its own line, finished steps ticked and greyed, the current one bright and the
-  rest dimmed. Long trips show the last two finished steps and the next ones.
+## 2026-10-04
 
-- Optional Orbit Navigation support: Compass hands its selected destination, including a user waypoint on another
-  continent, to Orbit Navigation and points the arrow at the planned route's next step, ahead of the game's own route
-  step. Waypoints placed by Navigation's nearest-service buttons keep their names. With nothing selected in Compass,
-  Navigation follows the game's own tracking, so quests tracked from the quest log or world map are routed even when
-  they lie off the current map; dismissing the route in Compass still stops it until the tracked target changes.
+* Landmark search stays responsive while you type on large maps. Compass places now appear in Orbit's search once you have typed two letters.
 
-- Avoid redundant discovery wakeups and tracked-content collection on navigation path updates, while preserving source deadlines and delayed addon readiness.
+## 2026-09-28
 
-- Spread child-map preparation and duplicate cleanup across catalog frames, and separate build phases in performance captures, including native map reads and search-index string assembly.
+* Standalone Compass bundles the Orbit UI fonts for the ribbon and search. Korean and Chinese clients use the game's own font.
+* Fixed confirmation buttons sometimes disappearing from the settings window.
 
-- Place search scores only plausible matches from an index built alongside the place list, keeping typing responsive on large maps. Results and their order are unchanged.
+## 2026-09-26
 
-- Stop re-querying watched-quest waypoints when only quest data finished loading. They still refresh on quest-log, POI, watch-list, super-tracking, subzone and map changes and at least every 30 seconds.
+* Names and notes from Kemayo's HandyNotes packs now appear on the compass, and their pins stay in place while a pack is still loading.
+* CurseForge now lists Forever 1.60.1 as supported.
 
-- Build the place index only when a search needs it. The ribbon no longer advances it, Orbit's search waits for a two-letter query, loading screens never rebuild it, and an unresolved tracked pin drives at most one background walk.
+## 2026-09-21
 
-- Build place-search text only for the places the index keeps, and fold each zone and continent once per index build.
+* Compass now runs on Forever, on its own or with Orbit.
+* Removed the Enabled options from Compass and Arrow settings. Turn Compass on or off from the game's AddOns list; an old disabled setting no longer hides it.
 
-- Search reuses the result rows of the ribbon's current markers (HandyNotes, GatherMate2, rares, treasures, quest offers) between keystrokes instead of rebuilding them on every query. Results are unchanged.
+## 2026-09-20
 
-- Keep confirmation actions visible after settings controls are reused.
+* New landmark search: click the magnifier at the compass's bottom-left and type to find dungeons, raids, delves, zones, cities, flight masters, portals, quest hubs, pet tamers, world quests, rares, treasures, your quests, your saved locations and more. Partial words, any word order and small typos still match, closest first.
+* With Orbit, Compass places appear in Orbit's search (in the chat box when Orbit Chat is on), and the ribbon hides its own search field while Orbit's search includes Locations. Standalone Compass keeps its own field.
+* The arrow follows the game's own route to map pins, world-map points, search picks and tracked content, pointing at the next portal or zone exit with its travel instruction. Newly placed map pins are tracked automatically.
+* Nearby icons are larger: 140% within 150 yards, shrinking smoothly to 45% at 1,000 yards and beyond.
+* Restored the original gold glow around the selected point.
 
-- Bundle private Orbit UI and Orbit UI Chat faces for standalone ribbon and search text. Korean and Chinese clients use Blizzard's locale-aware font instead of bundled locale-specific builds.
+## 2026-09-13
 
-- Read names and notes from Kemayo's HandyNotes packs, cache loaded names and resolved text, retry delayed data and retain pins during provider failures. Skip reparsing unchanged text while preserving dynamic callbacks, and retain completed HandyNotes snapshots during ordinary subzone movement within unchanged map artwork. Add per-pack setup/scan timings and cache/invalidation counters when a profiler is available.
+* New Auto Advance option in Arrow settings: after you arrive or a point disappears, the arrow moves on to the nearest enabled point, optionally of the same type, skipping places you have already visited.
+* GatherMate2 support: one Points option shows every category GatherMate2 has enabled, below the compass line, with arrival-based Auto Advance. Recorded locations do not mean a node has spawned.
+* Arrow navigation options now live in a Behaviour tab, with tooltips.
+* Points rows for GatherMate2 and HandyNotes only appear when those addons are installed.
+* Overlap and nearby selection menus show each point's icon.
+* Tracked waypoints stay visible when you toggle Points, and hidden point types no longer trigger Auto Advance.
+* The selected point's gold glow is larger.
 
-- Update the release packager so CurseForge correctly lists Forever 1.60.1 alongside supported Retail versions.
+## 2026-09-12
 
-- Let WoW addon enablement own Compass availability. Ignore stale standalone and Orbit profile disable flags, and remove the redundant Enabled controls from both Compass and Arrow settings.
-
-- Restore the original gold selection glow atlas on Retail and Forever after an unnecessary gradient replacement.
-
-- Prepare standalone and Orbit-hosted Forever Compass with shared client policy, gated nested activities, validated Search ancestry, independent dungeon entrances, client-qualified saved destinations and native/bundled artwork fallbacks. Preserve hidden Retail choices through Points reset. Pending observations cannot trigger auto-advance removal; stale Search selections are refused. Library delivery and in-game verification remain pending.
-
-- Make nearby compass icons more prominent: 140% size within 150 yards, smoothly shrinking to 45% at 1,000 yards and beyond, independent of the visibility range.
-
-- Search releases background demand when an empty field loses focus or Orbit takes over. Clearing text discards old results, and hidden updates avoid repeated cleanup. Typo matching reuses repeated word comparisons within each query; profiler spans cover inline search and catalog work with the ribbon hidden.
-
-- Compass places now reach Orbit's search through the shared LibOrbitSearch library. The ribbon's own search field hides only while Orbit's search includes Locations, so turning that category off in Orbit's Search Bar settings brings the field back.
-
-- With a compatible Orbit, Compass places appear in Orbit's search (in the chat input when Orbit Chat is active) and the ribbon hides its own magnifier and field. Choosing one tracks it through the same route as the inline search. Standalone Compass keeps its inline field. The place index now keeps building while the ribbon is hidden or you are inside an instance whenever a search is open.
-
-- Add a landmark search beside the compass: click the magnifier at its bottom-left and type to list everything the world map lets you click. That covers dungeons, raids, delves, zones, cities, continents, flight masters, portals, teleports, caves, events, skyriding races, quest hubs, pet tamers, dig sites, world quests, world bosses, bonus objectives, graveyards and your quests, plus nearby rares, treasures, quest offers and notes, and your saved locations. Category words ("raids", "pet trainers", "sky riding", Blizzard's own map legend names) and place names ("Khaz Algar") narrow the list; choosing a continent filters to it. Matching is fuzzy: partial words ("dung" lists dungeons), any word order, small typos ("rokery") and letters in order ("nerpal"), with the closest matches first. Results use PT Sans Narrow with icon, name and place, turn gold on hover or arrow keys, and scroll with the mouse wheel.
-
-- Follow the game's own route to map pins, world-map points, search choices, tracked content and vignettes: the arrow points at the next portal or zone exit with its travel instruction, and a destination on another continent shows its icon at that step. Tracked destinations show on the compass at any range even when their category is hidden. Newly placed map pins are tracked automatically so they receive routes. Dismissing a routed destination hides the whole trip; route steps cannot be chosen as destinations.
-
-- Keep tracked waypoints visible across Points toggles, preserve their artwork and row, and prevent filtered-out points from triggering auto-advance removal.
-
-- Hide GatherMate2 and HandyNotes Points rows unless the corresponding addon is loaded.
-
-- Group Arrow navigation controls in a Behaviour tab with tooltips for Auto Advance, same-type routing, Corpse Recovery and Follow Selected Map Targets. Auto Advance is now an arrival-or-removal checkbox.
-
-- Place GatherMate2 markers below the compass line, with flipped selection artwork and overlap selection separate from the upper row.
-
-- Integrate all enabled GatherMate2 categories through one Points option, following its category and node filters. Show localized names and provider icons at 60% size, with arrival-based auto-advance. The option starts enabled; recorded locations do not indicate live spawns.
-
-- Add optional auto-advance in Arrow settings: choose the nearest enabled point after source removal or arrival, optionally keep the same point type, and skip visited points within the current selection sequence.
-
-- Show each point's icon on the right of overlap and nearby selection menu entries.
-
-- Remove TomTom selection integration and its Follow TomTom setting. Retain /way, /orbitway and /oway; stop claiming /tway and /tomtomway.
-
-- Reduce repeated marker geometry and distance sorting, skip unusable quest and navigation queries, and retain unchanged taxi data across subzone changes. Add profiler phases and discovery job counters while preserving movement and navigation update timing.
-- Organize Core into focused modules with XML load bundles and local READMEs, following Orbit’s directory conventions while preserving Lua behavior and settings.
-- Declare marker and arrow click-through behavior in XML templates to avoid protected `SetPassThroughButtons` calls when buttons are created during combat.
-- Add a Toggle column and a Spotlight-styled hotkey selector to Points; press the assigned key to switch between Cities/World preferences and the alternate selections. Rename Open World to World. Explain each view on column-heading hover, with 2px below the header and extra space above it. Switching views reuses completed HandyNotes provider data without polling.
-- Double the selected POI's gold glow width and height and move it down 2 physical pixels.
-- Hold Alt to reveal only the nearest visible, untracked POI's name and distance in a callout connected to its icon, using existing marker caches.
-- Selecting a point from any of Zarillion's 12 HandyNotes expansion packs runs its native click action and shows its coloured guide dots on the compass. Each dot uses its own pack's artwork, is trackable and retains the parent's instructions; guide snapshots use existing provider refreshes without additional polling. Overlap and nearby choices preserve provider and node identity.
-- Render arrow note instructions in smaller white PT Sans Narrow text with padding beneath the name, independently of destination-name style customizations. Use HandyNotes' coloured circle textures within steps to avoid missing font glyphs.
-- Start arrow navigation when selecting a HandyNotes marker or other POI even if Waypoints are hidden for the current area.
-- Show Zarillion HandyNotes packs' native tooltip content on compass hover and carry localized node names and numbered instructions beneath the tracked arrow's name. Cache resolved text and cancel delayed tooltip rendering when the marker is no longer hovered.
-- Use MapNotes node names and cached localized NPC names/roles for compass selection and tracking. Normalize HandyNotes markers to the compass icon size instead of inheriting enlarged map scales.
-- Detect HandyNotes and cache enabled plugin markers until their data, settings or map context changes, replacing five-second rescans. The Points table controls visibility in Cities and Open World; icons and tracking are preserved, and personal-note descriptions appear beneath the arrow's destination name.
-- Include task-derived daily and weekly quest offers and refresh them when quest positions or titles load.
-- Enlarge the tracking selection badge by 56.25% and draw it above all POI icons.
-- Draw overlapping POIs at their normal positions with closer icons in front of farther ones. Clicking a grouped icon opens a menu to choose which point to track; individual icons still track directly.
-- Replace the Points checkbox list with a table of Cities and Open World visibility choices for every point type. Existing preferences initialize both areas, and visibility updates as the player changes areas.
-- Require LibOrbitUI API 1.5 for the standalone settings widget registration hook.
+* Points is now a table with separate Cities and World choices for every point type, and visibility updates as you move between them. A Toggle column and hotkey switch between your two sets of choices.
+* Overlapping points stay in their real positions with nearer icons in front. Clicking a group opens a menu to choose which one to track.
+* Hold Alt to show the name and distance of the nearest untracked point.
+* HandyNotes support: enabled plugin markers appear on the compass, with personal-note text under the arrow's destination name.
+* Selecting a point from Zarillion's HandyNotes expansion packs runs its own click action, shows its coloured guide dots on the compass, and adds its tooltip text and numbered instructions under the arrow.
+* MapNotes nodes and NPCs show their proper names when selected or tracked, and HandyNotes markers use the normal compass icon size.
+* Selecting any point starts arrow navigation, even where Waypoints are hidden.
+* Daily and weekly quest offers now appear on the compass.
+* The tracking badge is larger and draws above every other icon.
+* Removed TomTom integration and the Follow TomTom setting. `/way`, `/orbitway` and `/oway` still work; `/tway` and `/tomtomway` are left to TomTom.
+* Fixed an error when compass markers were created during combat.

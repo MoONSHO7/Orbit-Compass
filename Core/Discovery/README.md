@@ -53,7 +53,8 @@ Display polls are timed under their row's label; `Discovery/DisplayChanged/<key>
   full-scan deadline, like targeted path refreshes. Path events mark only route and quests path-dirty; tracked content
   depends on content/tracking events and its recovery deadline, not navigation-path notifications.
 - A path-dirty route settles without a job while its last completed collection's receipt (tracking type, next hop,
-  item-sourced name) still matches; unreadable reads, an unresolved target and the 30-second deadline re-collect.
+  item-sourced name) still matches, including no hop on this map and no route target; unreadable reads and the
+  30-second deadline re-collect.
   Every other route input (waypoint, pin choice, landmark index, Follow Targets, map) raises its own invalidation, so a
   new route input needs one too or the receipt will hide its changes.
 - City ancestry includes child maps; unknown ancestry hides normal points until retry. Unconfigured city/world cells

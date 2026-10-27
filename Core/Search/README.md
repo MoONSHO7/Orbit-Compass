@@ -17,14 +17,14 @@ uses, so Blizzard's route shortcuts guide the arrow.
   tracked map pin that the search choice, the open world map and the index cannot resolve. Without demand, requests and
   world entry only re-resolve and retire the root; release pauses the walk and the next acquire resumes it. Listeners
   and the shown list's poll see revisions every 0.25 s (once a second while a first build is unindexed) and on
-  completion. Budgets are 1 ms, or 4 ms with focused demand. Under demand, an index older than five minutes refreshes
-  into a side table that replaces the live index only when complete. Fixed places (map hierarchy and areas, dungeon
-  entrances, links, taxi nodes, graveyards) are read once per root, so a refresh replays them and re-reads only changing
-  sources; root changes and disable drop them. Native list reads check the budget even when ready-empty; child-copy,
-  duplicate and query-entry loops check per record; single native calls and the final folded-name concatenation stay
-  indivisible. Final steps build an index (word postings, a folded-name blob and kind lists) and publish it with the
-  entries in one step, except after an incomplete refresh; a root change or a build into the live index clears it, so
-  none exists while a first build runs.
+  completion. Budgets are 1 ms, or 4 ms while focused demand waits on a first build. Under demand, an index older than
+  five minutes refreshes at 1 ms into a side table that replaces the live index only when complete. Fixed places (map
+  hierarchy and areas, dungeon entrances, links, taxi nodes, graveyards) are read once per root, so a refresh replays
+  them and re-reads only changing sources; root changes and disable drop them. Native list reads check the budget even
+  when ready-empty; child-copy, duplicate and query-entry loops check per record; single native calls and the final
+  folded-name concatenation stay indivisible. Final steps build an index (word postings, a folded-name blob and kind
+  lists) and publish it with the entries in one step, except after an incomplete refresh; a root change or a build into
+  the live index clears it, so none exists while a first build runs.
 - **Collectors.** Policy-enabled collectors contribute area records for each continent, zone and micro map, walked in
   native order; dungeon entrances and delves; events, races, quest hubs and generic area POIs, split into teleports by
   atlas; map links, split into caves; pet tamers and friendly taxi nodes; dig sites, task quests (world quests, world

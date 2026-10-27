@@ -179,6 +179,8 @@ def validate(root, release=False):
     asset(UI_DIRECTORY + "LICENSE")
     for button in ("left", "middle", "right"):
         asset(UI_DIRECTORY + f"Rendering/Assets/orbit-click-{button}.tga")
+    for key in ("shift", "control", "alt"):
+        asset(UI_DIRECTORY + f"Rendering/Assets/orbit-key-{key}.tga")
     for destination in externals:
         if not any(name.startswith(destination + "/") for name in loaded):
             raise ValueError(f"Pinned dependency is not loaded by the runtime manifest: {destination}")

@@ -434,7 +434,7 @@ for family in ("retail", "forever"):
 local fps={fps}; local duration=1000/fps
 for i=1,1000 do Tick(1/fps,"SUPER_TRACKING_PATH_UPDATED") end
 local maximum=math.ceil(duration/Addon.Constants.DISCOVERY_MIN_INTERVAL)+1
-assert(Completed("route")>0 and Completed("route")<=maximum)
+assert(Completed("route")<=maximum)
 assert(Completed("questPath")>0 and Completed("questPath")<=maximum)
 assert(mock.visits<=maximum+math.ceil(duration/2)+5, "visits="..mock.visits)
 assert(Completed("content")==0, "path events recollected content")
@@ -456,7 +456,7 @@ Tick(.21); assert(Completed("questPath")==1 and Completed("route")==0)
     check(f"{family} coalesced path updates publish the latest route", DISCOVERY_RUNTIME + '''
 mock.waypoint={uiMapID=3,position={x=.8,y=.8}}; mock.routeX=.2
 C_Navigation.GetNextWaypointForMap=function() return mock.routeX,.3,"Route" end
-Tick(.3,"SUPER_TRACKING_PATH_UPDATED")
+Tick(.3,"USER_WAYPOINT_UPDATED")
 local route=P.compassSources.route
 assert(#route.markers==1 and route.markers[1].x==.2)
 local before=Completed("route")
@@ -492,6 +492,22 @@ Tick(.25,"SUPER_TRACKING_PATH_UPDATED"); assert(Started("route")==started+5, "an
 mock.hop={.4,.3,"Route"}; Tick(.25,"SUPER_TRACKING_PATH_UPDATED")
 assert(Started("route")==started+6 and route.pathReceipt)
 Tick(31,"SUPER_TRACKING_PATH_UPDATED"); assert(Started("route")==started+7, "the recovery deadline lost its refresh")
+''', family)
+    check(f"{family} routes without a hop or target on this map settle path storms",
+        DISCOVERY_RUNTIME + ROUTE_RUNTIME + '''
+local started=Started("route")
+mock.hop={}; Tick(.25,"SUPER_TRACKING_PATH_UPDATED")
+assert(Started("route")==started+1 and #route.markers==0 and route.pathReceipt, "a hop leaving this map kept no receipt")
+for i=1,40 do Tick(.25,"SUPER_TRACKING_PATH_UPDATED") end
+assert(Started("route")==started+1, "a route with no hop on this map recollected "..(Started("route")-started-1).." times")
+mock.hop={.4,.3,"Route"}; Tick(.25,"SUPER_TRACKING_PATH_UPDATED")
+assert(Started("route")==started+2 and #route.markers==1, "the receipt hid a hop arriving on this map")
+mock.waypoint=nil; Tick(.25,"USER_WAYPOINT_UPDATED")
+assert(Started("route")==started+3 and #route.markers==0 and route.pathReceipt, "a missing target kept no receipt")
+for i=1,40 do Tick(.25,"SUPER_TRACKING_PATH_UPDATED") end
+assert(Started("route")==started+3, "a route with no target recollected "..(Started("route")-started-3).." times")
+mock.waypoint={uiMapID=3,position={x=.8,y=.8}}; Tick(.25,"USER_WAYPOINT_UPDATED")
+assert(Started("route")==started+4 and #route.markers==1, "the receipt hid a restored waypoint")
 ''', family)
     check(f"{family} disabled source events cannot wake idle discovery", DISCOVERY_RUNTIME + '''
 P.showVignettes=false; P:InvalidateCompassSourceSettings("vignettes"); P:DiscoverCompassMarkers()

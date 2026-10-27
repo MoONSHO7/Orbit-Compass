@@ -843,7 +843,9 @@ function Plugin:StepCompassLandmarkCatalog()
     if profiler then
         start, startKB = profiler:Begin()
     end
-    local budget = IsDemandFocused(catalog) and FOCUSED_BUILD_BUDGET_MS or BUILD_BUDGET_MS
+    -- A refresh builds beside a published index that already answers searches, so typing never waits on it.
+    local waiting = catalog.target == catalog and IsDemandFocused(catalog)
+    local budget = waiting and FOCUSED_BUILD_BUDGET_MS or BUILD_BUDGET_MS
     catalog.deadline = debugprofilestop() + budget
     local thread = catalog.thread
     BeginPhase(catalog)

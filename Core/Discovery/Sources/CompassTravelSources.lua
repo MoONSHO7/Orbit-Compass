@@ -111,6 +111,7 @@ function Plugin:CollectCompassRoute(markers)
     end
     local target, name, artwork = RouteTarget(self, tracking)
     if target == nil then
+        self:SetCompassPathReceipt({ tracking = tracking })
         return
     end
     local x, y, text = C_Navigation.GetNextWaypointForMap(self.mapID)
@@ -138,8 +139,19 @@ function Plugin:CollectCompassRoute(markers)
         "route",
         target or nil
     )
+    local hopX, hopY, hopText = Reading(x), Reading(y), Reading(text)
+    if hopX ~= UNREADABLE and hopY ~= UNREADABLE and hopText ~= UNREADABLE and itemName ~= UNREADABLE then
+        self:SetCompassPathReceipt({
+            tracking = tracking,
+            routed = true,
+            x = hopX,
+            y = hopY,
+            text = hopText,
+            namedByItem = namedByItem,
+            itemName = itemName,
+        })
+    end
     if marker then
-        local hopX, hopY, hopText = Reading(x), Reading(y), Reading(text)
         marker.description = type(hopText) == "string" and hopText ~= "" and hopText or nil
         marker.routeTracking, marker.routeDestination = tracking, target ~= false
         if artwork then
@@ -148,17 +160,6 @@ function Plugin:CollectCompassRoute(markers)
                     marker[field] = artwork[field]
                 end
             end
-        end
-        if hopX ~= UNREADABLE and hopY ~= UNREADABLE and hopText ~= UNREADABLE and itemName ~= UNREADABLE then
-            self:SetCompassPathReceipt({
-                tracking = tracking,
-                routed = true,
-                x = hopX,
-                y = hopY,
-                text = hopText,
-                namedByItem = namedByItem,
-                itemName = itemName,
-            })
         end
     end
 end

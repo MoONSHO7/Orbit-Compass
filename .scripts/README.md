@@ -35,9 +35,9 @@ event storms at different frame rates. Run `python .scripts/check-client-feature
 
 `check-landmark-budget.py` exercises large synthetic catalogs, costly empty native lists, deterministic work bounds,
 pause/resume, cancellation/root replacement, equivalent publication, balanced phase spans across yields, unindexed
-first-build search cadence and aged refreshes that skip fixed sources. Run `python .scripts/check-landmark-budget.py`;
-native map calls and final string concatenation remain indivisible, so these bounds do not certify an in-game
-millisecond limit.
+first-build search cadence and aged refreshes that skip fixed sources and keep the background budget under focus. Run
+`python .scripts/check-landmark-budget.py`; native map calls and final string concatenation remain indivisible, so these
+bounds do not certify an in-game millisecond limit.
 
 `check-resources.py` drives live resources through that capability double: version admission, Retail and standalone
 silence, allocation-free unchanged polls, refinement without gaps, failure backoff, ownership release and auto-advance
@@ -46,7 +46,7 @@ and actionable overlap groups. Orbit's producer suite checks the same contract a
 the other repository; native detection, CPU and heap still need in-game verification. Release CI runs all three suites.
 
 ## Gotchas
-- Compass pins verified UI 1.14/API 1.17 and Search 1.4/revision 7 releases. Linked checks do not establish release
+- Compass pins verified UI 1.15/API 1.18 and Search 1.5/revision 8 releases. Linked checks do not establish release
   delivery; validate ordinary fetched packages. The automatic latest-release resolver is not implemented.
 - `fetch-libs.py` and `check-package.py` remain byte-identical between both addon repositories; keep their changes
   synchronized. `check-client-features.py` is product-specific despite sharing its name with Events' suite.

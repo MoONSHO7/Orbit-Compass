@@ -184,6 +184,31 @@ assert(Finish()>5)
 CheckPhases(4)
 '''
 
+# An aged refresh builds beside a published index, so a focused search must not lend it the waiting budget.
+FOCUSED_REFRESH = r'''
+SetBudgeted(true)
+local c=P.compassLandmarks
+P:AcquireCompassLandmarkDemand("test",true)
+Finish()
+assert(mock.profiler.records["Compass.Landmarks.Collect"].max>3,"the first focused build lost its budget")
+local first,blob=Snapshot()
+local published,index=c.entries,c.queryIndex
+wipe(mock.profiler.records)
+mock.now=mock.now+301
+P:AcquireCompassLandmarkDemand("test",true)
+assert(c.state=="building" and c.target~=c,"an aged catalog did not refresh beside its index")
+Step()
+assert(c.entries==published and c.queryIndex==index,"a refresh replaced the published index early")
+Finish()
+local refreshed,refreshedBlob=Snapshot()
+assert(refreshed==first and refreshedBlob==blob,"a refresh over unchanged data changed the catalog")
+for label,record in pairs(mock.profiler.records) do
+  if label~="Compass.Landmarks.QueryIndex.Blob" and label~="Compass.Landmarks" then
+    assert(record.max<=1.1,label.." took "..record.max.." ms of a typing frame during a refresh")
+  end
+end
+'''
+
 FAILURE = r'''
 SetBudgeted(true)
 P:AcquireCompassLandmarkDemand("test",false)
@@ -547,6 +572,7 @@ for _,entry in ipairs(c.entries) do assert(entry.mapID>=100,"retired root publis
 for family in ("retail", "forever"):
     check("large build, pause, refresh cancellation and equivalent publication", LIFECYCLE, family)
     check("focused budget and indivisible native/blob attribution", FOCUSED, family)
+    check("focused searches refresh an aged index at the background budget", FOCUSED_REFRESH, family)
     check("collector failure closes all phase spans", FAILURE, family)
     check("unindexed first-build searches skip typo scans and notify at most once a second", FIRST_BUILD_SEARCH, family)
     check("standalone build without profiler", ABSENT_PROFILER, family)
@@ -554,4 +580,4 @@ for family in ("retail", "forever"):
     empty_list_boundaries(family)
     aged_refresh_sources(family)
 
-print("16/16 landmark budget scenarios passed (large builds: 12640 POIs and 12642 child records each)")
+print("18/18 landmark budget scenarios passed (large builds: 12640 POIs and 12642 child records each)")
