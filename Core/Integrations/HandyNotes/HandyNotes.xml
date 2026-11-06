@@ -5,6 +5,9 @@
     <Script file="CompassHandyNotesGuides.lua"/>
     <Script file="CompassHandyNotesGuideSource.lua"/>
     <Script file="CompassHandyNotesClick.lua"/>
+    <Script file="CompassHandyNotesRead.lua"/>
+    <Script file="CompassHandyNotesCapture.lua"/>
+    <Script file="CompassHandyNotesProviders.lua"/>
     <Script file="CompassHandyNotes.lua"/>
     <Script file="CompassHandyNotesTooltip.lua"/>
 </Ui>

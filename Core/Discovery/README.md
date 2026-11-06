@@ -7,11 +7,11 @@ Validated point data, category visibility and budgeted source caches.
 Turn native and addon observations into stable marker snapshots without rescanning on every redraw.
 
 ## Implementation
-`Discovery.xml` loads `CompassSourceUtils.lua` and the visibility model before `Sources/`, then the aggregate source and
-scheduler modules. `CompassSourceUtils.lua` owns secret-first record validation and marker construction.
+`Discovery.xml` loads validation and visibility before `Sources/`, then snapshot assembly, the collector catalog,
+display polling and the scheduler. `CompassSourceUtils.lua` owns secret-first record validation and marker construction.
 `CompassPointVisibility.lua` caches Cities, World and Toggle preferences for the 18 point definitions.
-`CompassSources.lua` projects destinations and assembles source snapshots, while `CompassDiscovery.lua` owns the work
-queue, invalidation and refresh deadlines. Assembly adds the user waypoint and, when no source already provides it, the
+`CompassDiscoveryCatalog.lua` owns collector order and event routing. `CompassDiscovery.lua` owns job scheduling,
+invalidation and refresh deadlines. `CompassSources.lua` assembles snapshots with the user waypoint and, when absent, the
 followed map pin or vignette as a waypoint-priority marker, so a tracked destination shows at any range, even when its
 category is hidden or it sits on another map of the same continent.
 
@@ -19,13 +19,12 @@ Native collectors live in `Sources/`; optional-addon collectors stay with their 
 and their `SOURCES` rows name the `provider` addon that must be loaded. The `navigation` row has no Points field: it
 refreshes only when Orbit Navigation's callback invalidates it, and Navigation's settings decide whether it is empty.
 Navigation consumes the assembled records for guidance, and Ribbon selects and projects them for display.
-`DISPLAY_SOURCES` rows (the hosted Forever `resources` adapter in `../Integrations/Orbit/`) bypass the job queue.
-`RefreshCompassDisplayMarkers` runs before bearings on every visible frame and polls each supported row on a 0.2-second
-wall-clock deadline, so hiding or a suspended collector cannot keep stale observations. Changes publish
+`CompassDisplayMarkers.lua` owns the hosted Forever resource adapter's polling state and publishes outside the job
+queue. It checks the 0.2-second wall-clock deadline before bearings on visible frames, so hiding or a suspended collector
+cannot keep stale observations. Changes publish
 `displayMarkers`, a fresh array stamped `displayOnly`; `markers` stays actionable, so Navigation, Search, auto-advance
 and waypoint artwork never see observations, while Ribbon merges both lists. Context resets give each row a fresh state
-table for its caches. A failing provider publishes nothing, re-raises its error at once and next polls after
-`SOURCE_RETRY_INTERVAL`.
+table for its caches. A failing provider clears its published markers, re-raises its error and retries after 30 seconds.
 
 With the optional Orbit profiler active, source timing rows count coroutine resumes. Fixed counters distinguish started,
 completed, changed, unchanged, failed and cancelled jobs, including targeted quest paths and invalidation reasons;

@@ -3,5 +3,7 @@
     <Script file="CompassPointVisibility.lua"/>
     <Include file="Sources\Sources.xml"/>
     <Script file="CompassSources.lua"/>
+    <Script file="CompassDiscoveryCatalog.lua"/>
+    <Script file="CompassDisplayMarkers.lua"/>
     <Script file="CompassDiscovery.lua"/>
 </Ui>

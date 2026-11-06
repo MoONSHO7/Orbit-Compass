@@ -136,9 +136,13 @@ FILES = [
  "Discovery/CompassPointVisibility.lua", "Navigation/CompassAutoAdvance.lua", "Navigation/CompassLocations.lua",
  "Navigation/CompassWaypoint.lua", "Navigation/CompassTargets.lua", "Discovery/Sources/CompassTravelSources.lua",
  "Discovery/Sources/CompassContentSources.lua", "Discovery/Sources/CompassOfferSources.lua",
- "Discovery/Sources/CompassMapSources.lua", "Discovery/Sources/CompassQuestSources.lua", "Discovery/CompassDiscovery.lua",
+ "Discovery/Sources/CompassMapSources.lua", "Discovery/Sources/CompassQuestSources.lua",
+ "Discovery/CompassDiscoveryCatalog.lua", "Discovery/CompassDisplayMarkers.lua", "Discovery/CompassDiscovery.lua",
  "Integrations/CompassNavigationRoute.lua", "Integrations/Orbit/CompassResources.lua",
- "Search/CompassMapScope.lua", "Search/CompassLandmarkCatalog.lua", "Search/CompassLandmarkSearch.lua",
+ "Search/CompassMapScope.lua", "Search/CompassLandmarkKeywords.lua", "Search/CompassLandmarkRank.lua",
+ "Search/CompassLandmarkQueryIndex.lua", "Search/CompassLandmarkSources.lua", "Search/CompassLandmarkDuplicates.lua",
+ "Search/CompassLandmarkBuild.lua",
+ "Search/CompassLandmarkCatalog.lua", "Search/CompassLandmarkSearch.lua",
   "Integrations/CompassSearchProvider.lua", "Plugin/Compass.lua", "Config/CompassSettings.lua",
 ]
 

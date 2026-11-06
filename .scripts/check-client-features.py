@@ -1,5 +1,7 @@
 """Exercise Compass client policy and native boundaries with Lua 5.1 doubles; not a WoW runtime test."""
 
+from xml.etree import ElementTree
+
 from lupa.lua51 import LuaRuntime
 
 from compass_harness import ROOT, client, load_modules
@@ -107,7 +109,11 @@ check("Missing quest classification disables only quests", 'assert(Addon.ClientF
 check("Ordinary quests survive missing task API", 'assert(Addon.ClientFeatures.quests); Drain(); Build()', before='C_TaskQuest=nil')
 check("Missing base map API refuses startup contract", 'assert(not Addon.ClientFeatures.supported)', before='C_Map.GetMapInfo=false')
 check("Partial map data retains dungeon entrances", 'mock.noPOIs=true; mock.entrances={{areaPoiID=456,name="Entrance",position={x=.1,y=.2},atlasName="test"}}; Drain(); assert(P.compassSources.map.status=="pending" and #P.compassSources.map.markers==1); Build(); assert(P.compassLandmarks.positions["poi:456"] and P.compassLandmarks.state=="pending"); mock.noPOIs=false; mock.now=mock.now+31; Build(); assert(P.compassLandmarks.state=="complete")')
-check("Request without demand starts no walk", 'P:RequestCompassLandmarkCatalog(); assert(P.compassLandmarks.thread==nil and P.compassLandmarks.state=="idle")')
+check("Request without demand starts no walk or source cache", '''
+P:RequestCompassLandmarkCatalog()
+local c=P.compassLandmarks
+assert(c.thread==nil and c.state=="idle" and c.static==nil and P.compassLandmarkDriver.OnUpdate==nil)
+''')
 check("Stale world entry does not rebuild", 'Build(); P:ReleaseCompassLandmarkDemand("test"); mock.now=mock.now+301; P:InvalidateCompassLandmarkScope(); assert(P.compassLandmarks.state=="complete" and P.compassLandmarks.thread==nil)')
 check("Pin miss drives one finished walk", 'local c=P.compassLandmarks; P:RequestCompassPinLandmarks(0,999); assert(c.thread and c.demand.pin==false and c.pinAttempted=="poi:999"); for i=1,3 do P:StepCompassLandmarkCatalog() end; assert(c.state=="complete" and c.demand.pin==nil); mock.now=mock.now+301; P:RequestCompassPinLandmarks(0,999); assert(c.thread==nil and c.demand.pin==nil and c.state=="complete")')
 check("World entry pauses pin walk", 'local t=0; debugprofilestop=function() t=t+10; return t end; local c=P.compassLandmarks; P:RequestCompassPinLandmarks(0,999); P:StepCompassLandmarkCatalog(); local th=c.thread; assert(th and c.state=="building"); P:InvalidateCompassLandmarkScope(); assert(c.demand.pin==nil and c.pinAttempted==nil and P.compassLandmarkDriver.OnUpdate==nil and c.thread==th); P:RequestCompassPinLandmarks(0,999); assert(c.thread==th and P.compassLandmarkDriver.OnUpdate)')
@@ -336,8 +342,9 @@ P:StopCompassLandmarks(); c.entries, c.positions, c.ranks, c.queryIndex={}, {}, 
 mock.corpus=200
 """ + QUERY_CORPUS + r"""
 local t=0; debugprofilestop=function() t=t+0.3; return t end
-local build, inIndex, indexYields=P.BuildCompassLandmarkQueryIndex, false, 0
-P.BuildCompassLandmarkQueryIndex=function(self, ...) inIndex=true; local q=build(self, ...); inIndex=false; return q end
+local queryIndex=Addon.LandmarkQueryIndex
+local build, inIndex, indexYields=queryIndex.Build, false, 0
+queryIndex.Build=function(...) inIndex=true; local q=build(...); inIndex=false; return q end
 P:AcquireCompassLandmarkDemand("test",false); assert(c.state=="building")
 local steps=0
 while c.state=="building" do
@@ -1007,6 +1014,153 @@ def tracked_pin_client(family):
     return lua
 
 
+def handynotes_client(family):
+    lua = client(family)
+    prefix = "Integrations/HandyNotes/"
+    bundle = ElementTree.parse(ROOT / "Core" / prefix / "HandyNotes.xml").getroot()
+    load_modules(lua, [prefix + node.attrib["file"] for node in bundle if node.tag.endswith("}Script")])
+    lua.execute(r'''
+        mock.notesReads, mock.notesDone, mock.notesHooks, mock.notesErrors = {}, {}, 0, {}
+        Addon.LibOrbitUI.Callbacks.Wrap = function(_, fn) return fn end
+        Addon.LibOrbitUI.Callbacks.LogError = function(_, source, provider, err)
+            mock.notesErrors[#mock.notesErrors + 1] = { source, provider, err }
+        end
+        function hooksecurefunc(owner, method, callback)
+            local original = owner[method]
+            mock.notesHooks = mock.notesHooks + 1
+            owner[method] = function(...)
+                original(...)
+                callback(...)
+            end
+        end
+        function Provider(name, coord)
+            return { GetNodes2 = function(_, mapID, minimap)
+                assert(mapID == P.mapID and minimap == false)
+                mock.notesReads[name] = (mock.notesReads[name] or 0) + 1
+                if mock.notesSetupError == name then error('setup failed') end
+                return function(_, previous)
+                    if not previous then
+                        if mock.notesInvalidate == name then
+                            mock.notesInvalidate = nil
+                            mock.retiredNotesCache = P.compassSources.handynotes.handynotesProviders
+                            HandyNotes:UpdatePluginMap(nil, name)
+                        end
+                        if mock.notesIteratorError == name then error('iterator failed') end
+                        return coord, nil, 'marker', 1, 0.8
+                    end
+                    mock.notesDone[name] = (mock.notesDone[name] or 0) + 1
+                end
+            end }
+        end
+        HandyNotes = {
+            plugins = { A = Provider('A', 1), B = Provider('B', 2) },
+            db = { profile = { enabled = true, enabledPlugins = { A = true, B = true } } },
+            getXY = function(_, coord) return coord / 10, 0.3 end,
+            UpdatePluginMap = function() end,
+            UpdateWorldMap = function() end,
+        }
+        P.compassIntegrationsEnabled, P.showHandyNotes = true, true
+        function P:ProjectCompassDestination(_, x, y) return { x = x, y = y } end
+        function CollectNotes()
+            P.discoveryJob = { source = P.compassSources.handynotes }
+            P.discoverySteps, P.discoveryDeadline = 0, 1
+            local markers = {}
+            local retry = P:CollectCompassHandyNotes(markers)
+            local pending = P.discoveryJob and P.discoveryJob.pending
+            P.discoveryJob = nil
+            return markers, retry, pending
+        end
+    ''')
+    return lua
+
+
+HANDYNOTES_CASES = {
+    "retires a scan after its current iterator finishes": r'''
+        P:ConnectCompassHandyNotes()
+        mock.notesInvalidate = 'A'
+        local markers, retry = CollectNotes()
+        assert(#markers == 0 and retry == nil)
+        assert(mock.notesReads.A == 1 and mock.notesDone.A == 1 and not mock.notesReads.B)
+        assert(mock.retiredNotesCache and next(mock.retiredNotesCache) == nil)
+
+        markers = CollectNotes()
+        assert(#markers == 2 and markers[1].key:match('^handynotes:A:'))
+        assert(markers[1].sourceAlpha == 0.8 and markers[1].destination.mapID == P.mapID)
+        assert(mock.notesReads.A == 2 and mock.notesReads.B == 1)
+        HandyNotes:UpdatePluginMap(nil, 'A')
+        markers = CollectNotes()
+        assert(#markers == 2 and mock.notesReads.A == 3 and mock.notesReads.B == 1)
+    ''',
+    "reuses clean providers and hooks across reconnect": r'''
+        local markers = CollectNotes()
+        assert(#markers == 0 and not next(mock.notesReads), 'retired first-connect scan still ran')
+        markers = CollectNotes()
+        assert(#markers == 2 and mock.notesHooks == 2)
+        HandyNotes:UpdateWorldMap()
+        markers = CollectNotes()
+        assert(#markers == 2 and mock.notesReads.A == 1 and mock.notesReads.B == 1)
+        HandyNotes.db.profile.icon_alpha = 0.5
+        HandyNotes:UpdateWorldMap()
+        markers = CollectNotes()
+        assert(#markers == 2 and markers[2].sourceAlpha == 0.4)
+        assert(mock.notesReads.A == 2 and mock.notesReads.B == 2)
+        P:DisconnectCompassHandyNotes()
+        assert(not P.compassSources.handynotes.handynotesProviders)
+        P:ConnectCompassHandyNotes()
+        assert(mock.notesHooks == 2)
+        markers = CollectNotes()
+        assert(#markers == 2 and mock.notesReads.A == 3 and mock.notesReads.B == 3)
+        local retired = setmetatable({ HandyNotes }, { __mode = 'v' })
+        P:DisconnectCompassHandyNotes()
+        HandyNotes = nil
+        collectgarbage('collect')
+        assert(not retired[1], 'hook bookkeeping retained the retired addon')
+    ''',
+    "publishes the first live scan through discovery": r'''
+        mock.loaded.HandyNotes = true
+        Drain()
+        P.discoveryClock = 1
+        Drain()
+        local source = P.compassSources.handynotes
+        assert(source.status == 'ready' and #source.markers == 2 and source.nextRefresh == math.huge)
+        assert(mock.notesReads.A == 1 and mock.notesReads.B == 1 and not P.discoveryJob)
+    ''',
+    "retries failed providers and closes both protected spans": r'''
+        P:ConnectCompassHandyNotes()
+        local spans, stack = {}, {}
+        local serial = 0
+        Addon.Services.profiler = {
+            active = true,
+            Count = function() end,
+            Begin = function()
+                serial = serial + 1
+                stack[#stack + 1] = serial
+                return serial, 0
+            end,
+            End = function(_, owner, source, token)
+                assert(owner == P and table.remove(stack) == token)
+                spans[#spans + 1] = source
+            end,
+        }
+        mock.notesSetupError = 'A'
+        local markers, retry, pending = CollectNotes()
+        assert(#markers == 1 and retry == 30 and pending and #stack == 0)
+        assert(spans[1] == 'Compass.HandyNotes.A.GetNodes2' and spans[2] == 'Compass.HandyNotes.A')
+        assert(spans[3] == 'Compass.HandyNotes.B.GetNodes2' and spans[4] == 'Compass.HandyNotes.B.Nodes')
+        assert(#mock.notesErrors == 1 and mock.notesReads.B == 1)
+        mock.notesSetupError, mock.notesIteratorError = nil, 'A'
+        markers, retry, pending = CollectNotes()
+        assert(#markers == 1 and retry == 30 and pending and #stack == 0)
+        assert(spans[7] == 'Compass.HandyNotes.A.Nodes' and spans[8] == 'Compass.HandyNotes.A')
+        assert(#mock.notesErrors == 2 and mock.notesReads.B == 1)
+        mock.notesIteratorError = nil
+        markers, retry, pending = CollectNotes()
+        assert(#markers == 2 and retry == nil and not pending and #stack == 0)
+        assert(mock.notesReads.A == 3 and mock.notesReads.B == 1)
+    ''',
+}
+
+
 module_scenarios = tuple(
     (f"{family} choosing a tracked pin re-collects its route", tracked_pin_client(family), '''
         local route=P.compassSources.route
@@ -1014,7 +1168,10 @@ module_scenarios = tuple(
         P.discoveryPending=false
         P:SelectCompassPin({pinType=Enum.SuperTrackingMapPinType.AreaPOI,id=7})
         assert(route.dirty and P.discoveryPending, "pin selection left the route source clean")
-    ''') for family in ("retail", "forever"))
+    ''') for family in ("retail", "forever")) + tuple(
+    (f"{family} HandyNotes {name}", handynotes_client(family), code)
+    for family in ("retail", "forever") for name, code in HANDYNOTES_CASES.items()
+)
 for name, lua, code in host_scenarios + module_scenarios:
     try:
         lua.execute(code)

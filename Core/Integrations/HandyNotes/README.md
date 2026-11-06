@@ -7,8 +7,10 @@ HandyNotes provider snapshots, note text, native tooltips and selected guide poi
 Expose map notes as compass destinations while preserving provider identity and avoiding repeated scans of static data.
 
 ## Implementation
-`HandyNotes.xml` declares the family readers and click adapter before the collector and tooltip adapter.
-`CompassHandyNotes.lua` caches enabled `GetNodes2` providers for the current map context.
+`HandyNotes.xml` declares the family readers and click adapter before capture and provider lifecycle.
+`CompassHandyNotesRead.lua` admits foreign values. `CompassHandyNotesCapture.lua` exhausts each `GetNodes2` iterator
+and copies its observations. `CompassHandyNotesProviders.lua` owns connection hooks, provider caches and invalidation.
+`CompassHandyNotes.lua` projects those observations and selected guide points into markers.
 `CompassHandyNotesZarillion.lua` owns that family's exact identities and artwork; `CompassHandyNotesText.lua` owns
 shared successful-name caching and Zarillion's numbered instructions. `CompassHandyNotesKemayo.lua` reads 25 verified
 Kemayo identities from iterator metadata, including shared-handler rewards, legacy items, Directions names and
@@ -24,8 +26,9 @@ reads discrete guide coordinates; `CompassHandyNotesGuideSource.lua` retains the
   so previously published markers cannot imply completion/removal. The discovery owner retains clean, completed
   snapshots on ordinary subzone movement within the same map/artwork; indoor/new-area events, pending/active work, core
   settings, profiles and map/phase/world changes still reconcile.
-- Iterators share mutable map state and must finish synchronously before discovery yields. Copy records before releasing
-  iterator state; cancelled work cannot repopulate a replacement cache. Unchanged snapshots do not rebuild markers.
+- Iterators share mutable map state and finish synchronously, even if invalidated during the call. A retired job drops
+  the result and skips subsequent providers. Weak hook keys allow replaced addon objects to be collected.
+  Unchanged snapshots do not rebuild markers.
 - Discovery never renders tooltips. Native hover calls returned Zarillion nodes' Render/Unrender, avoiding OnEnter's
   world-map focus/refresh and global GameTooltip ownership.
 - MapNotes text uses zone-iterator metadata and its locale NPC cache, verified against 3.6.4. Continent iterators lack
@@ -55,9 +58,9 @@ reads discrete guide coordinates; `CompassHandyNotesGuideSource.lua` retains the
 
 ## Secrets
 External tables, iterators, coordinates and actions pass `Services.IsSecret` and the shared source boundary before
-access. `CompassHandyNotes.lua` passes the label `Compass.HandyNotes`; the three guide-record gates in
-`CompassHandyNotesGuides.lua` pass none and surface as `?` under Orbit's helper. Native provider calls are guarded
-trust boundaries; completed records contain only validated destinations.
+access. The source boundary reports `Compass.MapData`; the three guide-record gates in `CompassHandyNotesGuides.lua`
+pass no label and surface as `?` under Orbit's helper. Provider calls are protected trust boundaries; completed records
+contain only validated destinations.
 
 ## References
 `../README.md`, `../../Discovery/README.md`, `../../Navigation/README.md`; [HandyNotes

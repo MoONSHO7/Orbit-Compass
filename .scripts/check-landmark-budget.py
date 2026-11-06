@@ -569,6 +569,76 @@ for _,entry in ipairs(c.entries) do assert(entry.mapID>=100,"retired root publis
     print(f"PASS {family}: empty native lists respect budgets, pause, cancellation and root replacement")
 
 
+DUPLICATE_GRID = r'''
+local remove = Addon.LandmarkDuplicates.Remove
+local maps = {
+  [2]={mapID=2,mapType=2,parentMapID=1},
+  [3]={mapID=3,mapType=3,parentMapID=2},
+  [4]={mapID=4,mapType=5,parentMapID=3},
+  [5]={mapID=5,mapType=3,parentMapID=2},
+}
+local target, projections, reads, work
+local function Reset()
+  target, projections = {entries={},ranks={}}, {}
+  reads, work = 0, 0
+end
+C_Map.GetWorldPosFromMapPos=function(_, position)
+  local projected = projections[position.x]
+  reads = reads + 1
+  return projected.instance, projected
+end
+local function Add(key, name, mapID, rank, x, y, instance, questID)
+  local index=#target.entries+1
+  target.entries[index]={key=key,name=name,mapID=mapID,x=index,y=0,questID=questID}
+  target.ranks[key]=rank
+  projections[index]={x=x,y=y,instance=instance}
+end
+local function Run()
+  return remove(target,maps,function() work=work+1 end,function() end)
+end
+
+Reset()
+local count=2048
+for index=1,count do
+  Add("far:"..index,"Separate copies",3,index,index*200,0,42)
+  Add("near:"..index,"Coincident copies",3,index,-55,-2,42)
+  Add("left:"..index,"Nearby clusters",3,index+count,49,49,42)
+  Add("right:"..index,"Nearby clusters",3,index,100,-49,42)
+end
+local entries,positions,ranks=Run()
+assert(#entries==count+3 and ranks["near:"..count]==count)
+assert(positions["left:"..count] and positions["right:"..count])
+for index=1,count do assert(positions["far:"..index]==index) end
+assert(reads==count*4 and work<count*4*12,"repeat names used all-pairs work")
+
+Reset()
+Add("continent","Ancestry",2,99,nil,nil,nil)
+Add("ancestor","Ancestry",3,9,-51,0,42)
+Add("child","Ancestry",4,1,-50,0,42)
+Add("exact-distance","Ancestry",5,1,49,0,42)
+Add("other-instance","Ancestry",5,1,-51,0,43)
+Add("missing-position","Ancestry",5,1,-51,nil,42)
+Add("quest","Ancestry",5,1,-51,0,42,999)
+Add("bucket-best","Range",5,5,49,49,42)
+Add("bucket-fallback","Range",5,3,0,0,42)
+Add("near-fallback","Range",5,2,-51,0,42)
+Add("b-tie","Tie",5,1,-101,0,42)
+Add("a-tie","Tie",5,1,-100,0,42)
+for i=1,16 do
+  for _,name in ipairs({"Ancestry","Range","Tie"}) do
+    Add(name..i,name,5,1,500+i*200,0,42)
+  end
+end
+entries,positions=Run()
+assert(not positions.continent and not positions.ancestor and positions.child)
+assert(not positions["exact-distance"],"a removed ancestor must still suppress unrelated copies at exactly 100 yards")
+assert(positions["other-instance"] and positions["missing-position"] and positions.quest)
+assert(positions["bucket-best"] and not positions["bucket-fallback"] and not positions["near-fallback"])
+assert(positions["a-tie"] and not positions["b-tie"])
+for index,entry in ipairs(entries) do assert(positions[entry.key]==index) end
+'''
+
+
 for family in ("retail", "forever"):
     check("large build, pause, refresh cancellation and equivalent publication", LIFECYCLE, family)
     check("focused budget and indivisible native/blob attribution", FOCUSED, family)
@@ -579,5 +649,7 @@ for family in ("retail", "forever"):
     repeated_records(family)
     empty_list_boundaries(family)
     aged_refresh_sources(family)
+    client(family).execute(DUPLICATE_GRID)
+    print(f"PASS {family}: repeated-name work bounds, map ancestry, exact distance and rank ties")
 
-print("18/18 landmark budget scenarios passed (large builds: 12640 POIs and 12642 child records each)")
+print("20/20 landmark budget scenarios passed (large builds: 12640 POIs and 12642 child records each)")

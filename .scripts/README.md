@@ -31,11 +31,12 @@ double records frozen tables so `table.sort` rejects them, as the strictest clie
 
 `check-client-features.py` checks client families, withheld APIs, partial data, retained preferences, destination
 provenance, query-local map-read sharing/recovery, Navigation route guidance, stale actions and readiness, including
-event storms at different frame rates. Run `python .scripts/check-client-features.py`.
+event storms at different frame rates. HandyNotes checks exercise the XML-loaded capture and cache owners, including
+iterator retirement, reconnect and protected failures. Run `python .scripts/check-client-features.py`.
 
 `check-landmark-budget.py` exercises large synthetic catalogs, costly empty native lists, deterministic work bounds,
 pause/resume, cancellation/root replacement, equivalent publication, balanced phase spans across yields, unindexed
-first-build search cadence and aged refreshes that skip fixed sources and keep the background budget under focus. Run
+first-build search cadence, aged refreshes, and repeated-name work bounds for sparse and crowded groups. Run
 `python .scripts/check-landmark-budget.py`; native map calls and final string concatenation remain indivisible, so these
 bounds do not certify an in-game millisecond limit.
 

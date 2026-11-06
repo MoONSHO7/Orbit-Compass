@@ -8,33 +8,32 @@ Let players find anything the world map lets them click, then track it through t
 uses, so Blizzard's route shortcuts guide the arrow.
 
 ## Implementation
-- **Scope.** `Search.xml` loads `CompassMapScope.lua`, the index, ranking and the view. Scope validates bounded,
+- **Scope.** `Search.xml` loads `CompassMapScope.lua`, the ranker and query index before their consumers. Scope validates bounded,
   cycle-free ancestry to Retail's Cosmic or Forever's World ancestor, using the player map, Blizzard's fallback seed,
   then a previously validated root. No fixed map number identifies a client.
-- **Index.** `CompassLandmarkCatalog.lua` walks `C_Map.GetMapChildrenInfo(rootID, nil, true)` in a coroutine stepped
-  only by its demand driver. Demand owners are the focused inline field (or its list while shown), an Orbit search
+- **Lifecycle.** `CompassLandmarkCatalog.lua` owns the published catalog and steps the build coroutine only under
+  demand. Demand owners are the focused inline field (or its list while shown), an Orbit search
   session from its first scored query (two folded characters, `IsScoredCompassQuery`, the ranker's own predicate), and a
   tracked map pin that the search choice, the open world map and the index cannot resolve. Without demand, requests and
   world entry only re-resolve and retire the root; release pauses the walk and the next acquire resumes it. Listeners
   and the shown list's poll see revisions every 0.25 s (once a second while a first build is unindexed) and on
   completion. Budgets are 1 ms, or 4 ms while focused demand waits on a first build. Under demand, an index older than
-  five minutes refreshes at 1 ms into a side table that replaces the live index only when complete. Fixed places (map
-  hierarchy and areas, dungeon entrances, links, taxi nodes, graveyards) are read once per root, so a refresh replays
-  them and re-reads only changing sources; root changes and disable drop them. Native list reads check the budget even
+  five minutes refreshes at 1 ms into a side table that replaces the live index only when complete. Root changes and
+  disable drop the source cache, and demand alone can populate it. Native list reads check the budget even
   when ready-empty; child-copy, duplicate and query-entry loops check per record; single native calls and the final
-  folded-name concatenation stay indivisible. Final steps build an index (word postings, a folded-name blob and kind
-  lists) and publish it with the entries in one step, except after an incomplete refresh; a root change or a build into
+  folded-name concatenation stay indivisible. `CompassLandmarkQueryIndex.lua` builds word postings, a folded-name blob
+  and kind lists. The catalog publishes the index with its entries, except after an incomplete refresh. A build into
   the live index clears it, so none exists while a first build runs.
-- **Collectors.** Policy-enabled collectors contribute area records for each continent, zone and micro map, walked in
-  native order; dungeon entrances and delves; events, races, quest hubs and generic area POIs, split into teleports by
-  atlas; map links, split into caves; pet tamers and friendly taxi nodes; dig sites, task quests (world quests, world
-  bosses, bonus objectives), graveyards and invasions, as in Blizzard's `MapLegendFrame.lua`. After the area pass the
-  other collectors walk zones, then micro maps, then continents (`COLLECT_PASSES`, rank order), so a candidate that
-  cannot outrank its key's record skips its native reads and construction. Records are frozen landmarks keyed like
-  ribbon markers (`poi:`, `taxi:`, `digSite:`, `quest:`, `map:`); only a record that wins its key gets folded name text,
-  and each distinct place is folded once per walk into read-only words shared by its records. `FindCompassLandmarkOnMap`
-  reuses the collectors for a world-map click and reads only the clicked key.
-- **Ranking.** `CompassLandmarkSearch.lua` searches into caller-owned scratch (`NewCompassSearchScratch`), recording a
+- **Sources.** `CompassLandmarkSources.lua` reads the native hierarchy and policy-enabled map, POI, travel, quest and
+  activity sources. Fixed data (hierarchy, map areas, dungeon entrances, links, taxi nodes and graveyards) is
+  normalized once per root. A refresh reuses it and re-reads changing sources.
+- **Build.** `CompassLandmarkBuild.lua` visits areas in native order, then collects records in descending map rank so
+  losing keys can skip detail reads. It freezes winning records with folded name and shared place words, applies
+  `CompassLandmarkDuplicates.lua` to same-name copies, and builds the query index over the survivors.
+  `FindCompassLandmarkOnMap` uses the same readers and record format without a world walk or a retained source cache.
+- **Ranking.** `CompassLandmarkKeywords.lua` builds localized phrases. `CompassLandmarkRank.lua` interprets phrases,
+  scores matches and orders ties. `CompassLandmarkSearch.lua`
+  combines indexed candidates with live results in caller-owned scratch (`NewCompassSearchScratch`), recording a
   score and a match tier per result (5 exact to 1 typo/loose) so Orbit can merge places with its own results;
   `fuzzy = false` skips the fuzzy pass and `limit` trims the list. It adds live results at query time (quest-log
   quests, the current map's Compass markers such as rares, treasures, quest offers, HandyNotes and GatherMate2, and
@@ -94,7 +93,9 @@ uses, so Blizzard's route shortcuts guide the arrow.
   no defined order.
 - After the walk, same-name entries collapse when one sits on an ancestor or continent map of the other, or within 100
   yards in world space. Parent maps repeat places under other POI IDs that do not route. Same-name places elsewhere stay
-  distinct, and quests are excluded.
+  distinct, and quests are excluded. Large groups index map ancestry and compare only nearby cells in the same world
+  instance. Any input copy can suppress another, even if that copy is itself removed. The grid is discarded after its
+  group is processed.
 - Quest offers, rares and treasures exist only near the player, so they come from live markers, not the index. The index
   is session-only and never persisted.
 - There is no placeholder text: only the magnifier shows until the field is focused. Search elements sit at ribbon level
