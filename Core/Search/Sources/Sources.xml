@@ -1,0 +1,9 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Script file="CompassLandmarkRecord.lua"/>
+    <Script file="CompassLandmarkRead.lua"/>
+    <Script file="CompassLandmarkMaps.lua"/>
+    <Script file="CompassLandmarkAreaPOIs.lua"/>
+    <Script file="CompassLandmarkTravel.lua"/>
+    <Script file="CompassLandmarkActivities.lua"/>
+    <Script file="CompassLandmarkSources.lua"/>
+</Ui>

@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import re
+from xml.etree import ElementTree
 from lupa.lua51 import LuaRuntime
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -129,6 +130,17 @@ C_QuestLine.GetForceVisibleQuests=empty
 C_DeathInfo.GetGraveyardsForMap=empty
 '''
 
+def bundle_scripts(relative):
+    for node in ElementTree.parse(ROOT / "Core" / relative).getroot():
+        tag = node.tag.rsplit("}", 1)[-1]
+        if tag in ("Script", "Include"):
+            path = (Path(relative).parent / node.attrib["file"].replace("\\", "/")).as_posix()
+            if tag == "Include":
+                yield from bundle_scripts(path)
+            else:
+                yield path
+
+
 FILES = [
  "Foundation/CompassClientFeatures.lua", "Foundation/CompassConstants.lua", "Foundation/CompassArtwork.lua",
  "Foundation/CompassText.lua", "Plugin/CompassDefaults.lua", "Plugin/CompassStandaloneStore.lua",
@@ -140,7 +152,7 @@ FILES = [
  "Discovery/CompassDiscoveryCatalog.lua", "Discovery/CompassDisplayMarkers.lua", "Discovery/CompassDiscovery.lua",
  "Integrations/CompassNavigationRoute.lua", "Integrations/Orbit/CompassResources.lua",
  "Search/CompassMapScope.lua", "Search/CompassLandmarkKeywords.lua", "Search/CompassLandmarkRank.lua",
- "Search/CompassLandmarkQueryIndex.lua", "Search/CompassLandmarkSources.lua", "Search/CompassLandmarkDuplicates.lua",
+ "Search/CompassLandmarkQueryIndex.lua", *bundle_scripts("Search/Sources/Sources.xml"), "Search/CompassLandmarkDuplicates.lua",
  "Search/CompassLandmarkBuild.lua",
  "Search/CompassLandmarkCatalog.lua", "Search/CompassLandmarkSearch.lua",
   "Integrations/CompassSearchProvider.lua", "Plugin/Compass.lua", "Config/CompassSettings.lua",

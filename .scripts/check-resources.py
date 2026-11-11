@@ -1,5 +1,7 @@
 """Check Compass live resources against Orbit's documented capability double in Lua 5.1; not native profiling."""
 
+from xml.etree import ElementTree
+
 from compass_harness import ORBIT_RESOURCES, ROOT, UI, client, load_modules
 
 LIVE = ORBIT_RESOURCES + r'''
@@ -554,8 +556,12 @@ function Near(actual,expected,label)
 end
 '''
 
-RENDER_MODULES = ("Navigation/CompassPointMenu.lua", "Ribbon/CompassMarkerGroups.lua",
-                  "Ribbon/CompassMarkerView.lua")
+MARKERS = "Ribbon/Markers"
+RENDER_MODULES = ("Navigation/CompassPointMenu.lua", *(
+    f"{MARKERS}/{node.attrib['file']}"
+    for node in ElementTree.parse(ROOT / "Core" / MARKERS / "Markers.xml").getroot()
+    if node.tag.endswith("}Script")
+))
 
 for family in ("forever", "retail"):
     check(f"{family} ordinary marker click and artwork remain intact", r'''
@@ -570,6 +576,35 @@ assert(not button.resourceBorder and mock.textureCreates==textures)
 assert(marker.projectedHitSize==marker.projectedIconSize+2)
 assert(marker.projectedBelowLine)
 Click(button);assert(mock.waypoints==1 and #mock.menuButtons==0)
+''', family=family, modules=RENDER_MODULES, setup=REGIONS)
+
+for family in ("forever", "retail"):
+    check(f"{family} rebinding a hovered slot rejects a stale press and accepts the same destination", r'''
+local first=MakeMarker("poi:1","poi",false,.2)
+local second=MakeMarker("poi:1","poi",false,.4)
+second.name,second.distance="Updated destination",42
+P:CreateCompassMarkerPool();local button=P.markerPool:Acquire()
+local function Bind(marker)
+ P:LayoutCompassMarkerGroups({marker})
+ P:RenderCompassMarker(button,marker,true,0,1,0,2,1)
+end
+Bind(first);button.scripts.OnEnter(button)
+local tip=Addon.Services.tooltip
+assert(tip:IsOwned(button) and tip.text==first.name)
+button.scripts.OnMouseDown(button,"LeftButton")
+Bind(second)
+assert(tip.text==second.name and tip.lines[1]=="42" and button.tooltipMarker==second)
+button.scripts.OnClick(button,"LeftButton")
+assert(mock.waypoints==0 and button.pressedMarker==nil)
+
+local replacement=MakeMarker("poi:1","poi",false,.4)
+replacement.name="Same destination, new record"
+button.scripts.OnMouseDown(button,"LeftButton")
+Bind(replacement)
+button.scripts.OnClick(button,"LeftButton")
+assert(mock.waypoints==1 and mock.waypoint.position.x==.4)
+P.markerPool:Release(button)
+assert(P.hoveredCompassMarker==nil and not tip:IsShown() and button.pressedMarker==nil)
 ''', family=family, modules=RENDER_MODULES, setup=REGIONS)
 
 check("live resource icon keeps artwork but cannot click-track", r'''

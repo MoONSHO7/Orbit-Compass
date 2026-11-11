@@ -1,11 +1,12 @@
 local _, Addon = ...
 local Plugin = Addon.Controller
 local Sources = Addon.LandmarkSources
+local Maps = Addon.LandmarkMaps
 local Duplicates = Addon.LandmarkDuplicates
 local QueryIndex = Addon.LandmarkQueryIndex
 local Fold, Words, AddNameFields = Addon.Text.Fold, Addon.Text.Words, Addon.Text.AddNameFields
-local MAP_DEPTH = Sources.MapDepth
-local PIN_KEYS = Sources.PinKeys
+local MAP_DEPTH = Maps.Depth
+local PIN_KEYS = Addon.LandmarkRecord.PinKeys
 local COLLECT_PHASE = "Compass.Landmarks.Collect"
 
 local CONTINENT_MAP = Enum.UIMapType.Continent
@@ -62,7 +63,7 @@ local function Collect(catalog, target, checkpoint, phase)
     end
     local static = catalog.static or Sources.NewStaticLayer()
     catalog.static = static
-    local maps, order = Sources.ReadHierarchy(catalog.rootID, static, checkpoint, phase)
+    local maps, order = Maps.ReadHierarchy(catalog.rootID, static, checkpoint, phase)
     if not maps then
         return
     end
@@ -73,7 +74,7 @@ local function Collect(catalog, target, checkpoint, phase)
     local function Continent(mapID)
         local name = continents[mapID]
         if name == nil then
-            name = Sources.ContinentName(mapID, Lookup) or false
+            name = Maps.ContinentName(mapID, Lookup) or false
             continents[mapID] = name
         end
         return name or nil
@@ -86,7 +87,7 @@ local function Collect(catalog, target, checkpoint, phase)
         if MAP_DEPTH[details.mapType] and details.parentMapID then
             mapIndex = index
             local parent = maps[details.parentMapID]
-            Sources.CollectArea(
+            Maps.CollectArea(
                 details,
                 { zone = parent and parent.name, continent = Continent(mapID) },
                 Add,
@@ -136,7 +137,7 @@ function Build.Run(catalog, target, setPhase)
 end
 
 function Plugin:FindCompassLandmarkOnMap(mapID, pinType, id)
-    local place = Sources.ReadMapPlace(mapID)
+    local place = Maps.ReadMapPlace(mapID)
     local key = PIN_KEYS[pinType] and PIN_KEYS[pinType] .. id
     local found
     local function Add(landmark)

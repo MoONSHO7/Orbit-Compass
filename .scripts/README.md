@@ -42,9 +42,10 @@ bounds do not certify an in-game millisecond limit.
 
 `check-resources.py` drives live resources through that capability double: version admission, Retail and standalone
 silence, allocation-free unchanged polls, refinement without gaps, failure backoff, ownership release and auto-advance
-latency equal to the empty baseline. Rendering cases cover mask/ring geometry, heading reservation, pooled-slot reuse
-and actionable overlap groups. Orbit's producer suite checks the same contract against its scanner, so neither CI needs
-the other repository; native detection, CPU and heap still need in-game verification. Release CI runs all three suites.
+latency equal to the empty baseline. Rendering cases cover mask/ring geometry, heading reservation, pooled-slot reuse,
+press validation after rebinding, and actionable overlap groups. Orbit's producer suite checks its scanner against the
+same contract. Both suites run independently, and native detection, CPU and heap still need in-game verification.
+Release CI runs all three suites.
 
 ## Gotchas
 - Compass pins verified UI 1.15/API 1.18 and Search 1.5/revision 8 releases. Linked checks do not establish release

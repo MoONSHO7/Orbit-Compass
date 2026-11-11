@@ -1,5 +1,5 @@
 local _, Addon = ...
-local MAP_DEPTH = Addon.LandmarkSources.MapDepth
+local MAP_DEPTH = Addon.LandmarkMaps.Depth
 local Utils = Addon.SourceUtils
 local Number = Utils.Number
 

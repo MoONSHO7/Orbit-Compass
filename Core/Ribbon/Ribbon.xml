@@ -1,6 +1,5 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
-    <Script file="CompassMarkerGroups.lua"/>
-    <Script file="CompassMarkerView.lua"/>
+    <Include file="Markers/Markers.xml"/>
     <Script file="CompassProjection.lua"/>
     <Script file="CompassPeek.lua"/>
     <Script file="CompassView.lua"/>

@@ -24,9 +24,8 @@ uses, so Blizzard's route shortcuts guide the arrow.
   folded-name concatenation stay indivisible. `CompassLandmarkQueryIndex.lua` builds word postings, a folded-name blob
   and kind lists. The catalog publishes the index with its entries, except after an incomplete refresh. A build into
   the live index clears it, so none exists while a first build runs.
-- **Sources.** `CompassLandmarkSources.lua` reads the native hierarchy and policy-enabled map, POI, travel, quest and
-  activity sources. Fixed data (hierarchy, map areas, dungeon entrances, links, taxi nodes and graveyards) is
-  normalized once per root. A refresh reuses it and re-reads changing sources.
+- **Sources.** The [sources bundle](Sources/README.md) separates hierarchy, area POIs, travel and activity readers.
+  Fixed data is normalized once per root. An aged refresh reuses it and re-reads changing sources.
 - **Build.** `CompassLandmarkBuild.lua` visits areas in native order, then collects records in descending map rank so
   losing keys can skip detail reads. It freezes winning records with folded name and shared place words, applies
   `CompassLandmarkDuplicates.lua` to same-name copies, and builds the query index over the survivors.

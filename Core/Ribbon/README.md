@@ -7,12 +7,11 @@ Visible-point selection, overlapping marker presentation and compass artwork.
 Render existing navigation data with stable icon identity and bounded work per frame.
 
 ## Implementation
-`Ribbon.xml` loads marker grouping and pooled views, projection/selection, the Alt callout and root rendering.
-`CompassProjection.lua` chooses visible points from discovery records. `CompassMarkerGroups.lua` rebuilds exact pixel
-overlaps while retaining validated distance order; `CompassMarkerView.lua` binds stable pooled buttons and consumes the
-same snapped left edge. `CompassView.lua` combines markers, headings and artwork, while `CompassPeek.lua` draws one
-connected name/distance callout. Optional profiler phases separate grouping from marker binding/rendering; fixed
-counters record depth sorts, skipped sorts and membership changes.
+`Ribbon.xml` loads the [marker bundle](Markers/README.md), projection and selection, the Alt callout and root rendering.
+`CompassProjection.lua` chooses visible points from discovery records. The marker bundle groups exact pixel overlaps
+and renders stable pooled buttons using the same snapped left edge. `CompassView.lua` combines markers, headings and
+artwork, and `CompassPeek.lua` draws one connected name and distance callout. Optional profiler phases separate
+grouping from marker binding and rendering. Fixed counters record depth sorts, skipped sorts and membership changes.
 
 ## Gotchas
 - Native atlases and rejected provider textures use `Addon.Artwork` fallbacks. Failed textures do not inherit provider

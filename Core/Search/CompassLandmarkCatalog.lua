@@ -3,7 +3,7 @@ local C = Addon.Constants
 local Plugin = Addon.Controller
 local Build = Addon.LandmarkBuild
 local F = Addon.ClientFeatures
-local PIN_KEYS = Addon.LandmarkSources.PinKeys
+local PIN_KEYS = Addon.LandmarkRecord.PinKeys
 
 local ROOT_RETRY_SECONDS = 1
 local DATA_RETRY_SECONDS = 30
