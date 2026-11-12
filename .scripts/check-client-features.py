@@ -83,7 +83,31 @@ check("Pending root recovers", 'mock.playerMap=nil; Build(); mock.playerMap=3; m
 check("Cyclic ancestry rejected", 'mock.maps[1].parentMapID=2; assert(Addon.MapScope.Resolve(1)==nil)')
 check("Empty child data is pending", 'mock.noChildren=true; Build(); assert(P.compassLandmarks.state=="pending")')
 check("Root change retires previous index", 'Build(); local old=P.compassLandmarks.entries; mock.maps[3].parentMapID=20; mock.maps[20]={mapID=20,mapType=1,parentMapID=0,name="Other"}; Build(); assert(P.compassLandmarks.rootID==20 and P.compassLandmarks.entries~=old)')
-check("Unverified queries never run", 'local fail=function() error("withheld query called") end; C_TaskQuest.GetQuestsOnMap=fail; C_PetInfo.GetPetTamersForMap=fail; C_ResearchInfo.GetDigSitesForMap=fail; C_AreaPoiInfo.GetDelvesForMap=fail; C_AreaPoiInfo.GetDragonridingRacesForMap=fail; C_ContentTracking.GetCollectableSourceTrackingEnabled=fail; Drain(); Build()')
+TASK_OFFERS = '''
+local class={[1]=Enum.QuestClassification.Normal,[2]=Enum.QuestClassification.BonusObjective,
+ [3]=Enum.QuestClassification.Recurring,[4]=Enum.QuestClassification.Normal}
+C_QuestInfoSystem.GetQuestClassification=function(id) return class[id] end
+C_TaskQuest.GetQuestsOnMap=function()
+ mock.taskReads=(mock.taskReads or 0)+1
+ return {{questID=1,x=.2,y=.3,inProgress=false},{questID=2,x=.2,y=.3,inProgress=false},
+  {questID=3,x=.2,y=.3,inProgress=false},{questID=4,x=.2,y=.3,inProgress=true}}
+end
+C_TaskQuest.GetQuestInfoByQuestID=function(id) return "Offer "..id end
+C_QuestLog.IsQuestTrivial=function() return false end
+C_QuestLog.IsQuestFlaggedCompletedOnAccount=function() return false end
+function OfferKeys()
+ local keys={}
+ for _,marker in ipairs(P.compassSources.offers.markers) do keys[#keys+1]=marker.key end
+ table.sort(keys)
+ return table.concat(keys,",")
+end
+'''
+check("Forever task offers keep the classification allowlist", 'Drain(); assert(OfferKeys()=="offer:1", OfferKeys())', before=TASK_OFFERS)
+check("Nameless task offers take the quest log title", 'C_TaskQuest.GetQuestInfoByQuestID=function() end; Drain(); assert(OfferKeys()=="offer:1", OfferKeys()); assert(P.compassSources.offers.markers[1].name=="Ordinary quest")', before=TASK_OFFERS)
+check("Unloaded offer names request quest data once", 'C_TaskQuest.GetQuestInfoByQuestID=function() end; C_QuestLog.GetTitleForQuestID=function() return mock.title end; Drain(); assert(OfferKeys()=="", OfferKeys()); local asked=mock.calls["C_QuestLog.RequestLoadQuestByID"]; assert(asked==1, asked); P.discoveryClock=P.discoveryClock+31; P:InvalidateCompassSource("QUEST_DATA_LOAD_RESULT"); Drain(); assert(mock.calls["C_QuestLog.RequestLoadQuestByID"]==1, "requested again"); mock.title="Loaded"; P.discoveryClock=P.discoveryClock+31; P:InvalidateCompassSource("QUEST_DATA_LOAD_RESULT"); Drain(); assert(OfferKeys()=="offer:1", "missing offer")', before=TASK_OFFERS)
+check("Retail task offers keep every classification",'Drain(); assert(OfferKeys()=="offer:1,offer:3", OfferKeys())', "retail", TASK_OFFERS)
+check("Forever reads tasks only for quest offers", 'P:SetSetting(1,"ShowQuestOffers",false); P:CacheCompassPointVisibility(); Drain(); Build(); assert(not mock.taskReads); P:SetSetting(1,"ShowQuestOffers",true); P:CacheCompassPointVisibility(); Drain(); assert(mock.taskReads and OfferKeys()=="offer:1")', before=TASK_OFFERS)
+check("Unverified queries never run", 'local fail=function() error("withheld query called") end; C_PetInfo.GetPetTamersForMap=fail; C_ResearchInfo.GetDigSitesForMap=fail; C_AreaPoiInfo.GetDelvesForMap=fail; C_AreaPoiInfo.GetDragonridingRacesForMap=fail; C_ContentTracking.GetCollectableSourceTrackingEnabled=fail; Drain(); Build()')
 check("Ordinary quests survive", 'C_QuestLog.GetNumQuestWatches=function() return 1 end; C_QuestLog.GetQuestIDForQuestWatchIndex=function() return 123 end; Drain(); assert(#P.compassSources.quests.markers==1)', before='')
 check("Dungeon entrance without journal", 'mock.entrances={{areaPoiID=456,journalInstanceID=10,name="Entrance",position={x=0.1,y=0.2},atlasName="test"}}; Build(); local i=P.compassLandmarks.positions["poi:456"]; assert(i and P.compassLandmarks.entries[i].kind=="instance")')
 check("Ready empty differs from unsupported", 'Drain(); assert(P.compassSources.map.status=="ready" and P.compassSources.tamers.status=="unsupported" and P.compassSources.gathermate.status=="pending")')
@@ -173,7 +197,7 @@ check("Nested quest task cannot bypass through Search", 'C_QuestInfoSystem.GetQu
 check("Disabled native tracking action refused", 'mock.disabled=true; C_SuperTrack.SetSuperTrackedMapPin=function() error("disabled native action") end; assert(not P:TrackCompassLandmark({kind="poi",pinType=0,id=99,mapID=3,x=.5,y=.5}))')
 check("Disabled demand cannot restart Search", 'mock.disabled=true; P:AcquireCompassLandmarkDemand("late",true); P:RequestCompassLandmarkCatalog(); assert(P.compassLandmarks.thread==nil and not next(P.compassLandmarks.demand))')
 check("Only completed collector assigns marker ownership", 'mock.poiIDs={99}; Drain(); assert(P.compassSources.map.markers[1].source=="map"); P.discoveryJob={definition={key="taxi"}}; local markers={}; Addon.SourceUtils.AddMarker(P,markers,"waypoint",{x=.5,y=.5},"Point","test",1,"waypoint"); assert(markers[1].source==nil)')
-check("Withheld native query references remain dormant", 'Drain(); Build()', before='local fail=function() error("withheld native query") end; C_AreaPoiInfo.GetDelvesForMap=fail; C_AreaPoiInfo.GetDragonridingRacesForMap=fail; C_PetInfo.GetPetTamersForMap=fail; C_ResearchInfo.GetDigSitesForMap=fail; C_TaskQuest.GetQuestsOnMap=fail; C_ContentTracking.GetCollectableSourceTrackingEnabled=fail')
+check("Withheld native query references remain dormant", 'Drain(); Build()', before='local fail=function() error("withheld native query") end; C_AreaPoiInfo.GetDelvesForMap=fail; C_AreaPoiInfo.GetDragonridingRacesForMap=fail; C_PetInfo.GetPetTamersForMap=fail; C_ResearchInfo.GetDigSitesForMap=fail; C_ContentTracking.GetCollectableSourceTrackingEnabled=fail')
 check("Retired live marker refused", 'local marker={key="poi:old",kind="poi",destination={mapID=3,x=.5,y=.5}}; assert(not P:ChooseCompassSearchResult({marker=marker,kind="poi"}) and mock.waypoints==0)')
 check("Source re-enable schedules fresh observation", 'P:SetSetting(1,"ShowPOIs",false); P:SetSetting(1,"ShowEvents",false); P:SetSetting(1,"ShowQuestHubs",false); P:CacheCompassPointVisibility(); Drain(); assert(P.compassSources.map.status=="disabled"); P:SetSetting(1,"ShowPOIs",true); P:CacheCompassPointVisibility(); mock.poiIDs={99}; Drain(); assert(P.compassSources.map.status=="ready" and #P.compassSources.map.markers==1)')
 check("Pending source cannot advance by removal", '''

@@ -45,7 +45,11 @@ silence, allocation-free unchanged polls, refinement without gaps, failure backo
 latency equal to the empty baseline. Rendering cases cover mask/ring geometry, heading reservation, pooled-slot reuse,
 press validation after rebinding, and actionable overlap groups. Orbit's producer suite checks its scanner against the
 same contract. Both suites run independently, and native detection, CPU and heap still need in-game verification.
-Release CI runs all three suites.
+
+`check-questie.py` drives the QuestieDB adapter through a double of QuestieDB's documented contract-4 reads: provider
+admission, per-map indexing, quest availability rules (including race masks beyond 32 bits), faction service filters,
+client-named entrances, point toggles and Retail silence. Real QuestieDB data still needs in-game verification.
+Release CI runs these four suites.
 
 ## Gotchas
 - Compass pins verified UI 1.15/API 1.18 and Search 1.5/revision 8 releases. Linked checks do not establish release

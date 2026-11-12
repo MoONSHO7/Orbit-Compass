@@ -37,6 +37,22 @@ local function StartsOnMap(plugin, startMapID, cache)
     return matches
 end
 
+-- Native offer pins carry no required name; a task offer for an ordinary quest has none until its quest data loads.
+local function OfferName(plugin, id, name)
+    name = Readable(name)
+    if type(name) ~= "string" or name == "" then
+        name = Readable(C_QuestLog.GetTitleForQuestID(id))
+    end
+    if type(name) == "string" and name ~= "" then
+        return name
+    end
+    if not plugin.compassOfferTitleRequests[id] then
+        plugin.compassOfferTitleRequests[id] = true
+        C_QuestLog.RequestLoadQuestByID(id)
+    end
+    plugin:MarkCompassSourcePending()
+end
+
 local function AddOffer(plugin, markers, info, seen, mapCache, showHidden, showCompleted)
     info = Readable(info)
     local id = info and Number(info.questID)
@@ -69,7 +85,10 @@ local function AddOffer(plugin, markers, info, seen, mapCache, showHidden, showC
             return
         end
     end
-    AddMarker(plugin, markers, "offer:" .. id, info, info.questName, atlas, C.QUEST_PRIORITY, "questOffer")
+    local name = OfferName(plugin, id, info.questName)
+    if name then
+        AddMarker(plugin, markers, "offer:" .. id, info, name, atlas, C.QUEST_PRIORITY, "questOffer")
+    end
 end
 
 function Plugin:CollectCompassQuestOffers(markers)
@@ -78,6 +97,7 @@ function Plugin:CollectCompassQuestOffers(markers)
     end
     if self.compassOfferMapID ~= self.mapID or self.compassOfferRequestRequired then
         self.compassOfferMapID, self.compassOfferRequestRequired = self.mapID, false
+        self.compassOfferTitleRequests = {}
         C_QuestLine.RequestQuestLinesForMap(self.mapID)
         self:CompassDiscoveryCheckpoint()
     end
@@ -107,7 +127,8 @@ function Plugin:CollectCompassQuestOffers(markers)
         end
         self:CompassDiscoveryCheckpoint()
     end
-    if not F.tasks then
+    -- Both clients' native offer providers read standalone quest givers from tasks; classification withholds the rest.
+    if not F.taskOffers then
         return
     end
     local tasks = Utils.ReadList(self, C_TaskQuest.GetQuestsOnMap(self.mapID))

@@ -1,7 +1,8 @@
 # Compass integrations
 
 ## Description
-Optional Orbit, HandyNotes, GatherMate2, Orbit Navigation and LibOrbitSearch adapters for the Compass controller.
+Optional Orbit, HandyNotes, GatherMate2, QuestieDB, Orbit Navigation and LibOrbitSearch adapters for the Compass
+controller.
 
 ## Purpose
 Keep external addon contracts and lifecycle hooks with their provider while using the same navigation and discovery
@@ -9,9 +10,10 @@ owners.
 
 ## Implementation
 `Integrations.xml` loads the [HandyNotes module](HandyNotes/README.md), optional-addon lifecycle methods, the
-GatherMate2 adapter, the LibOrbitSearch provider, the Orbit Navigation adapter, then the Orbit live-resource and late
-Canvas adapters ([Orbit/](Orbit/README.md)). `CompassIntegrations.lua` connects enabled providers and observes late
-addon loads.
+GatherMate2 adapter, the Forever [QuestieDB module](QuestieDB/README.md), the LibOrbitSearch provider, the Orbit
+Navigation adapter, then the Orbit live-resource and late Canvas adapters ([Orbit/](Orbit/README.md)).
+`CompassIntegrations.lua` connects enabled providers and observes late addon loads; QuestieDB needs no connection
+because its collector reads the provider only while discovery runs.
 
 `CompassSearchProvider.lua` registers Compass as the `locations` provider of the shared LibOrbitSearch library whenever
 Compass is enabled, with or without Orbit. Each search session owns scratch, acquires catalog demand and invalidates on

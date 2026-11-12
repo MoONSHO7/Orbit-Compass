@@ -25,9 +25,11 @@ owns watched objectives and targeted route refreshes.
   lists.
 - Complete map POIs remain cached until native POI/quest-hub updates or a context reset. Timed points schedule expiry
   checks; incomplete data schedules retries.
-- Quest-offer deduplication precedes visibility filtering so earlier records remain authoritative. Task coordinates
-  belong to the queried map. Retail retains all offer classifications and native filters. Forever initially accepts
-  Normal, Questline and Important offers only; Recurring, Meta, Calling, Campaign and Legendary await beta verification.
+- Quest-offer deduplication precedes visibility filtering so earlier records remain authoritative. Both clients read
+  task offers, as their native offer providers do; task coordinates belong to the queried map. Native offer pins need no
+  name, so a nameless offer takes the quest log title and requests its quest data once per map. Retail retains all
+  offer classifications and native filters. Forever initially accepts Normal, Questline and Important offers only;
+  Recurring, Meta, Calling, Campaign and Legendary await beta verification.
 - `SUPER_TRACKING_PATH_UPDATED` can repeat while navigating. Refresh only the supertracked quest through the budgeted
   queue, retaining other markers and the full-scan deadline. Unusable coordinates skip quest metadata reads but retain
   map/task fallback. The route step records a path receipt that `CompassRoutePathUnchanged` compares (`../README.md`).

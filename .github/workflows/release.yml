@@ -210,3 +210,7 @@ jobs:
       - name: Check live resources against the Orbit capability contract
         working-directory: Orbit-Compass
         run: python .scripts/check-resources.py
+
+      - name: Check the QuestieDB adapter against its documented contract
+        working-directory: Orbit-Compass
+        run: python .scripts/check-questie.py

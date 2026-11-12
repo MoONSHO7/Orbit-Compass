@@ -1,0 +1,5 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Script file="CompassQuestieIndex.lua"/>
+    <Script file="CompassQuestieAvailability.lua"/>
+    <Script file="CompassQuestieDB.lua"/>
+</Ui>

@@ -19,10 +19,11 @@ local POINTS = {
         source = "taxi",
         labelKey = "PLU_COMPASS_FLIGHT_MASTERS",
     },
+    { key = "ShowServices", field = "showServices", source = "questie", labelKey = "PLU_COMPASS_SERVICES" },
     { key = "ShowEvents", field = "showEvents", source = "map", labelKey = "PLU_COMPASS_EVENTS" },
     { key = "ShowRaces", field = "showRaces", source = "map", labelKey = "PLU_COMPASS_RACES" },
     { key = "ShowQuestHubs", field = "showQuestHubs", source = "map", labelKey = "PLU_COMPASS_QUEST_HUBS" },
-    { key = "ShowPOIs", field = "showPOIs", source = "map", labelKey = "PLU_COMPASS_ZONE_POIS" },
+    { key = "ShowPOIs", field = "showPOIs", source = { "map", "questie" }, labelKey = "PLU_COMPASS_ZONE_POIS" },
     { key = "ShowVignettes", field = "showVignettes", source = "vignettes", labelKey = "PLU_COMPASS_VIGNETTES" },
     { key = "ShowDirections", field = "showDirections", source = "directions", labelKey = "PLU_COMPASS_DIRECTIONS" },
     { key = "ShowMapLinks", field = "showMapLinks", source = "links", labelKey = "PLU_COMPASS_MAP_LINKS" },
@@ -34,7 +35,12 @@ local POINTS = {
         source = "content",
         labelKey = "PLU_COMPASS_TRACKED_CONTENT",
     },
-    { key = "ShowQuestOffers", field = "showQuestOffers", source = "offers", labelKey = "PLU_COMPASS_QUEST_OFFERS" },
+    {
+        key = "ShowQuestOffers",
+        field = "showQuestOffers",
+        source = { "offers", "questie" },
+        labelKey = "PLU_COMPASS_QUEST_OFFERS",
+    },
     {
         key = "ShowSavedLocations",
         field = "showSavedLocations",
@@ -123,7 +129,11 @@ function Plugin:ApplyCompassPointVisibility()
                 self.compassAutoAdvance.missingSince = nil
             end
             self[point.field] = shown
-            if point.source then
+            if type(point.source) == "table" then
+                for _, source in ipairs(point.source) do
+                    self:InvalidateCompassSourceSettings(source, true)
+                end
+            elseif point.source then
                 self:InvalidateCompassSourceSettings(point.source, true)
             else
                 self.waypointDirty = true

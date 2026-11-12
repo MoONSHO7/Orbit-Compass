@@ -16,7 +16,7 @@ place of the standalone store.
   Orbit's module conventions: Foundation, Plugin, Discovery, Navigation, Integrations, Ribbon, Search and Config each
   own a directory, XML bundle and README; [Core/README.md](Core/README.md) maps the data flow and startup phases.
   `Assets/` owns the arrow texture, logo and private fonts.
-- **Orbit boundary.** The TOC declares `## OptionalDeps: Orbit, HandyNotes, GatherMate2, Orbit_Navigation`.
+- **Orbit boundary.** The TOC declares `## OptionalDeps: Orbit, HandyNotes, GatherMate2, Orbit_Navigation, QuestieDB`.
   `Core/CompassCompatibility.lua` accepts a host only when `Orbit.ExternalUIHost.legacyPluginVersion == 1` and no
   `Compass` plugin is already registered; it exports `Addon.OrbitHost` or sets `Addon.incompatibleOrbit`.
   `Core/Integrations/Orbit/Orbit.lua` is the bridge: it registers the real `Orbit_Compass` plugin (indices 1 and 2 plus
@@ -41,6 +41,9 @@ place of the standalone store.
 - **GatherMate2.** One GatherMate2 row in Points shows recorded locations for every category enabled in GatherMate2;
   import GatherMate2_Data there for a prebuilt database. Records are possible spawn locations, and arrival-based
   auto-advance can visit them in sequence.
+- **QuestieDB (Forever).** With QuestieDB installed, Available Quests shows givers whose quests this character can take,
+  Zone POIs gains dungeon and raid entrances, and a Town Services row shows innkeepers, repairers, bankers, auctioneers
+  and stable masters. Compass reads the installed database only (`Core/Integrations/QuestieDB/README.md`).
 - **Live resources.** On Forever with a compatible Orbit host, the ribbon mirrors the herb/ore item icons detected by
   Orbit's active minimap/HUD resource scanner. These temporary, approximate observations appear below the line and
   cannot be selected for navigation. They follow Orbit's resource switch and do not start another minimap scan.
@@ -63,9 +66,10 @@ place of the standalone store.
   warning and preserves the existing Compass, commands and settings; disabling Orbit allows standalone startup after
   reload.
 - Both surfaces stop navigation discovery inside instances. Native pins survive disable.
-- Forever runs standalone or through a compatible Orbit host with ordinary quests, map points, entrances and navigation.
-  World Quests/tasks, Delves, races, tamers, archaeology, tracked content and Housing pins remain withheld. Retail keeps
-  its choices; unknown clients stay dormant.
+- Forever runs standalone or through a compatible Orbit host with ordinary quests, map points and navigation. Its
+  client reports no quest givers, services or journal entrances, so those need QuestieDB. World Quests/tasks, Delves,
+  races, tamers, archaeology, tracked content and Housing pins remain withheld. Retail keeps its choices; unknown
+  clients stay dormant.
 - Saved destinations carry client family and optional world-instance identity. Old unclassified records stay stored but
   cannot navigate; re-save confirmed places on their originating client. See `Core/Navigation/README.md`.
 - Pins are the verified LibOrbitUI 1.14 (API 1.17) and LibOrbitSearch 1.4 (revision 7) releases. Validate ordinary fetched

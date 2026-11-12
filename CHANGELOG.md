@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-13
+
+* On Forever with QuestieDB installed, the compass shows quest givers with quests you can take, dungeon and raid entrances, and a new Town Services point type for innkeepers, repairers, bankers, auctioneers and stable masters.
+
 ## 2026-10-24
 
 * On Forever with Orbit, herbs and ore spotted by the minimap or HUD now appear below the compass as round icons with thin gold borders. They follow Orbit's existing resource setting.

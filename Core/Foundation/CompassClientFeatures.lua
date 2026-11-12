@@ -93,10 +93,12 @@ local features = {
         "GetForceVisibleQuests",
         "GetQuestLineInfo",
         "QuestLineIgnoresAccountCompletedFiltering"
-    ) and Has(C_QuestInfoSystem, "GetQuestClassification") and Has(
-        C_QuestLog,
-        "QuestIgnoresAccountCompletedFiltering"
-    ) and Has(C_Minimap, "IsTrackingHiddenQuests", "IsTrackingAccountCompletedQuests"),
+    )
+        and Has(C_QuestInfoSystem, "GetQuestClassification")
+        and Has(C_QuestLog, "QuestIgnoresAccountCompletedFiltering", "GetTitleForQuestID", "RequestLoadQuestByID")
+        and Has(C_Minimap, "IsTrackingHiddenQuests", "IsTrackingAccountCompletedQuests"),
+    taskOffers = Has(C_TaskQuest, "GetQuestsOnMap", "GetQuestInfoByQuestID")
+        and Has(C_QuestLog, "IsQuestTrivial", "IsQuestFlaggedCompletedOnAccount"),
     taxi = Has(C_TaxiMap, "GetTaxiNodesForMap"),
     directions = Has(C_GossipInfo, "GetPoiForUiMapID", "GetPoiInfo"),
     links = Has(C_Map, "GetMapLinksForMap"),
@@ -109,6 +111,7 @@ local features = {
 features.content = features.content and Has(C_SuperTrack, "GetSuperTrackedContent")
 features.worldQuests = features.worldQuests and features.quests
 features.tasks = features.tasks and features.quests
+features.taskOffers = features.taskOffers and features.offers
 features.supported = features.supported and type(features.rootType) == "number"
 features.questOfferClasses = table.freeze({
     Normal = true,
@@ -135,6 +138,7 @@ features.points = table.freeze({
     ShowQuestObjectives = features.quests,
     ShowQuestOffers = features.offers,
     ShowFlightMasters = features.taxi,
+    ShowServices = family == "forever",
     ShowDirections = features.directions,
     ShowMapLinks = features.links,
     ShowVignettes = features.vignettes,
@@ -144,6 +148,7 @@ features.sources = table.freeze({
     resources = family == "forever",
     gathermate = known,
     handynotes = known,
+    questie = family == "forever",
     navigation = known,
     locations = known,
     quests = features.quests,

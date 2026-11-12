@@ -61,6 +61,8 @@ local STRINGS = {
         PLU_COMPASS_TYPE_BONUS_OBJECTIVE = "Bonus Objective",
         PLU_COMPASS_TYPE_INVASION = "Invasion",
         PLU_COMPASS_TYPE_GRAVEYARD = "Graveyard",
+        PLU_COMPASS_SERVICES = "Town Services (QuestieDB)",
+        PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
     },
     deDE = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "Der Kompass ist für diesen Spielclient nicht verfügbar.",
@@ -122,6 +124,8 @@ local STRINGS = {
         PLU_COMPASS_TYPE_BONUS_OBJECTIVE = "Bonusziel",
         PLU_COMPASS_TYPE_INVASION = "Invasion",
         PLU_COMPASS_TYPE_GRAVEYARD = "Friedhof",
+        PLU_COMPASS_SERVICES = "Stadtdienste (QuestieDB)",
+        PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
     },
     frFR = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "La boussole est indisponible sur ce client du jeu.",
@@ -183,6 +187,8 @@ local STRINGS = {
         PLU_COMPASS_TYPE_BONUS_OBJECTIVE = "Objectif bonus",
         PLU_COMPASS_TYPE_INVASION = "Invasion",
         PLU_COMPASS_TYPE_GRAVEYARD = "Cimetière",
+        PLU_COMPASS_SERVICES = "Services urbains (QuestieDB)",
+        PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
     },
     esES = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "La brújula no está disponible en este cliente del juego.",
@@ -244,6 +250,8 @@ local STRINGS = {
         PLU_COMPASS_TYPE_BONUS_OBJECTIVE = "Objetivo adicional",
         PLU_COMPASS_TYPE_INVASION = "Invasión",
         PLU_COMPASS_TYPE_GRAVEYARD = "Cementerio",
+        PLU_COMPASS_SERVICES = "Servicios urbanos (QuestieDB)",
+        PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
     },
     ptBR = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "A bússola não está disponível neste cliente do jogo.",
@@ -305,6 +313,8 @@ local STRINGS = {
         PLU_COMPASS_TYPE_BONUS_OBJECTIVE = "Objetivo Bônus",
         PLU_COMPASS_TYPE_INVASION = "Invasão",
         PLU_COMPASS_TYPE_GRAVEYARD = "Cemitério",
+        PLU_COMPASS_SERVICES = "Serviços urbanos (QuestieDB)",
+        PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
     },
     ruRU = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "Компас недоступен в этом игровом клиенте.",
@@ -366,6 +376,8 @@ local STRINGS = {
         PLU_COMPASS_TYPE_BONUS_OBJECTIVE = "Дополнительная цель",
         PLU_COMPASS_TYPE_INVASION = "Вторжение",
         PLU_COMPASS_TYPE_GRAVEYARD = "Кладбище",
+        PLU_COMPASS_SERVICES = "Городские услуги (QuestieDB)",
+        PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
     },
     koKR = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "이 게임 클라이언트에서는 나침반을 사용할 수 없습니다.",
@@ -427,6 +439,8 @@ local STRINGS = {
         PLU_COMPASS_TYPE_BONUS_OBJECTIVE = "보너스 목표",
         PLU_COMPASS_TYPE_INVASION = "침공",
         PLU_COMPASS_TYPE_GRAVEYARD = "무덤",
+        PLU_COMPASS_SERVICES = "마을 시설 (QuestieDB)",
+        PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
     },
     zhCN = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "此游戏客户端不支持指南针。",
@@ -488,6 +502,8 @@ local STRINGS = {
         PLU_COMPASS_TYPE_BONUS_OBJECTIVE = "奖励目标",
         PLU_COMPASS_TYPE_INVASION = "入侵",
         PLU_COMPASS_TYPE_GRAVEYARD = "墓地",
+        PLU_COMPASS_SERVICES = "城镇服务（QuestieDB）",
+        PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
     },
     zhTW = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "此遊戲用戶端不支援指南針。",
@@ -549,6 +565,8 @@ local STRINGS = {
         PLU_COMPASS_TYPE_BONUS_OBJECTIVE = "額外目標",
         PLU_COMPASS_TYPE_INVASION = "入侵",
         PLU_COMPASS_TYPE_GRAVEYARD = "墓地",
+        PLU_COMPASS_SERVICES = "城鎮服務（QuestieDB）",
+        PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
     },
 }
 
