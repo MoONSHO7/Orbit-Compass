@@ -164,9 +164,12 @@ CASES = {
         P.questLevelRange=18; Recollect(); assert(Marker("questie:giver:npc:6:3:1"))
         P.questLevelRange=17; Recollect(); assert(not Marker("questie:giver:npc:6:3:1"))
     ''',
-    "quests exactly at the range edge stay visible": '''
-        Quests[10].questLevel=25; assert(Available(10))
-        Quests[10].questLevel=24; assert(not Available(10))
+    "the range reaches the same distance above and below the character": '''
+        Quests[10].questLevel=25; assert(Available(10), "5 below")
+        Quests[10].questLevel=24; assert(not Available(10), "6 below")
+        Quests[10].questLevel=35; assert(Available(10), "5 above")
+        Quests[10].questLevel=36; assert(not Available(10), "6 above")
+        Quests[10].questLevel=35; Quests[10].requiredLevel=31; assert(not Available(10), "required level still gates")
     ''',
     "the level range slider renders only with a compatible QuestieDB": '''
         local function HasRange()

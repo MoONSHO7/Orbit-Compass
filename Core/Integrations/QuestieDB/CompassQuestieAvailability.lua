@@ -86,7 +86,7 @@ local function Standing(factionID)
 end
 
 -- Character facts for one collection; verdicts cache in it until the next one. `quests` is the session's decoded quest
--- data (static), and `levelRange` the Quest Level Range: quests further below the character's level stay hidden.
+-- data (static), and `levelRange` the Quest Level Range: quests further above or below the character stay hidden.
 function Availability.Context(lib, levelRange, quests)
     local _, classFile = UnitClass("player")
     local _, _, raceID = UnitRace("player")
@@ -190,7 +190,7 @@ local function Evaluate(context, questID)
     if not Requirements(context, quest) or not Chain(quest) then
         return false
     end
-    return quest.questLevel <= 0 or context.level - quest.questLevel <= context.levelRange
+    return quest.questLevel <= 0 or math.abs(context.level - quest.questLevel) <= context.levelRange
 end
 
 function Availability.IsAvailable(context, questID)

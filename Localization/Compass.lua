@@ -65,7 +65,7 @@ local STRINGS = {
         PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
         PLU_COMPASS_QUEST_LEVEL_F = "[%d] %s",
         PLU_COMPASS_QUEST_LEVEL_RANGE = "Quest Level Range",
-        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "Show available quests up to this many levels below your own. Needs QuestieDB.",
+        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "Show available quests within this many levels above or below your own. Needs QuestieDB.",
     },
     deDE = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "Der Kompass ist für diesen Spielclient nicht verfügbar.",
@@ -131,7 +131,7 @@ local STRINGS = {
         PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
         PLU_COMPASS_QUEST_LEVEL_F = "[%d] %s",
         PLU_COMPASS_QUEST_LEVEL_RANGE = "Questlevel-Bereich",
-        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "Verfügbare Quests bis zu so vielen Stufen unter deiner eigenen anzeigen. Erfordert QuestieDB.",
+        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "Verfügbare Quests bis zu so vielen Stufen über oder unter deiner eigenen anzeigen. Erfordert QuestieDB.",
     },
     frFR = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "La boussole est indisponible sur ce client du jeu.",
@@ -197,7 +197,7 @@ local STRINGS = {
         PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
         PLU_COMPASS_QUEST_LEVEL_F = "[%d] %s",
         PLU_COMPASS_QUEST_LEVEL_RANGE = "Écart de niveau des quêtes",
-        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "Affiche les quêtes disponibles jusqu’à ce nombre de niveaux sous le vôtre. Nécessite QuestieDB.",
+        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "Affiche les quêtes disponibles jusqu’à ce nombre de niveaux au-dessus ou en dessous du vôtre. Nécessite QuestieDB.",
     },
     esES = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "La brújula no está disponible en este cliente del juego.",
@@ -263,7 +263,7 @@ local STRINGS = {
         PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
         PLU_COMPASS_QUEST_LEVEL_F = "[%d] %s",
         PLU_COMPASS_QUEST_LEVEL_RANGE = "Rango de nivel de misiones",
-        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "Muestra misiones disponibles hasta este número de niveles por debajo del tuyo. Requiere QuestieDB.",
+        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "Muestra misiones disponibles hasta este número de niveles por encima o por debajo del tuyo. Requiere QuestieDB.",
     },
     ptBR = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "A bússola não está disponível neste cliente do jogo.",
@@ -329,7 +329,7 @@ local STRINGS = {
         PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
         PLU_COMPASS_QUEST_LEVEL_F = "[%d] %s",
         PLU_COMPASS_QUEST_LEVEL_RANGE = "Faixa de nível das missões",
-        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "Mostra missões disponíveis até este número de níveis abaixo do seu. Requer QuestieDB.",
+        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "Mostra missões disponíveis até este número de níveis acima ou abaixo do seu. Requer QuestieDB.",
     },
     ruRU = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "Компас недоступен в этом игровом клиенте.",
@@ -395,7 +395,7 @@ local STRINGS = {
         PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
         PLU_COMPASS_QUEST_LEVEL_F = "[%d] %s",
         PLU_COMPASS_QUEST_LEVEL_RANGE = "Диапазон уровней заданий",
-        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "Показывать доступные задания не более чем на столько уровней ниже вашего. Требуется QuestieDB.",
+        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "Показывать доступные задания не более чем на столько уровней выше или ниже вашего. Требуется QuestieDB.",
     },
     koKR = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "이 게임 클라이언트에서는 나침반을 사용할 수 없습니다.",
@@ -461,7 +461,7 @@ local STRINGS = {
         PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
         PLU_COMPASS_QUEST_LEVEL_F = "[%d] %s",
         PLU_COMPASS_QUEST_LEVEL_RANGE = "퀘스트 레벨 범위",
-        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "내 레벨보다 이 수만큼 낮은 레벨까지의 수행 가능한 퀘스트를 표시합니다. QuestieDB가 필요합니다.",
+        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "내 레벨보다 이 수만큼 높거나 낮은 레벨까지의 수행 가능한 퀘스트를 표시합니다. QuestieDB가 필요합니다.",
     },
     zhCN = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "此游戏客户端不支持指南针。",
@@ -527,7 +527,7 @@ local STRINGS = {
         PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
         PLU_COMPASS_QUEST_LEVEL_F = "[%d] %s",
         PLU_COMPASS_QUEST_LEVEL_RANGE = "任务等级范围",
-        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "显示最多比你低这么多级的可接任务。需要 QuestieDB。",
+        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "显示等级与你相差不超过这么多级（高于或低于）的可接任务。需要 QuestieDB。",
     },
     zhTW = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "此遊戲用戶端不支援指南針。",
@@ -593,7 +593,7 @@ local STRINGS = {
         PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
         PLU_COMPASS_QUEST_LEVEL_F = "[%d] %s",
         PLU_COMPASS_QUEST_LEVEL_RANGE = "任務等級範圍",
-        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "顯示最多比你低這麼多級的可接任務。需要 QuestieDB。",
+        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "顯示等級與你相差不超過這麼多級（高於或低於）的可接任務。需要 QuestieDB。",
     },
 }
 

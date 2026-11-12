@@ -26,7 +26,8 @@ per giver is shared by its spawns within a collection.
   without it (or with an older contract) the source stays pending or empty.
 - QuestieDB supplies data, not quest logic. Availability is ours: completion, quest log, level, race and class masks,
   prerequisites, exclusive and breadcrumb links, parent and chain quests, reputation and the Appearance tab's Quest
-  Level Range (default 5; quests further below the character stay hidden), which replaces the native trivial rule.
+  Level Range (default 5; quests further above or below the character's level stay hidden), which replaces the native
+  trivial rule; a higher quest still needs its required level.
   The slider renders only while a compatible QuestieDB is loaded on Forever. Skill, spell, specialization, rank and
   holiday-category quests stay hidden because they cannot be confirmed. `specialFlags` bit 2 describes completion by
   exploration or a scripted event, not availability, so it never hides a quest.
