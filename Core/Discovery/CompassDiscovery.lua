@@ -9,6 +9,11 @@ local SOURCES = Catalog.sources
 local EVENT_SOURCES = Catalog.eventSources
 local PATH_SOURCES = Catalog.pathSources
 local CONTEXT_EVENTS = Catalog.contextEvents
+local SUBZONE_RETAINED_LABELS = {
+    taxi = "Discovery/SubzoneTaxiRetained",
+    handynotes = "Discovery/SubzoneHandyNotesRetained",
+    questie = "Discovery/SubzoneQuestieRetained",
+}
 
 local function CancelDiscoveryJob(plugin, reason)
     local job = plugin.discoveryJob
@@ -23,6 +28,22 @@ local function CancelDiscoveryJob(plugin, reason)
     end
 end
 
+local function SameLines(old, new)
+    if old == new then
+        return true
+    end
+    if not old or not new or #old ~= #new then
+        return false
+    end
+    for index, line in ipairs(new) do
+        local before = old[index]
+        if before.text ~= line.text or before.r ~= line.r or before.g ~= line.g or before.b ~= line.b then
+            return false
+        end
+    end
+    return true
+end
+
 local function SourceChanged(plugin, previous, markers)
     if #previous ~= #markers then
         return true
@@ -35,6 +56,7 @@ local function SourceChanged(plugin, previous, markers)
             or old.y ~= marker.y
             or old.name ~= marker.name
             or old.description ~= marker.description
+            or not SameLines(old.tooltipLines, marker.tooltipLines)
             or old.handynotesNode ~= marker.handynotesNode
             or not Addon.HandyNotesClick:Matches(old.handynotesPoint, marker.handynotesPoint)
             or old.atlas ~= marker.atlas
@@ -142,6 +164,10 @@ function Plugin:InvalidateCompassSource(event)
                 and not taxi.dirty
                 and not taxi.pathDirty
                 and not (job and job.source == taxi)
+            local questie = self.compassSources.questie
+            local retainQuestie = questie.status == "ready"
+                and not questie.dirty
+                and not (job and job.source == questie)
             local notes = self.compassSources.handynotes
             local retainNotes = event == "ZONE_CHANGED"
                 and notes.status == "ready"
@@ -156,15 +182,15 @@ function Plugin:InvalidateCompassSource(event)
             end
             CancelDiscoveryJob(self, "Subzone")
             for key, source in pairs(self.compassSources) do
-                local retained = key == "taxi" and retainTaxi or key == "handynotes" and retainNotes
+                -- QuestieDB markers depend on the map and character only, so a same-map subzone keeps them.
+                local retained = key == "taxi" and retainTaxi
+                    or key == "handynotes" and retainNotes
+                    or key == "questie" and retainQuestie
                 if not retained then
                     source.dirty, source.pathDirty, source.nextAllowed = true, false, self.discoveryClock
                     source.handynotesProviders = nil
                 elseif profiler and profiler.active then
-                    profiler:Count(
-                        self,
-                        key == "taxi" and "Discovery/SubzoneTaxiRetained" or "Discovery/SubzoneHandyNotesRetained"
-                    )
+                    profiler:Count(self, SUBZONE_RETAINED_LABELS[key])
                 end
             end
             self.discoveryPending, self.waypointDirty = true, true

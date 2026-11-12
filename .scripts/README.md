@@ -1,7 +1,7 @@
 # Standalone package validation
 
 ## Description
-Dependency fetching, runtime package validation and the Compass client-boundary suite.
+Dependency fetching, runtime package validation and the Compass regression suites.
 
 ## Purpose
 Keep development library links convenient while rejecting incomplete or incompatible release bundles, and exercise
@@ -51,6 +51,14 @@ admission, per-map indexing, quest availability rules (including race masks beyo
 client-named entrances, point toggles and Retail silence. Real QuestieDB data still needs in-game verification.
 Release CI runs these four suites.
 
+`check-full-boot.py` loads the whole TOC closure (XML bundles, `Bindings.xml` bodies, real LibOrbitUI and
+LibOrbitSearch, LibStub as a double) on Orbit's strict shared client double,
+`../../Orbit/.scripts/tests/wow_fixture.py`, standalone on both families and once under Orbit Core with Spotlight. It
+drives commands, bindings, the ribbon and peek, search, the arrow, Edit Mode, Points and hotkey settings, GatherMate2,
+secret map reads, locales and refused hosts, and fails on any recorded error, blocked call, secret fault or frozen
+write. Expected failures mark open addon bugs; `--coverage` prints line shares. Run
+`python .scripts/check-full-boot.py`; it needs that sibling Orbit checkout.
+
 ## Gotchas
 - Compass pins verified UI 1.15/API 1.18 and Search 1.5/revision 8 releases. Linked checks do not establish release
   delivery; validate ordinary fetched packages. The automatic latest-release resolver is not implemented.
@@ -58,8 +66,11 @@ Release CI runs these four suites.
   synchronized. `check-client-features.py` is product-specific despite sharing its name with Events' suite.
 - Compilation and static API checks cannot validate combat permissions, native ownership, taint or rendering.
   Dynamically assembled asset names still need client verification.
+- `check-full-boot.py` adds a local native double only after both wow-ui-source branches confirm the API, and never
+  edits Orbit's fixture. Its GatherMate2 double follows `../Core/Integrations/README.md`, not upstream source.
 - Fetches use configured Git credentials without an interactive prompt. No token is written into `.pkgmeta` or the
   scripts.
 
 ## References
-`../README.md`, `../.pkgmeta`, `../.github/workflows/README.md`, `../.github/workflows/release.yml`.
+`../README.md`, `../.pkgmeta`, `../.github/workflows/README.md`, `../.github/workflows/release.yml`; Orbit's
+`../../Orbit/.scripts/README.md` for the shared client double.

@@ -16,9 +16,11 @@ The standalone application and the Orbit bridge both consume these schemas and w
 omit lifecycle toggles because WoW addon enablement owns availability. Arrow schemas use the component preferences and
 distance formatting owned by `../Navigation/`.
 
-Both surfaces use Layout, Appearance and Behaviour in that order, with Points appended for the ribbon. Scope appears
-in control hover help. Arrow Behaviour owns Show Arrow, auto-advance, same-type routing, corpse recovery and native map
-tracking; Show Arrow is a display preference on index 2, not a lifecycle toggle.
+Both surfaces use Layout, Appearance and Behaviour in that order, with Points appended for the ribbon. The ribbon's
+Appearance adds Quest Level Range only while a compatible QuestieDB is loaded on Forever; schemas are rebuilt each time
+settings open, so the row follows the addon without a stored flag. Scope appears in control hover help. Arrow
+Behaviour owns Show Arrow, auto-advance, same-type routing, corpse recovery and native map tracking; Show Arrow is a
+display preference on index 2, not a lifecycle toggle.
 Auto-advance maps the existing mode to on/off; enabled modes use arrival-or-removal semantics. Same-type routing remains
 visible but disabled while auto-advance is off, with the reason on hover; changing the parent retains the child's preference.
 
@@ -27,9 +29,10 @@ visible but disabled while auto-advance is off, with the reason on hover; changi
   writes to its navigation controller's existing owner. Standalone Reset position remains a separate action.
 - Both settings windows must use the same widget renderer and controller accessors. Standalone changes trigger
   application through the store callback; hosted changes explicitly request application.
-- Points intersects all 18 definitions with the same client policy as Discovery/Search. GatherMate2 and HandyNotes also
-  require their addon to be loaded. Hidden rows retain saved preferences and occupy no space; Forever Points reset
-  preserves unsupported Retail rows. Filtering never persists false merely because the client lacks a feature.
+- Points intersects all 19 definitions with the same client policy as Discovery/Search. GatherMate2, HandyNotes and
+  Town Services (QuestieDB) also require their addon to be loaded. Hidden rows retain saved preferences and occupy no
+  space; Forever Points reset preserves unsupported Retail rows. Filtering never persists false merely because the
+  client lacks a feature.
 - Keybindings belong to the current WoW binding set, not the Compass profile. Capture stops on hide or combat entry, and
   failed assignment preserves the previous keys.
 - Controls, rows and header hover regions are reused with their table. Hover uses the private layout tooltip; release

@@ -2,6 +2,8 @@ local _, Addon = ...
 local Readable, Number = Addon.SourceUtils.Readable, Addon.SourceUtils.Number
 local REQUIRED_CONTRACT = 4
 local PERCENT = 100
+local BUILD_BUDGET_MS = 0.5
+local NPC_SLOT, OBJECT_SLOT = 1, 2
 -- QuestieDB service flag name and the Enum.MinimapTrackingFilter field whose icon and label present it.
 local SERVICES = {
     { flag = "INNKEEPER", filter = "Innkeeper" },
@@ -10,9 +12,9 @@ local SERVICES = {
     { flag = "AUCTIONEER", filter = "Auctioneer" },
     { flag = "STABLEMASTER", filter = "Stablemaster" },
 }
-local NPC_GETTERS = { "GetAllIds", "questStarts", "npcFlags", "spawns", "friendlyToFaction", "name" }
-local OBJECT_GETTERS = { "GetAllIds", "questStarts", "spawns", "name" }
-local QUEST_GETTERS = { "GetAll", "name" }
+local NPC_GETTERS = { "GetAllIds", "npcFlags", "spawns", "friendlyToFaction", "name" }
+local OBJECT_GETTERS = { "spawns", "name" }
+local QUEST_GETTERS = { "GetAllIds", "GetAll", "startedBy", "name" }
 local Index = {}
 
 -- QuestieDB masks can exceed 32 bits, so single-bit membership uses arithmetic rather than the 32-bit bit library.
@@ -108,6 +110,32 @@ local function AddSpawns(build, spawns, kind, record)
     end
 end
 
+local function AddStarters(starters, owners, questID)
+    if type(owners) ~= "table" then
+        return
+    end
+    for _, owner in ipairs(owners) do
+        owner = Number(owner)
+        if owner then
+            local quests = starters[owner]
+            if not quests then
+                quests = {}
+                starters[owner] = quests
+            end
+            quests[#quests + 1] = questID
+        end
+    end
+end
+
+-- Givers come from each quest's starters, so the 6.6k-row object table never has to be swept or cached.
+local function IndexQuest(build, quest, id)
+    local startedBy = quest.startedBy(id)
+    if type(startedBy) == "table" then
+        AddStarters(build.npcQuests, startedBy[NPC_SLOT], id)
+        AddStarters(build.objectQuests, startedBy[OBJECT_SLOT], id)
+    end
+end
+
 local function ServiceFilters(build, flags)
     local found
     for _, service in ipairs(build.services) do
@@ -120,10 +148,9 @@ local function ServiceFilters(build, flags)
 end
 
 local function IndexNpc(build, npc, id)
-    local starts = npc.questStarts(id)
+    local quests = build.npcQuests[id]
     local flags = Number(npc.npcFlags(id)) or 0
     local services = flags ~= 0 and ServiceFilters(build, flags) or nil
-    local quests = type(starts) == "table" and #starts > 0 and starts or nil
     if not quests and not services then
         return
     end
@@ -142,13 +169,9 @@ local function IndexNpc(build, npc, id)
 end
 
 local function IndexObject(build, object, id)
-    local starts = object.questStarts(id)
-    if type(starts) ~= "table" or #starts == 0 then
-        return
-    end
     local spawns = object.spawns(id)
     if type(spawns) == "table" then
-        AddSpawns(build, spawns, "givers", { entity = "object", id = id, quests = starts })
+        AddSpawns(build, spawns, "givers", { entity = "object", id = id, quests = build.objectQuests[id] })
     end
 end
 
@@ -195,42 +218,97 @@ local function StartBuild(lib)
         areaMaps = areaMaps,
         services = services,
         byMap = {},
+        npcQuests = {},
+        objectQuests = {},
+        questIDs = lib.Quest.GetAllIds(),
         npcIDs = lib.Npc.GetAllIds(),
-        objectIDs = lib.Object.GetAllIds(),
+        questCursor = 0,
         npcCursor = 0,
-        objectCursor = 0,
     }
 end
 
--- Builds once per provider and resumes after a cancelled discovery job; returns the per-map index once complete.
-function Index.Get(plugin, lib)
+-- Advances the build within this frame's budget; true once the index is published.
+local function Step(plugin)
+    local build = plugin.compassQuestieBuild
+    local lib, deadline = build.lib, debugprofilestop() + BUILD_BUDGET_MS
+    while build.questCursor < #build.questIDs do
+        build.questCursor = build.questCursor + 1
+        IndexQuest(build, lib.Quest, build.questIDs[build.questCursor])
+        if debugprofilestop() >= deadline then
+            return false
+        end
+    end
+    while build.npcCursor < #build.npcIDs do
+        build.npcCursor = build.npcCursor + 1
+        IndexNpc(build, lib.Npc, build.npcIDs[build.npcCursor])
+        if debugprofilestop() >= deadline then
+            return false
+        end
+    end
+    for objectID in pairs(build.objectQuests) do
+        IndexObject(build, lib.Object, objectID)
+    end
+    IndexEntrances(build, build.zoneDB)
+    plugin.compassQuestieIndex = { lib = lib, byMap = build.byMap, quests = {} }
+    plugin.compassQuestieBuild = nil
+    return true
+end
+
+local function Drive(plugin)
+    -- One protected step per frame: a failing build stops for the session instead of erroring every frame.
+    local ok, done = pcall(Step, plugin)
+    if ok and not done then
+        return
+    end
+    plugin.compassQuestieDriver:SetScript("OnUpdate", nil)
+    plugin.compassQuestieDriving = false
+    if not ok then
+        local build = plugin.compassQuestieBuild
+        plugin.compassQuestieFailed, plugin.compassQuestieBuild = build and build.lib, nil
+        geterrorhandler()(done)
+        return
+    end
+    plugin:InvalidateCompassSourceSettings("questie", true)
+end
+
+-- The published index; otherwise nil plus whether one is still building in its own per-frame budget, outside
+-- discovery's single job slot.
+function Index.Request(plugin, lib)
     local index = plugin.compassQuestieIndex
     if index and index.lib == lib then
         return index
+    end
+    if plugin.compassQuestieFailed == lib then
+        return nil, false
     end
     local build = plugin.compassQuestieBuild
     if not build or build.lib ~= lib then
         build = StartBuild(lib)
         if not build then
-            return
+            return nil, false
         end
         plugin.compassQuestieBuild = build
     end
-    local npc, object = lib.Npc, lib.Object
-    while build.npcCursor < #build.npcIDs do
-        build.npcCursor = build.npcCursor + 1
-        IndexNpc(build, npc, build.npcIDs[build.npcCursor])
-        plugin:CompassDiscoveryCheckpoint()
+    local driver = plugin.compassQuestieDriver
+    if not driver then
+        driver = CreateFrame("Frame")
+        plugin.compassQuestieDriver = driver
     end
-    while build.objectCursor < #build.objectIDs do
-        build.objectCursor = build.objectCursor + 1
-        IndexObject(build, object, build.objectIDs[build.objectCursor])
-        plugin:CompassDiscoveryCheckpoint()
+    if not plugin.compassQuestieDriving then
+        plugin.compassQuestieDriving = true
+        driver:SetScript("OnUpdate", function()
+            Drive(plugin)
+        end)
     end
-    IndexEntrances(build, build.zoneDB)
-    index = { lib = lib, byMap = build.byMap }
-    plugin.compassQuestieIndex, plugin.compassQuestieBuild = index, nil
-    return index
+    return nil, true
+end
+
+-- Pauses an unfinished build while Compass is disabled; its progress resumes on the next request.
+function Index.Stop(plugin)
+    if plugin.compassQuestieDriver then
+        plugin.compassQuestieDriver:SetScript("OnUpdate", nil)
+        plugin.compassQuestieDriving = false
+    end
 end
 
 Addon.CompassQuestieIndex = table.freeze(Index)

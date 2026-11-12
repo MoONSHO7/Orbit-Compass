@@ -66,6 +66,7 @@ Addon.Definition = {
         ShowWorldQuests = true,
         ShowFlightMasters = true,
         ShowServices = true,
+        QuestLevelRange = 5,
         ShowEvents = true,
         ShowRaces = true,
         ShowQuestHubs = true,

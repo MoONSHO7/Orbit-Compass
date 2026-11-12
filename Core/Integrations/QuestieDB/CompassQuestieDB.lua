@@ -9,6 +9,8 @@ local Availability = Addon.CompassQuestieAvailability
 local REFRESH_INTERVAL = 60
 local GIVER_ATLAS, ENTRANCE_ATLAS = "QuestNormal", "Dungeon"
 local DESCRIPTION_SEPARATOR = ", "
+local WHITE = { r = 1, g = 1, b = 1 }
+local ENTRANCE_LINES = table.freeze({ table.freeze({ text = L.PLU_COMPASS_TYPE_INSTANCE, r = 1, g = 1, b = 1 }) })
 
 -- Each service's localized name and icon from the client's own minimap tracking list; empty until that list loads.
 local function TrackingArt(plugin)
@@ -76,22 +78,35 @@ local function QuestTitle(lib, questID)
     return type(title) == "string" and title ~= "" and title or nil
 end
 
--- Nil when none of the giver's quests is available; otherwise the first title and how many more it offers.
-local function GiverDescription(lib, context, record)
-    local title, count = nil, 0
+-- Each available quest as a tooltip line, "[level] title" in the client's quest difficulty colour.
+local function QuestLine(context, questID, title)
+    local level = Availability.Level(context, questID)
+    if not level then
+        return { text = title, r = WHITE.r, g = WHITE.g, b = WHITE.b }
+    end
+    local color = type(GetQuestDifficultyColor) == "function" and Readable(GetQuestDifficultyColor(level))
+    color = type(color) == "table" and color or WHITE
+    return { text = L.PLU_COMPASS_QUEST_LEVEL_F:format(level, title), r = color.r, g = color.g, b = color.b }
+end
+
+-- Nil when none of the giver's quests is available; otherwise its summary and per-quest tooltip lines.
+local function GiverQuests(lib, context, record)
+    local first, count, lines = nil, 0, {}
     for _, questID in ipairs(record.quests) do
         if Availability.IsAvailable(context, questID) then
             count = count + 1
-            title = title or QuestTitle(lib, questID)
+            local title = QuestTitle(lib, questID)
+            if title then
+                first = first or title
+                lines[#lines + 1] = QuestLine(context, questID, title)
+            end
         end
     end
     if count == 0 then
         return
     end
-    if not title then
-        return ""
-    end
-    return count > 1 and L.PLU_COMPASS_QUEST_MORE_F:format(title, count - 1) or title
+    local description = first and (count > 1 and L.PLU_COMPASS_QUEST_MORE_F:format(first, count - 1) or first)
+    return { description = description, lines = lines }
 end
 
 local function ServiceDescription(art, record)
@@ -118,17 +133,22 @@ local function AddPoint(plugin, markers, mapID, point, name, prefix, atlas, prio
     })
 end
 
-local function AddGivers(plugin, markers, lib, context, mapID, givers)
+local function AddGivers(plugin, markers, lib, context, summaries, mapID, givers)
     for _, point in ipairs(givers) do
         local record = point.record
         if Availability.Serves(context, record) then
-            local description = GiverDescription(lib, context, record)
-            if description then
+            -- One summary per giver per collection; its spawns share the read-only tooltip lines.
+            local quests = summaries[record]
+            if quests == nil then
+                quests = GiverQuests(lib, context, record) or false
+                summaries[record] = quests
+            end
+            if quests then
                 local name = EntityName(lib, record)
                 local marker =
                     AddPoint(plugin, markers, mapID, point, name, "giver", GIVER_ATLAS, C.QUEST_PRIORITY, "questOffer")
-                if marker and description ~= "" then
-                    marker.description = description
+                if marker then
+                    marker.description, marker.tooltipLines = quests.description, quests.lines
                 end
             end
         end
@@ -156,20 +176,23 @@ local function AddServices(plugin, markers, lib, context, mapID, services)
                 local primary = art[Enum.MinimapTrackingFilter[record.services[1]]]
                 marker.texture = primary and primary.texture
                 local description = ServiceDescription(art, record)
-                marker.description = description ~= "" and description or nil
+                if description ~= "" then
+                    marker.description = description
+                    marker.tooltipLines = { { text = description, r = WHITE.r, g = WHITE.g, b = WHITE.b } }
+                end
             end
         end
         plugin:CompassDiscoveryCheckpoint()
     end
 end
 
--- Native journal entrances win; Forever's client has none, so QuestieDB's entrances fill the gap there.
-local function NativeEntrances(plugin)
+-- Native journal entrances win for their map; Forever's client has none, so QuestieDB's entrances fill the gap there.
+local function HasNativeEntrances(mapID)
     if not Addon.ClientFeatures.dungeonEntrances then
         return false
     end
-    local entrances = Readable(C_EncounterJournal.GetDungeonEntrancesForMap(plugin.mapID))
-    return type(entrances) ~= "table" or #entrances > 0
+    local entrances = Readable(C_EncounterJournal.GetDungeonEntrancesForMap(mapID))
+    return type(entrances) == "table" and #entrances > 0
 end
 
 local function AddEntrances(plugin, markers, mapID, entrances)
@@ -186,7 +209,7 @@ local function AddEntrances(plugin, markers, mapID, entrances)
             "poi"
         )
         if marker then
-            marker.description = L.PLU_COMPASS_TYPE_INSTANCE
+            marker.description, marker.tooltipLines = L.PLU_COMPASS_TYPE_INSTANCE, ENTRANCE_LINES
         end
         plugin:CompassDiscoveryCheckpoint()
     end
@@ -197,22 +220,24 @@ function Plugin:CollectCompassQuestieDB(markers)
     if not lib then
         return REFRESH_INTERVAL
     end
-    local index = Index.Get(self, lib)
+    local index, building = Index.Request(self, lib)
     if not index then
+        if building then
+            self:MarkCompassSourcePending()
+        end
         return REFRESH_INTERVAL
     end
-    local context = Availability.Context(lib)
-    local entrances = self.showPOIs and not NativeEntrances(self)
+    local context, summaries = Availability.Context(lib, self.questLevelRange, index.quests), {}
     for _, mapID in ipairs(NearbyMaps(self)) do
         local entry = index.byMap[mapID]
         if entry then
             if self.showQuestOffers then
-                AddGivers(self, markers, lib, context, mapID, entry.givers)
+                AddGivers(self, markers, lib, context, summaries, mapID, entry.givers)
             end
             if self.showServices then
                 AddServices(self, markers, lib, context, mapID, entry.services)
             end
-            if entrances then
+            if self.showPOIs and #entry.entrances > 0 and not HasNativeEntrances(mapID) then
                 AddEntrances(self, markers, mapID, entry.entrances)
             end
         end

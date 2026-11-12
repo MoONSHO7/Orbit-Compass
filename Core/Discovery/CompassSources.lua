@@ -81,6 +81,7 @@ local function CollectWaypoint(plugin, mapID, x, y, title, description, sourceKe
     if sourceKey and match then
         title, description = match.name, match.description
         plugin.waypointLabel.title, plugin.waypointLabel.description = title, description
+        plugin.waypointLabel.tooltipLines = match.tooltipLines
         local artwork = { atlas = match.atlas, kind = match.kind }
         for _, field in ipairs(C.MARKER_ART_FIELDS) do
             artwork[field] = match[field]
@@ -101,6 +102,7 @@ local function CollectWaypoint(plugin, mapID, x, y, title, description, sourceKe
     )
     if marker then
         marker.description = description
+        marker.tooltipLines = sourceKey and plugin.waypointLabel and plugin.waypointLabel.tooltipLines or nil
         marker.sourceKey = sourceKey
         if match then
             marker.handynotesNode = match.handynotesNode

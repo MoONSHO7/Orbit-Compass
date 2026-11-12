@@ -46,11 +46,12 @@ local function OfferName(plugin, id, name)
     if type(name) == "string" and name ~= "" then
         return name
     end
+    -- Only the first miss waits for its data load; a title that never loads must not hold the source pending.
     if not plugin.compassOfferTitleRequests[id] then
         plugin.compassOfferTitleRequests[id] = true
         C_QuestLog.RequestLoadQuestByID(id)
+        plugin:MarkCompassSourcePending()
     end
-    plugin:MarkCompassSourcePending()
 end
 
 local function AddOffer(plugin, markers, info, seen, mapCache, showHidden, showCompleted)

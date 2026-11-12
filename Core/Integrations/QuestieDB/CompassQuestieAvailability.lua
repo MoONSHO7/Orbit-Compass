@@ -1,8 +1,8 @@
 local _, Addon = ...
 local Readable, Number = Addon.SourceUtils.Readable, Addon.SourceUtils.Number
 local HasBit = Addon.CompassQuestieIndex.HasBit
-local REPEATABLE_FLAG, EVENT_FLAG = 1, 2
-local DIFFICULT_LEVELS = 4
+-- specialFlags bit 1 marks a repeatable quest; bit 2 is how a quest completes (exploration or event), not availability.
+local REPEATABLE_FLAG = 1
 -- QuestSort categories whose quests exist only during holidays, as negative zoneOrSort values.
 local HOLIDAY_SORTS = {
     [-21] = true,
@@ -85,22 +85,24 @@ local function Standing(factionID)
     return type(data) == "table" and Number(data.currentStanding) or 0
 end
 
--- Character facts for one collection; quest verdicts cache in it until the next collection.
-function Availability.Context(lib)
+-- Character facts for one collection; verdicts cache in it until the next one. `quests` is the session's decoded quest
+-- data (static), and `levelRange` the Quest Level Range: quests further below the character's level stay hidden.
+function Availability.Context(lib, levelRange, quests)
     local _, classFile = UnitClass("player")
     local _, _, raceID = UnitRace("player")
     local faction = Readable(UnitFactionGroup("player"))
     classFile = Readable(classFile)
     return {
         lib = lib,
+        quests = quests,
         level = Number(UnitLevel("player")) or 0,
-        trivialRange = Number(UnitQuestTrivialLevelRange("player")) or 0,
-        showTrivial = Readable(C_Minimap.IsTrackingHiddenQuests()) == true,
+        levelRange = levelRange,
         raceBit = Number(lib.Enum.raceMaskById[Number(raceID)]),
         classBit = type(classFile) == "string" and Number(lib.Enum.classKeys[CLASS_KEYS[classFile] or classFile])
             or nil,
         factionLetter = faction == "Alliance" and "A" or faction == "Horde" and "H" or nil,
         verdicts = {},
+        levels = {},
     }
 end
 
@@ -139,10 +141,9 @@ local function Chain(quest)
     if quest.exclusiveTo and AnyTaken(quest.exclusiveTo) then
         return false
     end
-    for _, later in ipairs({ quest.nextQuestInChain, quest.breadcrumbForQuestId }) do
-        if later > 0 and (Completed(later) or InLog(later)) then
-            return false
-        end
+    local next, target = quest.nextQuestInChain, quest.breadcrumbForQuestId
+    if (next > 0 and (Completed(next) or InLog(next))) or (target > 0 and (Completed(target) or InLog(target))) then
+        return false
     end
     if quest.parentQuest > 0 and not InLog(quest.parentQuest) then
         return false
@@ -157,16 +158,30 @@ local function Chain(quest)
     return not (quest.disabledByQuest > 0 and InLog(quest.disabledByQuest))
 end
 
+-- QuestieDB's quest rows never change in a session, so each quest is decoded once; false marks an unknown quest.
+local function QuestData(context, questID)
+    local quest = context.quests[questID]
+    if quest == nil then
+        local values = context.lib.Quest.GetAll(questID, FIELDS)
+        quest = false
+        if type(values) == "table" then
+            quest = {}
+            for index, field in ipairs(FIELDS) do
+                quest[field] = values[index]
+            end
+        end
+        context.quests[questID] = quest
+    end
+    return quest
+end
+
 local function Evaluate(context, questID)
-    local values = context.lib.Quest.GetAll(questID, FIELDS)
-    if type(values) ~= "table" then
+    local quest = QuestData(context, questID)
+    if not quest then
         return false
     end
-    local quest = {}
-    for index, field in ipairs(FIELDS) do
-        quest[field] = values[index]
-    end
-    if HasBit(quest.specialFlags, EVENT_FLAG) or HOLIDAY_SORTS[quest.zoneOrSort] then
+    context.levels[questID] = quest.questLevel > 0 and quest.questLevel or nil
+    if HOLIDAY_SORTS[quest.zoneOrSort] then
         return false
     end
     if InLog(questID) or (Completed(questID) and not HasBit(quest.specialFlags, REPEATABLE_FLAG)) then
@@ -175,9 +190,7 @@ local function Evaluate(context, questID)
     if not Requirements(context, quest) or not Chain(quest) then
         return false
     end
-    local below = context.level - quest.questLevel
-    local trivial = quest.questLevel > 0 and below > DIFFICULT_LEVELS and below > context.trivialRange
-    return not trivial or context.showTrivial
+    return quest.questLevel <= 0 or context.level - quest.questLevel <= context.levelRange
 end
 
 function Availability.IsAvailable(context, questID)
@@ -191,6 +204,11 @@ function Availability.IsAvailable(context, questID)
         context.verdicts[questID] = verdict
     end
     return verdict
+end
+
+-- The quest's own level once IsAvailable has evaluated it; nil for unknown or unlevelled quests.
+function Availability.Level(context, questID)
+    return context.levels[Number(questID)]
 end
 
 -- NPC givers and services serve only the factions QuestieDB marks friendly; objects have no such restriction.

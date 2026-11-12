@@ -44,6 +44,7 @@ Display polls are timed under their row's label; `Discovery/DisplayChanged/<key>
 - Same-map subzone events retain only clean, completed taxi data with matching readable map artwork. Pending taxi work,
   artwork changes, native taxi-status events and preference changes still refresh; the 60-second recovery deadline
   remains.
+- Same-map subzone events also retain a ready QuestieDB source, which depends only on the map and character.
 - Ordinary `ZONE_CHANGED` also retains clean, completed HandyNotes snapshots when readable map artwork matches and no
   retry or active scan remains. Provider notifications still invalidate their own pack. Indoor/new-area events,
   changed/unknown artwork, pending work and map/world/phase transitions refresh normally; area visibility is always

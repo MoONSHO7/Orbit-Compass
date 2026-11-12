@@ -14,7 +14,7 @@ local COLUMNS = {
     { key = "toggle", labelKey = "PLU_COMPASS_TOGGLE", tooltipKey = "PLU_COMPASS_TOGGLE_TT" },
 }
 local POINTS = Addon.CompassPointTypes
-local REQUIRED_ADDONS = { ShowGatherMate = "GatherMate2", ShowHandyNotes = "HandyNotes" }
+local REQUIRED_ADDONS = { ShowGatherMate = "GatherMate2", ShowHandyNotes = "HandyNotes", ShowServices = "QuestieDB" }
 
 local function ReleaseRow(_, row)
     row:Hide()

@@ -13,7 +13,7 @@ owners.
 GatherMate2 adapter, the Forever [QuestieDB module](QuestieDB/README.md), the LibOrbitSearch provider, the Orbit
 Navigation adapter, then the Orbit live-resource and late Canvas adapters ([Orbit/](Orbit/README.md)).
 `CompassIntegrations.lua` connects enabled providers and observes late addon loads; QuestieDB needs no connection
-because its collector reads the provider only while discovery runs.
+because its collector reads the provider only while discovery runs, and disabling Compass pauses its index build.
 
 `CompassSearchProvider.lua` registers Compass as the `locations` provider of the shared LibOrbitSearch library whenever
 Compass is enabled, with or without Orbit. Each search session owns scratch, acquires catalog demand and invalidates on

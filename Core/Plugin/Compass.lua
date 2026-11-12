@@ -302,6 +302,7 @@ function Plugin:ApplySettings()
     self.showLabel = self:GetSetting(C.SYSTEM_INDEX, "ShowLabel")
     CacheSourceSetting(self, "corpse", "showCorpse", "ShowCorpse")
     CacheSourceSetting(self, "route", "followTracked", "FollowTracked")
+    CacheSourceSetting(self, "questie", "questLevelRange", "QuestLevelRange")
     self.autoAdvanceMode = self:GetSetting(C.SYSTEM_INDEX, "AutoAdvanceMode") ~= "off" and "arrival" or "off"
     self.autoAdvanceSameType = self:GetSetting(C.SYSTEM_INDEX, "AutoAdvanceSameType")
     self:ResetCompassAutoAdvance()

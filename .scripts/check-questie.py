@@ -6,6 +6,19 @@ from compass_harness import client
 # nil everywhere, GetAll returns a packed table, and the area-to-UiMap table is Lua source the consumer loads.
 QUESTIE = r'''
 mock.loaded.QuestieDB=true
+P.questLevelRange=5
+Addon.L.PLU_COMPASS_QUEST_LEVEL_F="[%d] %s"
+function geterrorhandler() return function(message) mock.reported=message end end
+RawDrain=Drain
+-- The index builds on its own driver frame; run it to completion around discovery.
+function Drain()
+ RawDrain()
+ local steps=0
+ while P.compassQuestieDriving and steps<10000 do P.compassQuestieDriver.OnUpdate(P.compassQuestieDriver,0.016); steps=steps+1 end
+ mock.buildSteps=(mock.buildSteps or 0)+steps
+ RawDrain()
+end
+Addon.PointsSettings=Addon.PointsSettings or function() return {} end
 mock.done,mock.log,mock.rep={},{},{}
 mock.maps[5]={mapID=5,mapType=3,parentMapID=3,name="City"}
 local children=C_Map.GetMapChildrenInfo
@@ -15,13 +28,12 @@ function UnitClass() return "Warrior","WARRIOR",1 end
 function UnitRace() return "Orc","Orc",2 end
 function UnitLevel() return 30 end
 function UnitFactionGroup() return "Horde" end
-function UnitQuestTrivialLevelRange() return 7 end
 function GetRealZoneText(id) return ({[43]="Wailing Caverns"})[id] or "" end
-C_Minimap.IsTrackingHiddenQuests=function() return mock.trivial==true end
 C_QuestLog.IsQuestFlaggedCompleted=function(id) return mock.done[id]==true end
 C_QuestLog.GetLogIndexForQuestID=function(id) return mock.log[id] end
 C_QuestLog.GetTitleForQuestID=function(id) return "Quest "..id end
 C_Reputation.GetFactionDataByID=function(id) return mock.rep[id] and {currentStanding=mock.rep[id]} end
+function GetQuestDifficultyColor(level) return level>=29 and {r=1,g=1,b=0} or {r=0.25,g=0.75,b=0.25} end
 Enum.MinimapTrackingFilter=Enum.MinimapTrackingFilter or {Innkeeper=32,Repair=512,Banker=2,Auctioneer=1,Stablemaster=2048}
 local tracking={{name="Innkeeper",texture=1001,filter=32},{name="Repair",texture=1002,filter=512}}
 C_Minimap.GetNumTrackingTypes=function() return #tracking end
@@ -49,9 +61,19 @@ Npcs={
  [8]={name="Alliance Giver",questStarts={14},spawns={[100]={{90,90}}},friendlyToFaction="A"},
 }
 Objects={[7]={name="Wanted Poster",questStarts={14},spawns={[100]={{60,60}}}}}
+-- QuestieDB's quest-side starters, derived from the doubles' NPC and object lists at read time.
+local function StartedBy(questID)
+ local npcs,objects
+ for id,row in pairs(Npcs) do for _,q in ipairs(row.questStarts or {}) do if q==questID then npcs=npcs or {} npcs[#npcs+1]=id end end end
+ for id,row in pairs(Objects) do for _,q in ipairs(row.questStarts or {}) do if q==questID then objects=objects or {} objects[#objects+1]=id end end end
+ if npcs then table.sort(npcs) end
+ return {npcs,objects}
+end
 local function Entity(store,numeric)
- local ids={} for id in pairs(store) do ids[#ids+1]=id end table.sort(ids)
- local entity={GetAllIds=function() mock.idReads=(mock.idReads or 0)+1 return ids end}
+ local entity={GetAllIds=function()
+  mock.idReads=(mock.idReads or 0)+1
+  local ids={} for id in pairs(store) do ids[#ids+1]=id end table.sort(ids) return ids
+ end}
  for _,field in ipairs({"name","questStarts","npcFlags","spawns","friendlyToFaction"}) do
   entity[field]=function(id) local row=store[id] if not row then return nil end
    local value=row[field] if value==nil and numeric[field] then return 0 end return value end
@@ -64,7 +86,10 @@ local ZoneDB={private={areaIdToUiMapId="return {[100]=3,[200]=5,[300]=3}",
 LibQuestieDB={
  RequireContract=function(v) return v>=1 and v<=(mock.contract or 4) end,
  Npc=Entity(Npcs,{npcFlags=1}),Object=Entity(Objects,{}),
- Quest={name=function(id) return Quests[id] and "DB "..id end,GetAll=function(id,keys)
+ Quest={name=function(id) return Quests[id] and "DB "..id end,
+  GetAllIds=function() local ids={} for id in pairs(Quests) do ids[#ids+1]=id end table.sort(ids) return ids end,
+  startedBy=function(id) if mock.brokenStarters then error("broken starters") end return Quests[id] and StartedBy(id) end,
+  GetAll=function(id,keys)
   local row=Quests[id] if not row then return nil end
   local values={n=#keys} for i,key in ipairs(keys) do local v=row[key] if v==nil and NUMERIC[key] then v=0 end values[i]=v end
   return values end},
@@ -83,7 +108,7 @@ function Marker(key)
  for _,marker in ipairs(P.compassSources.questie.markers) do if marker.key==key then return marker end end
 end
 function Recollect() P.discoveryClock=P.discoveryClock+61; P:InvalidateCompassSourceSettings("questie"); Drain() end
-function Available(id) return Addon.CompassQuestieAvailability.IsAvailable(Addon.CompassQuestieAvailability.Context(LibQuestieDB),id) end
+function Available(id) local A=Addon.CompassQuestieAvailability return A.IsAvailable(A.Context(LibQuestieDB,P.questLevelRange,{}),id) end
 '''
 
 CASES = {
@@ -99,6 +124,19 @@ CASES = {
         Npcs[1].questStarts={10,22}
         Drain()
         assert(Marker("questie:giver:npc:1:3:1").description=="PLU_COMPASS_QUEST_MORE_F")
+    ''',
+    "giver tooltips list each available quest with its level in difficulty colour": '''
+        Npcs[1].questStarts={10,13,14}; Quests[10].questLevel=25
+        Drain()
+        local lines=Marker("questie:giver:npc:1:3:1").tooltipLines
+        assert(#lines==2, #lines)
+        assert(lines[1].text=="[25] Quest 10" and lines[1].g==0.75, lines[1].text)
+        assert(lines[2].r==1 and lines[2].b==0)
+    ''',
+    "service and entrance tooltips name their role": '''
+        Drain()
+        assert(Marker("questie:service:npc:2:3:1").tooltipLines[1].text=="Innkeeper, Repair")
+        assert(Marker("questie:entrance:instance:43:3:1").tooltipLines[1].text=="PLU_COMPASS_TYPE_INSTANCE")
     ''',
     "quest rules hide unavailable quests": '''
         mock.done[11]=true; mock.log[17]=4
@@ -121,9 +159,65 @@ CASES = {
         assert(not Available(21))
         mock.rep[76]=3000; assert(Available(21))
     ''',
-    "trivial quests follow the hidden-quest tracking choice": '''
+    "the quest level range hides quests too far below the character": '''
         Drain(); assert(not Marker("questie:giver:npc:6:3:1"))
-        mock.trivial=true; Recollect(); assert(Marker("questie:giver:npc:6:3:1"))
+        P.questLevelRange=18; Recollect(); assert(Marker("questie:giver:npc:6:3:1"))
+        P.questLevelRange=17; Recollect(); assert(not Marker("questie:giver:npc:6:3:1"))
+    ''',
+    "quests exactly at the range edge stay visible": '''
+        Quests[10].questLevel=25; assert(Available(10))
+        Quests[10].questLevel=24; assert(not Available(10))
+    ''',
+    "the level range slider renders only with a compatible QuestieDB": '''
+        local function HasRange()
+            for _,tab in ipairs(Addon.SettingsTabs(1)) do
+                if tab.id=="appearance" then
+                    for _,control in ipairs(tab.controls) do if control.key=="QuestLevelRange" then return control end end
+                end
+            end
+        end
+        local range=HasRange(); assert(range and range.min==1 and range.max==60 and range.default==5)
+        mock.contract=3; assert(not HasRange(), "incompatible contract")
+        mock.contract=nil; mock.loaded.QuestieDB=false; assert(not HasRange(), "not loaded")
+    ''',
+    "exploration and scripted-event completion flags do not hide quests": '''
+        Quests[10].specialFlags=2; assert(Available(10))
+    ''',
+    "quest turn-ins refresh giver tooltips through events": '''
+        Quests[12].preQuestSingle={11}; Npcs[1].questStarts={10,11,12}
+        Drain()
+        local lines=Marker("questie:giver:npc:1:3:1").tooltipLines
+        assert(#lines==2 and lines[2].text=="[28] Quest 11", lines[2].text)
+        mock.done[11]=true; P.discoveryClock=P.discoveryClock+1; P:InvalidateCompassSource("QUEST_TURNED_IN"); Drain()
+        lines=Marker("questie:giver:npc:1:3:1").tooltipLines
+        assert(#lines==2 and lines[2].text=="[28] Quest 12", lines[2] and lines[2].text)
+    ''',
+    "the index builds on its own budget without holding discovery": '''
+        for id=1000,1600 do Npcs[id]={name="Filler",spawns={[100]={{1,1}}},friendlyToFaction="AH"} end
+        local clock=0; debugprofilestop=function() clock=clock+0.01 return clock end
+        RawDrain()
+        assert(P.compassQuestieDriving and not P.compassQuestieIndex, "built inside discovery")
+        assert(P.compassSources.locations.status=="ready", "other sources waited for the build")
+        local steps=0
+        while P.compassQuestieDriving do P.compassQuestieDriver.OnUpdate(); steps=steps+1 end
+        assert(steps>5, steps)
+        assert(P.compassSources.questie.dirty, "completion did not request a collection")
+        RawDrain(); assert(Marker("questie:giver:npc:1:3:1"))
+    ''',
+    "a failing build stops instead of erroring every frame": '''
+        mock.brokenStarters=true; Drain()
+        assert(not P.compassQuestieDriving and mock.reported and Keys()=="", tostring(mock.reported))
+        local calls=mock.idReads; Recollect(); assert(not P.compassQuestieDriving and mock.idReads==calls)
+    ''',
+    "a same-map subzone keeps QuestieDB markers": '''
+        Drain(); local source=P.compassSources.questie; assert(not source.dirty)
+        P:InvalidateCompassSource("ZONE_CHANGED")
+        assert(not source.dirty and P.compassSources.offers.dirty)
+    ''',
+    "unreadable native entrances leave QuestieDB entrances shown": '''
+        Addon.ClientFeatures=setmetatable({dungeonEntrances=true},{__index=Addon.ClientFeatures})
+        C_EncounterJournal.GetDungeonEntrancesForMap=function() return nil end
+        Drain(); assert(Keys("entrance")=="questie:entrance:instance:43:3:1", Keys("entrance"))
     ''',
     "hostile and other-faction givers stay hidden": '''
         Drain(); assert(not Marker("questie:giver:npc:5:3:1") and not Marker("questie:giver:npc:8:3:1"))
@@ -153,7 +247,7 @@ CASES = {
     ''',
     "the index builds once across collections": '''
         Drain(); Recollect(); Recollect()
-        assert(mock.idReads==2, mock.idReads)
+        assert(mock.idReads==1, mock.idReads)
     ''',
     "quest events refresh the source": '''
         Drain(); local source=P.compassSources.questie; assert(not source.dirty)
@@ -169,6 +263,9 @@ CASES = {
 }
 
 RETAIL = '''
+    for _,tab in ipairs(Addon.SettingsTabs(1)) do
+        for _,control in ipairs(tab.controls) do assert(control.key~="QuestLevelRange", "Retail renders the slider") end
+    end
     Drain()
     assert(P.compassSources.questie.status=="unsupported" and Keys()=="")
     assert(not Addon.ClientFeatures.AllowsPoint("ShowServices"))

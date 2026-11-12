@@ -104,6 +104,31 @@ local function ArrowAppearanceControls()
     }
 end
 
+-- The quest level range only filters QuestieDB givers, so it renders only while a compatible QuestieDB is loaded.
+local function AppearanceControls()
+    local controls = {
+        Slider(C.SYSTEM_INDEX, "FontSize", L.CMN_FONT_SIZE, C.FONT_MIN, C.FONT_MAX, 1),
+        Slider(C.SYSTEM_INDEX, "IconSize", L.CMN_ICON_SIZE, C.ICON_MIN, C.ICON_MAX, 1),
+    }
+    if
+        Addon.ClientFeatures.sources.questie
+        and C_AddOns.IsAddOnLoaded("QuestieDB")
+        and Addon.CompassQuestieIndex.Provider()
+    then
+        local range = Slider(
+            C.SYSTEM_INDEX,
+            "QuestLevelRange",
+            L.PLU_COMPASS_QUEST_LEVEL_RANGE,
+            C.QUEST_LEVEL_RANGE_MIN,
+            C.QUEST_LEVEL_RANGE_MAX,
+            C.QUEST_LEVEL_RANGE_STEP
+        )
+        range.tooltip = L.PLU_COMPASS_QUEST_LEVEL_RANGE_TT
+        controls[#controls + 1] = range
+    end
+    return controls
+end
+
 local function BehaviourControls(refresh)
     local sameType =
         Checkbox(C.SYSTEM_INDEX, "AutoAdvanceSameType", L.PLU_COMPASS_AUTO_SAME_TYPE, L.PLU_COMPASS_AUTO_SAME_TYPE_TT)
@@ -184,10 +209,7 @@ function Addon.SettingsTabs(index, refresh)
             id = "appearance",
             label = L.CFG_SETTINGS_TAB_APPEARANCE,
             scopeText = L.CFG_SETTINGS_SCOPE_LAYOUT,
-            controls = {
-                Slider(C.SYSTEM_INDEX, "FontSize", L.CMN_FONT_SIZE, C.FONT_MIN, C.FONT_MAX, 1),
-                Slider(C.SYSTEM_INDEX, "IconSize", L.CMN_ICON_SIZE, C.ICON_MIN, C.ICON_MAX, 1),
-            },
+            controls = AppearanceControls(),
         },
         {
             id = "behaviour",

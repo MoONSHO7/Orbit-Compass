@@ -7,6 +7,7 @@ local TYPE_COLOR = { r = 1, g = 0.82, b = 0 }
 local FAILURE_COLOR = { r = 1, g = 0.2, b = 0.2 }
 local GATHERMATE_KIND_PREFIX = "gathermate:"
 local TYPE_LABELS = Addon.Constants.POINT_TYPE_LABELS
+local NO_LINES = {}
 
 local Input = {}
 Addon.CompassMarkerInput = Input
@@ -52,6 +53,9 @@ local function ShowMarkerTooltip(button)
     local typeLabel = marker.kind:sub(1, #GATHERMATE_KIND_PREFIX) == GATHERMATE_KIND_PREFIX and L.PLU_COMPASS_GATHERMATE
         or L[TYPE_LABELS[marker.kind]]
     GameTooltip:AddLine(typeLabel, TYPE_COLOR.r, TYPE_COLOR.g, TYPE_COLOR.b)
+    for _, line in ipairs(marker.tooltipLines or NO_LINES) do
+        GameTooltip:AddLine(line.text, line.r, line.g, line.b)
+    end
     if button.tooltipGroupCount > 1 and not marker.displayOnly then
         GameTooltip:AddLine(L.PLU_COMPASS_OVERLAP_HINT_F:format(button.tooltipGroupCount), 1, 1, 1, true)
     end

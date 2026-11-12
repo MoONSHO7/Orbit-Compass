@@ -63,6 +63,9 @@ local STRINGS = {
         PLU_COMPASS_TYPE_GRAVEYARD = "Graveyard",
         PLU_COMPASS_SERVICES = "Town Services (QuestieDB)",
         PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
+        PLU_COMPASS_QUEST_LEVEL_F = "[%d] %s",
+        PLU_COMPASS_QUEST_LEVEL_RANGE = "Quest Level Range",
+        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "Show available quests up to this many levels below your own. Needs QuestieDB.",
     },
     deDE = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "Der Kompass ist für diesen Spielclient nicht verfügbar.",
@@ -126,6 +129,9 @@ local STRINGS = {
         PLU_COMPASS_TYPE_GRAVEYARD = "Friedhof",
         PLU_COMPASS_SERVICES = "Stadtdienste (QuestieDB)",
         PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
+        PLU_COMPASS_QUEST_LEVEL_F = "[%d] %s",
+        PLU_COMPASS_QUEST_LEVEL_RANGE = "Questlevel-Bereich",
+        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "Verfügbare Quests bis zu so vielen Stufen unter deiner eigenen anzeigen. Erfordert QuestieDB.",
     },
     frFR = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "La boussole est indisponible sur ce client du jeu.",
@@ -189,6 +195,9 @@ local STRINGS = {
         PLU_COMPASS_TYPE_GRAVEYARD = "Cimetière",
         PLU_COMPASS_SERVICES = "Services urbains (QuestieDB)",
         PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
+        PLU_COMPASS_QUEST_LEVEL_F = "[%d] %s",
+        PLU_COMPASS_QUEST_LEVEL_RANGE = "Écart de niveau des quêtes",
+        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "Affiche les quêtes disponibles jusqu’à ce nombre de niveaux sous le vôtre. Nécessite QuestieDB.",
     },
     esES = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "La brújula no está disponible en este cliente del juego.",
@@ -252,6 +261,9 @@ local STRINGS = {
         PLU_COMPASS_TYPE_GRAVEYARD = "Cementerio",
         PLU_COMPASS_SERVICES = "Servicios urbanos (QuestieDB)",
         PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
+        PLU_COMPASS_QUEST_LEVEL_F = "[%d] %s",
+        PLU_COMPASS_QUEST_LEVEL_RANGE = "Rango de nivel de misiones",
+        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "Muestra misiones disponibles hasta este número de niveles por debajo del tuyo. Requiere QuestieDB.",
     },
     ptBR = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "A bússola não está disponível neste cliente do jogo.",
@@ -315,6 +327,9 @@ local STRINGS = {
         PLU_COMPASS_TYPE_GRAVEYARD = "Cemitério",
         PLU_COMPASS_SERVICES = "Serviços urbanos (QuestieDB)",
         PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
+        PLU_COMPASS_QUEST_LEVEL_F = "[%d] %s",
+        PLU_COMPASS_QUEST_LEVEL_RANGE = "Faixa de nível das missões",
+        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "Mostra missões disponíveis até este número de níveis abaixo do seu. Requer QuestieDB.",
     },
     ruRU = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "Компас недоступен в этом игровом клиенте.",
@@ -378,6 +393,9 @@ local STRINGS = {
         PLU_COMPASS_TYPE_GRAVEYARD = "Кладбище",
         PLU_COMPASS_SERVICES = "Городские услуги (QuestieDB)",
         PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
+        PLU_COMPASS_QUEST_LEVEL_F = "[%d] %s",
+        PLU_COMPASS_QUEST_LEVEL_RANGE = "Диапазон уровней заданий",
+        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "Показывать доступные задания не более чем на столько уровней ниже вашего. Требуется QuestieDB.",
     },
     koKR = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "이 게임 클라이언트에서는 나침반을 사용할 수 없습니다.",
@@ -441,6 +459,9 @@ local STRINGS = {
         PLU_COMPASS_TYPE_GRAVEYARD = "무덤",
         PLU_COMPASS_SERVICES = "마을 시설 (QuestieDB)",
         PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
+        PLU_COMPASS_QUEST_LEVEL_F = "[%d] %s",
+        PLU_COMPASS_QUEST_LEVEL_RANGE = "퀘스트 레벨 범위",
+        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "내 레벨보다 이 수만큼 낮은 레벨까지의 수행 가능한 퀘스트를 표시합니다. QuestieDB가 필요합니다.",
     },
     zhCN = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "此游戏客户端不支持指南针。",
@@ -504,6 +525,9 @@ local STRINGS = {
         PLU_COMPASS_TYPE_GRAVEYARD = "墓地",
         PLU_COMPASS_SERVICES = "城镇服务（QuestieDB）",
         PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
+        PLU_COMPASS_QUEST_LEVEL_F = "[%d] %s",
+        PLU_COMPASS_QUEST_LEVEL_RANGE = "任务等级范围",
+        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "显示最多比你低这么多级的可接任务。需要 QuestieDB。",
     },
     zhTW = {
         MSG_COMPASS_UNSUPPORTED_CLIENT = "此遊戲用戶端不支援指南針。",
@@ -567,6 +591,9 @@ local STRINGS = {
         PLU_COMPASS_TYPE_GRAVEYARD = "墓地",
         PLU_COMPASS_SERVICES = "城鎮服務（QuestieDB）",
         PLU_COMPASS_QUEST_MORE_F = "%s (+%d)",
+        PLU_COMPASS_QUEST_LEVEL_F = "[%d] %s",
+        PLU_COMPASS_QUEST_LEVEL_RANGE = "任務等級範圍",
+        PLU_COMPASS_QUEST_LEVEL_RANGE_TT = "顯示最多比你低這麼多級的可接任務。需要 QuestieDB。",
     },
 }
 
