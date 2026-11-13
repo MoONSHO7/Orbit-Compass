@@ -10,6 +10,7 @@ local REFRESH_INTERVAL = 60
 local GIVER_ATLAS, ENTRANCE_ATLAS = "QuestNormal", "Dungeon"
 local DESCRIPTION_SEPARATOR = ", "
 local WHITE = { r = 1, g = 1, b = 1 }
+local NO_ROWS = table.freeze({})
 local ENTRANCE_LINES = table.freeze({ table.freeze({ text = L.PLU_COMPASS_TYPE_INSTANCE, r = 1, g = 1, b = 1 }) })
 
 -- Each service's localized name and icon from the client's own minimap tracking list; empty until that list loads.
@@ -213,6 +214,47 @@ local function AddEntrances(plugin, markers, mapID, entrances)
         end
         plugin:CompassDiscoveryCheckpoint()
     end
+end
+
+-- One map's available quest givers as rows for a host's own map (`../Orbit/CompassMapPoints.lua`): nil while the
+-- index is still building, an empty list without a provider or with Available Quests off.
+function Plugin:CollectCompassQuestieGivers(mapID)
+    local lib = self.showQuestOffers and Index.Provider()
+    if not lib then
+        return NO_ROWS
+    end
+    local index, building = Index.Request(self, lib)
+    if not index then
+        return not building and NO_ROWS or nil
+    end
+    local entry = index.byMap[mapID]
+    if not entry then
+        return NO_ROWS
+    end
+    local context, summaries, rows = Availability.Context(lib, self.questLevelRange, index.quests), {}, {}
+    for _, point in ipairs(entry.givers) do
+        local record = point.record
+        if Availability.Serves(context, record) then
+            local quests = summaries[record]
+            if quests == nil then
+                quests = GiverQuests(lib, context, record) or false
+                summaries[record] = quests
+            end
+            local name = quests and EntityName(lib, record)
+            if type(name) == "string" and name ~= "" then
+                rows[#rows + 1] = {
+                    key = ("giver:%s:%d:%d"):format(record.entity, record.id, point.ordinal),
+                    x = point.x,
+                    y = point.y,
+                    atlas = GIVER_ATLAS,
+                    name = name,
+                    description = quests.description,
+                    lines = quests.lines,
+                }
+            end
+        end
+    end
+    return rows
 end
 
 function Plugin:CollectCompassQuestieDB(markers)

@@ -127,6 +127,9 @@ function Plugin:InvalidateCompassSourceSettings(key, retainProviders)
     end
     source.dirty, source.pathDirty, source.nextAllowed = true, false, self.discoveryClock
     self.discoveryPending, self.waypointDirty = true, true
+    if key == "questie" then
+        self:InvalidateCompassMapPoints()
+    end
     local profiler = Addon.Services.profiler
     if profiler and profiler.active then
         profiler:Count(self, "Discovery/Settings/" .. key)
@@ -213,10 +216,16 @@ function Plugin:InvalidateCompassSource(event)
                 elseif not source.dirty then
                     source.dirty = QUEST_DATA_DIRTY
                 end
+                if key == "questie" then
+                    self:InvalidateCompassMapPoints()
+                end
                 ScheduleInvalidatedSource(self, key)
             end
         else
             self.compassSources[sources].dirty = true
+            if sources == "questie" then
+                self:InvalidateCompassMapPoints()
+            end
             ScheduleInvalidatedSource(self, sources)
         end
         if event == "SUPER_TRACKING_CHANGED" then

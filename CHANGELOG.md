@@ -2,6 +2,7 @@
 
 ## 2026-11-13
 
+* With Orbit also installed, those quest givers appear on Orbit's interactive minimap and HUD map too, following the Available Quests point.
 * On Forever with QuestieDB installed, the compass shows quest givers with quests you can take, dungeon and raid entrances, and a new Town Services point type for innkeepers, repairers, bankers, auctioneers and stable masters. Hovering a quest giver lists its quests with their levels in difficulty colours. A Quest Level Range slider in Appearance (default 5) hides quests too far above or below your level.
 
 ## 2026-10-24

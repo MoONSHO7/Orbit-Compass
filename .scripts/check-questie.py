@@ -112,6 +112,41 @@ function Available(id) local A=Addon.CompassQuestieAvailability return A.IsAvail
 '''
 
 CASES = {
+    "a host map receives one map's available givers as rows, and nothing while the index builds": '''
+        mock.done[11]=true
+        assert(P:CollectCompassQuestieGivers(3)==nil,"an unbuilt index answered")
+        Drain()
+        local rows=P:CollectCompassQuestieGivers(3)
+        local keys={} for _,row in ipairs(rows) do keys[#keys+1]=row.key end table.sort(keys)
+        assert(table.concat(keys,",")=="giver:npc:1:1,giver:object:7:1", table.concat(keys,","))
+        local row=rows[1].key=="giver:npc:1:1" and rows[1] or rows[2]
+        assert(row.name=="Giver" and row.atlas=="QuestNormal" and row.x==0.5 and row.description=="Quest 10")
+        assert(row.lines[1].text:find("Quest 10",1,true))
+        assert(#P:CollectCompassQuestieGivers(5)==1 and #P:CollectCompassQuestieGivers(99)==0)
+        P.showQuestOffers=false
+        assert(#P:CollectCompassQuestieGivers(3)==0,"hidden Available Quests still reached the host map")
+    ''',
+    "the host's point provider is registered while integrations run and told when givers change": '''
+        local calls={register=0,unregister=0,invalidate=0}
+        local points={Register=function(_,p) calls.register=calls.register+1 calls.provider=p return true end,
+            Unregister=function(_,p) calls.unregister=calls.unregister+1 assert(p==calls.provider) return true end,
+            Invalidate=function(_,p) calls.invalidate=calls.invalidate+1 assert(p==calls.provider) end}
+        Addon.OrbitHost={ExternalUIHost={mapPointProviderVersion=1},MapPOICompanion=points}
+        P:ConnectCompassMapPoints()
+        assert(calls.register==1 and type(calls.provider.Collect)=="function" and calls.provider.name~="")
+        Drain()
+        local before=calls.invalidate
+        P:InvalidateCompassSource("QUEST_ACCEPTED")
+        assert(calls.invalidate==before+1,"an accepted quest left the host's givers stale")
+        local rows,refresh=calls.provider.Collect(3)
+        assert(type(rows)=="table" and refresh==60)
+        P:DisconnectCompassMapPoints()
+        assert(calls.unregister==1)
+        Addon.OrbitHost={ExternalUIHost={mapPointProviderVersion=2},MapPOICompanion=points}
+        P:ConnectCompassMapPoints()
+        assert(calls.register==1,"an unknown host capability version was used")
+        Addon.OrbitHost=nil
+    ''',
     "givers with available quests appear on the player's map and nearby city map": '''
         mock.done[11]=true; Drain()
         assert(Keys("giver")=="questie:giver:npc:1:3:1,questie:giver:npc:4:5:1,questie:giver:object:7:3:1", Keys("giver"))

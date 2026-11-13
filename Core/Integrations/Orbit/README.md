@@ -25,6 +25,12 @@ snapshot table settles a poll; a new one reuses markers by record id and unchang
 records (at most 64) through Navigation's player world anchor, `ProjectCompassWorldPoint`. Item artwork becomes
 display-only ribbon markers; no additional scanner or minimap lease runs.
 
+`CompassMapPoints.lua` gives Orbit's interactive map the same Forever quest givers. While integrations run and the
+host reports `Orbit.ExternalUIHost.mapPointProviderVersion == 1`, it registers one provider with
+`Orbit.MapPOICompanion`; Orbit asks it for one UI map at a time and `CollectCompassQuestieGivers`
+(`../QuestieDB/CompassQuestieDB.lua`) answers that map's available givers as rows, nil while the index builds and
+none with Available Quests off. Whatever marks the `questie` source dirty also invalidates the provider.
+
 Search places reach Orbit through LibOrbitSearch rather than this bridge; see `../README.md`. Presentation hooks resolve
 Orbit UI Chat from Orbit's private media catalog, while standalone Compass uses its own private catalog. Both resolve
 that name to Blizzard's locale-aware font on Korean and Chinese clients.

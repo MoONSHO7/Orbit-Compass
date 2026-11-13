@@ -151,7 +151,7 @@ FILES = [
  "Discovery/Sources/CompassMapSources.lua", "Discovery/Sources/CompassQuestSources.lua",
  "Discovery/CompassDiscoveryCatalog.lua", "Discovery/CompassDisplayMarkers.lua", "Discovery/CompassDiscovery.lua",
  "Integrations/CompassNavigationRoute.lua", *bundle_scripts("Integrations/QuestieDB/QuestieDB.xml"),
- "Integrations/Orbit/CompassResources.lua",
+ "Integrations/Orbit/CompassResources.lua", "Integrations/Orbit/CompassMapPoints.lua",
  "Search/CompassMapScope.lua", "Search/CompassLandmarkKeywords.lua", "Search/CompassLandmarkRank.lua",
  "Search/CompassLandmarkQueryIndex.lua", *bundle_scripts("Search/Sources/Sources.xml"), "Search/CompassLandmarkDuplicates.lua",
  "Search/CompassLandmarkBuild.lua",
