@@ -9,8 +9,9 @@ Keep settings presentation separate from navigation, discovery and controller li
 ## Implementation
 `Config.xml` registers the hotkey and Points widgets before loading `CompassSettings.lua`, which supplies
 `Addon.SettingsTabs`. `CompassPointHotkey.lua` owns native binding capture. `CompassPointsSettings.lua` owns the pooled
-visibility matrix and column explanations; it reads and writes preferences through
-`../Discovery/CompassPointVisibility.lua`.
+visibility matrix, column explanations and each row's thin native range slider; it reads and writes preferences
+through `../Discovery/CompassPointVisibility.lua`. A slider shows Marker Range in grey until dragged, then gold;
+right-click clears the row's own range. Waypoint has no slider because a waypoint shows at any distance.
 
 The standalone application and the Orbit bridge both consume these schemas and widget registrations. Compass and Arrow
 omit lifecycle toggles because WoW addon enablement owns availability. Arrow schemas use the component preferences and
@@ -35,8 +36,10 @@ visible but disabled while auto-advance is off, with the reason on hover; changi
   client lacks a feature.
 - Keybindings belong to the current WoW binding set, not the Compass profile. Capture stops on hide or combat entry, and
   failed assignment preserves the previous keys.
-- Controls, rows and header hover regions are reused with their table. Hover uses the private layout tooltip; release
-  must retire any visible tooltip and cell callbacks.
+- Range sliders commit each snapped step like the Behaviour sliders. Their displayed value is set under an
+  initialization guard, so opening Points never turns an inherited Marker Range into a saved row range.
+- Controls, rows, range sliders and header hover regions are reused with their table. Hover uses the private layout
+  tooltip; release must retire any visible tooltip and cell callbacks, and unbinds each slider from its row.
 - The hotkey's temporary visibility mode is owned by Discovery. It must not add keyboard polling or settings reads to
   the render loop.
 

@@ -83,7 +83,7 @@ function Plugin:OnLoad()
         Bridge.AttachFrame(frame, self, C.SYSTEM_INDEX)
     end
     Services.RestorePosition(frame, C.SYSTEM_INDEX)
-    self.events:SetScript("OnEvent", function(_, event, payload)
+    self.events:SetScript("OnEvent", function(_, event, payload, detail)
         if event == "MODIFIER_STATE_CHANGED" then
             if payload == "LALT" or payload == "RALT" then
                 self:RefreshCompassPeekModifier()
@@ -96,6 +96,8 @@ function Plugin:OnLoad()
             self.dismissedNavigationKey = nil
         elseif event == "PLAYER_ALIVE" or event == "PLAYER_UNGHOST" then
             self.dismissedNavigationKey = nil
+        elseif event == "QUEST_DATA_LOAD_RESULT" then
+            self:NoteCompassQuestExistence(payload, detail)
         end
         if event == "PLAYER_ENTERING_WORLD" then
             self:InvalidateCompassLandmarkScope()
@@ -294,7 +296,7 @@ function Plugin:ApplySettings()
         return
     end
     self.viewAngle = self:GetSetting(C.SYSTEM_INDEX, "ViewAngle")
-    self.range = math.max(C.RANGE_MIN, math.min(C.RANGE_MAX, self:GetSetting(C.SYSTEM_INDEX, "Range")))
+    self:CacheCompassRanges()
     self.iconSize = self:GetSetting(C.SYSTEM_INDEX, "IconSize")
     self.navigationSize = self:GetSetting(C.NAVIGATION_SYSTEM_INDEX, "NavigationSize")
     self.showArrow = self:GetSetting(C.NAVIGATION_SYSTEM_INDEX, "ShowArrow")

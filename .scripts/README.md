@@ -26,8 +26,9 @@ version metadata. Python needs `lupa==2.8`.
 `compass_harness.py` is the suites' shared Lua 5.1 client: native namespace doubles, the loaded Compass files and the
 LibOrbitUI client/store, read from the sibling `../Orbit-Libs/LibOrbitUI/LibOrbitUI-1.0` path (the workspace checkout
 locally and, in the workflow's `suites` job, a symlink to the fetched `Libs/LibOrbitUI-1.0`). It also holds a double of
-Orbit's documented resource-observation capability; it simulates no native rendering or security. Its `table.freeze`
-double records frozen tables so `table.sort` rejects them, as the strictest client may.
+Orbit's documented resource-observation capability, publishable as either host version (1 through `MapDots`, 2
+through `MapNativeResources`); it simulates no native rendering or security. Its `table.freeze` double records frozen
+tables so `table.sort` rejects them, as the strictest client may.
 
 `check-client-features.py` checks client families, withheld APIs, partial data, retained preferences, destination
 provenance, query-local map-read sharing/recovery, Navigation route guidance, stale actions and readiness, including
@@ -40,15 +41,18 @@ first-build search cadence, aged refreshes, and repeated-name work bounds for sp
 `python .scripts/check-landmark-budget.py`; native map calls and final string concatenation remain indivisible, so these
 bounds do not certify an in-game millisecond limit.
 
-`check-resources.py` drives live resources through that capability double: version admission, Retail and standalone
-silence, allocation-free unchanged polls, refinement without gaps, failure backoff, ownership release and auto-advance
-latency equal to the empty baseline. Rendering cases cover mask/ring geometry, heading reservation, pooled-slot reuse,
-press validation after rebinding, and actionable overlap groups. Orbit's producer suite checks its scanner against the
-same contract. Both suites run independently, and native detection, CPU and heap still need in-game verification.
+`check-resources.py` drives live resources through that capability double: both host versions and their owners,
+refused unknown, malformed and ownerless versions, Retail and standalone silence, allocation-free unchanged polls,
+refinement without gaps, failure backoff, ownership release and auto-advance latency equal to the empty baseline.
+Rendering cases cover mask/ring geometry, heading reservation, pooled-slot reuse, press validation after rebinding, and
+actionable overlap groups. Orbit's producer suites check its scanner against the same contract. The suites run
+independently, and native detection, CPU and heap still need in-game verification.
 
 `check-questie.py` drives the QuestieDB adapter through a double of QuestieDB's documented contract-4 reads: provider
 admission, per-map indexing, quest availability rules (including race masks beyond 32 bits), faction service filters,
-client-named entrances, point toggles and Retail silence. Real QuestieDB data still needs in-game verification.
+client-named entrances, point toggles and Retail silence. For the quest log's host-map rows it covers each objective
+kind, finished and misaligned objectives, turn-ins and their de-duplication against client pins, clustering and caps,
+merged tooltips, coalesced log events and read bounds. Real QuestieDB data still needs in-game verification.
 Release CI runs these four suites.
 
 `check-full-boot.py` loads the whole TOC closure (XML bundles, `Bindings.xml` bodies, real LibOrbitUI and
@@ -56,7 +60,8 @@ LibOrbitSearch, LibStub as a double) on Orbit's strict shared client double,
 `../../Orbit/.scripts/tests/wow_fixture.py`, standalone on both families and once under Orbit Core with Spotlight. It
 drives commands, bindings, the ribbon and peek, search, the arrow, Edit Mode, Points and hotkey settings, GatherMate2,
 secret map reads, locales and refused hosts, and fails on any recorded error, blocked call, secret fault or frozen
-write. Expected failures mark open addon bugs; `--coverage` prints line shares. Run
+write. Hosted, it also checks that the real host's resource capability version is one Compass reads. Expected failures
+mark open addon bugs; `--coverage` prints line shares. Run
 `python .scripts/check-full-boot.py`; it needs that sibling Orbit checkout.
 
 ## Gotchas
@@ -74,3 +79,4 @@ write. Expected failures mark open addon bugs; `--coverage` prints line shares. 
 ## References
 `../README.md`, `../.pkgmeta`, `../.github/workflows/README.md`, `../.github/workflows/release.yml`; Orbit's
 `../../Orbit/.scripts/README.md` for the shared client double.
+`lua-globals/README.md`: the Lua-globals gate (`check-lua-globals.py`, copied from Orbit) the lint-only pre-push runs.

@@ -51,7 +51,7 @@ function Namespace(name)
    rawset(self,method,fn); return fn
  end })
 end
-Addon = { LibOrbitUI = { VERSION_MAJOR=1, VERSION_MINOR=8, Callbacks={ Wrap=function(fn) return fn end } },
+Addon = { LibOrbitUI = { VERSION_MAJOR=1, VERSION_MINOR=8, Callbacks={ Wrap=function(_, fn) return fn end } },
  Services={ IsSecret=issecretvalue, IsEditMode=function() return false end },
  L=setmetatable({}, { __index=function(_,key) return key end }),
  HandyNotesClick={ Matches=function(_,a,b) return a==b end }, Controller={} }
@@ -181,7 +181,7 @@ def client(family="forever", before=""):
       function P:SetSetting(i,k,v) assert(Addon.Store:Set(i,k,v)) end
       P.compassLocations=Addon.Store:Collection("CompassLocations")
       P.events=CreateFrame(); P.mapID=3; P.mapWidth=1000; P.mapHeight=1000; P.markers={}
-      P:InitializeCompassDiscovery(); if Addon.ClientFeatures.supported then P:CacheCompassPointVisibility() end; P:InitializeCompassLandmarks()
+      P:InitializeCompassDiscovery(); if Addon.ClientFeatures.supported then P:CacheCompassPointVisibility() end; P:CacheCompassRanges(); P:InitializeCompassLandmarks()
       function Drain() for i=1,30 do P:DiscoverCompassMarkers() end end
       function Build() P:AcquireCompassLandmarkDemand("test",true); for i=1,30 do mock.now=mock.now+0.01; P:StepCompassLandmarkCatalog() end end
       function Drive(n) for i=1,n do mock.now=mock.now+0.01; if P.compassLandmarkDriver.OnUpdate then P:StepCompassLandmarkDemand(0.01) end end end
@@ -196,9 +196,11 @@ def load_modules(lua, modules):
         load((ROOT / "Core" / module).read_text(encoding="utf-8"), module)
 
 
-# Orbit's resource-observation capability v1 as Orbit/Core/MapDisplay/Render/README.md documents it: nil while no
-# leased view scans, else one immutable snapshot per revision whose session-unique record ids never repeat. Orbit's
-# producer suite (map_performance `test_resource_snapshots_*`) checks the same contract against the real scanner.
+# Orbit's resource-observation capability as Orbit/Core/MapDisplay/Render/README.md documents it: nil while its
+# scanner shows none, else one immutable snapshot per revision whose session-unique record ids never repeat. Version 1
+# hosts published it from `Orbit.MapDots`, version 2 hosts publish the same shape from `Orbit.MapNativeResources`.
+# `OrbitResources.Publish(version, ...)` installs one host, whose named members answer (by default the one its
+# version documents); the double starts as the current host. Orbit's producer suites check the real scanner.
 ORBIT_RESOURCES = r'''
 OrbitResources={nodes={},extra={},revision=1,nextID=0,live=true,reads=0,instance=42,
  copies=setmetatable({},{__mode="k"})}
@@ -266,6 +268,13 @@ function UnitPosition()
  if mock.noWorldPosition then return nil end
  return mock.north,mock.west,0,R.instance
 end
-Addon.OrbitHost={ExternalUIHost={legacyPluginVersion=1,mapResourceObservationsVersion=1},
- MapDots={RESOURCE_LIFETIME_SECONDS=2,GetResourceSnapshot=function() return R.Snapshot() end}}
+R.OWNERS={"MapDots","MapNativeResources"}
+function R.Publish(version,...)
+ local host={ExternalUIHost={legacyPluginVersion=1,mapResourceObservationsVersion=version}}
+ local owners=select("#",...)>0 and {...} or {R.OWNERS[version]}
+ for _,owner in ipairs(owners) do host[owner]={GetResourceSnapshot=function() return R.Snapshot() end} end
+ Addon.OrbitHost=host
+ return host
+end
+R.Publish(2)
 '''

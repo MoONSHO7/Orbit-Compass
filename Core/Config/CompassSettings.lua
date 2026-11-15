@@ -68,6 +68,22 @@ local function ComponentToggle(key, label)
     }
 end
 
+local function RangeSlider()
+    local range = Slider(
+        C.SYSTEM_INDEX,
+        "Range",
+        L.PLU_COMPASS_RANGE,
+        C.RANGE_MIN,
+        C.RANGE_MAX,
+        C.RANGE_STEP,
+        function(value)
+            return Plugin:FormatCompassDistance(value, "yards")
+        end
+    )
+    range.tooltip = L.PLU_COMPASS_RANGE_TT
+    return range
+end
+
 local function ArrowAppearanceControls()
     return {
         {
@@ -216,17 +232,7 @@ function Addon.SettingsTabs(index, refresh)
             label = L.CFG_SETTINGS_TAB_BEHAVIOUR,
             scopeText = L.CFG_SETTINGS_SCOPE_LAYOUT,
             controls = {
-                Slider(
-                    C.SYSTEM_INDEX,
-                    "Range",
-                    L.PLU_COMPASS_RANGE,
-                    C.RANGE_MIN,
-                    C.RANGE_MAX,
-                    C.RANGE_STEP,
-                    function(value)
-                        return Plugin:FormatCompassDistance(value, "yards")
-                    end
-                ),
+                RangeSlider(),
                 Slider(
                     C.SYSTEM_INDEX,
                     "ViewAngle",

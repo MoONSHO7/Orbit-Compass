@@ -18,18 +18,21 @@ bridge registers the real `Orbit_Compass` plugin (`Bridge.CreateController`), it
 `OrbitCanvas.lua` after navigation and controller declarations to supply Canvas text drafts for the arrow. Product
 navigation and formatting remain outside this module.
 
-`CompassResources.lua` is Discovery's Forever display source for Orbit's resource-observation capability. It requires
-`Orbit.ExternalUIHost.mapResourceObservationsVersion == 1` and reads `Orbit.MapDots:GetResourceSnapshot()`: nil while no
-leased Orbit view scans, else one immutable snapshot per scanner revision with session-unique record ids. The same
-snapshot table settles a poll; a new one reuses markers by record id and unchanged position, and projects new or moved
-records (at most 64) through Navigation's player world anchor, `ProjectCompassWorldPoint`. Item artwork becomes
-display-only ribbon markers; no additional scanner or minimap lease runs.
+`CompassResources.lua` is Discovery's Forever display source for Orbit's resource-observation capability. The host's
+`ExternalUIHost.mapResourceObservationsVersion` names the snapshot owner: 1 reads `Orbit.MapDots:GetResourceSnapshot()`,
+2 `Orbit.MapNativeResources:GetResourceSnapshot()` (the corner minimap's scanner). Either is nil while it shows none,
+else one immutable snapshot per scanner revision with session-unique record ids. The same snapshot table settles a
+poll; a new one reuses markers by record id and unchanged position, and projects new or moved records (at most 64)
+through Navigation's player world anchor, `ProjectCompassWorldPoint`. Item artwork becomes display-only ribbon markers.
 
-`CompassMapPoints.lua` gives Orbit's interactive map the same Forever quest givers. While integrations run and the
+`CompassMapPoints.lua` gives Orbit's interactive map Forever's QuestieDB points and, through the provider's `Menu`,
+the right-click menu that removes a quest from it (`../QuestieDB/CompassQuestieMenu.lua`). While integrations run and the
 host reports `Orbit.ExternalUIHost.mapPointProviderVersion == 1`, it registers one provider with
-`Orbit.MapPOICompanion`; Orbit asks it for one UI map at a time and `CollectCompassQuestieGivers`
-(`../QuestieDB/CompassQuestieDB.lua`) answers that map's available givers as rows, nil while the index builds and
-none with Available Quests off. Whatever marks the `questie` source dirty also invalidates the provider.
+`Orbit.MapPOICompanion`; Orbit asks it for one UI map at a time and `CollectCompassQuestieMapRows`
+(`../QuestieDB/CompassQuestieDB.lua`) answers that map's rows: available givers under Available Quests (scale 0.75),
+then the quest log's turn-ins and unfinished objectives under Quest Objectives (scale 0.6). It answers nil while the
+index builds and none with both points off. Whatever marks the `questie` source dirty also invalidates the provider,
+as do a changed quest log and finished objective preparation; `../QuestieDB/README.md` owns those rows' bounds.
 
 Search places reach Orbit through LibOrbitSearch rather than this bridge; see `../README.md`. Presentation hooks resolve
 Orbit UI Chat from Orbit's private media catalog, while standalone Compass uses its own private catalog. Both resolve
@@ -50,9 +53,10 @@ that name to Blizzard's locale-aware font on Korean and Chinese clients.
 - The bridge must load before any feature caches service hooks or the controller. Canvas needs that controller, so it
   belongs to the later integration phase.
 - Live resources follow the hosted Forever scanner and its shared resource switch, and never create scan demand.
-  Standalone, Retail and hosts without capability version 1 publish nothing; the source stops polling until a context
-  reset. Records carry no age because Orbit drops nodes within its own lifetime: copy no expiry, retain no scanner
-  table, and keep only the current snapshot's ids. Records that arrive before the player's first world sample retry.
+  Standalone, Retail and a host whose version is not exactly 1 or 2, or whose named owner is absent, publish nothing;
+  the source stops polling until a context reset, and a newer host version needs its owner in `SNAPSHOT_OWNERS`.
+  Records carry no age because Orbit drops nodes within its own lifetime: copy no expiry, retain no scanner table,
+  and keep only the current snapshot's ids. Records that arrive before the player's first world sample retry.
 
 ## Secrets
 The bridge rebinds `Services.IsSecret` to `Orbit.SecretValueUtils.IsSecret`, so hosted gates report their source labels

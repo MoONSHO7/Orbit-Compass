@@ -30,6 +30,7 @@ place of the standalone store.
 - **Player surface.** `/orbitcompass` opens Appearance and Points settings; `/orbitcompass move` enters Edit Mode and
   `reset` restores the ribbon. Points selects visibility in Cities, World and an alternate Toggle column, including
   HandyNotes and GatherMate2, and a hotkey above the table switches between the current area and the Toggle choices.
+  A thin slider under each row sets how far away that type appears; untouched rows follow Behaviour's Marker Range.
   Zarillion's packs provide native tooltips, numbered instructions and coloured guide dots; following a dot keeps the
   note's instructions. Hold Alt to label the nearest visible untracked POI. The search field at the ribbon's bottom-left
   finds any dungeon, raid, delve, zone, city, continent, flight master, portal or named point; category words ("raids",
@@ -43,7 +44,9 @@ place of the standalone store.
   auto-advance can visit them in sequence.
 - **QuestieDB (Forever).** With QuestieDB installed, Available Quests shows givers whose quests this character can take,
   Zone POIs gains dungeon and raid entrances, and a Town Services row shows innkeepers, repairers, bankers, auctioneers
-  and stable masters. Compass reads the installed database only (`Core/Integrations/QuestieDB/README.md`).
+  and stable masters. On a compatible Orbit host's map, Quest Objectives also marks where the log's unfinished
+  objectives can be done and where complete quests turn in. Compass reads the installed database only
+  (`Core/Integrations/QuestieDB/README.md`).
 - **Live resources.** On Forever with a compatible Orbit host, the ribbon mirrors the herb/ore item icons detected by
   Orbit's active minimap/HUD resource scanner. These temporary, approximate observations appear below the line and
   cannot be selected for navigation. They follow Orbit's resource switch and do not start another minimap scan.

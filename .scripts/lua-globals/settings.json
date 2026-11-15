@@ -1,0 +1,27 @@
+{
+  "roots": [
+    "Core",
+    "Localization"
+  ],
+  "exclude": {},
+  "ownedPrefixes": [
+    "Orbit",
+    "SLASH_ORBIT"
+  ],
+  "readGlobals": {
+    "embedded libraries": [
+      "LibStub"
+    ],
+    "optional Orbit host": [
+      "Orbit"
+    ],
+    "client functions wow-ui-source neither calls nor documents": [
+      "GetAchievementCriteriaInfoByID"
+    ]
+  },
+  "writableGlobals": {},
+  "missingOnRetail": [
+    "C_SkillInfo.GetSkillLineInfoByID"
+  ],
+  "missingOnForever": []
+}

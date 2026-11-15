@@ -129,9 +129,10 @@ function Plugin:RenderCompassMarker(button, marker, interactive, x, alpha, marke
         button.glowX, button.glowY = x, glowY
         button.glowAnchor = glowAnchor
     end
-    if not waypoint and marker.distance > self.range * (1 - C.MARKER_RANGE_FADE_FRACTION) then
-        local fadeWidth = math.min(self.range * C.MARKER_RANGE_FADE_FRACTION, C.MARKER_RANGE_FADE_YARDS)
-        local progress = math.max(0, math.min(1, (self.range - marker.distance) / fadeWidth))
+    local range = not waypoint and self:GetCompassMarkerRange(marker)
+    if range and marker.distance > range * (1 - C.MARKER_RANGE_FADE_FRACTION) then
+        local fadeWidth = math.min(range * C.MARKER_RANGE_FADE_FRACTION, C.MARKER_RANGE_FADE_YARDS)
+        local progress = math.max(0, math.min(1, (range - marker.distance) / fadeWidth))
         alpha = alpha * progress * progress * (3 - 2 * progress)
     end
     alpha = alpha * (marker.sourceAlpha or 1)

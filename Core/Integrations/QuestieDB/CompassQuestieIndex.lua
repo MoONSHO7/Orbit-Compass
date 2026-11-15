@@ -3,6 +3,7 @@ local Readable, Number = Addon.SourceUtils.Readable, Addon.SourceUtils.Number
 local REQUIRED_CONTRACT = 4
 local PERCENT = 100
 local BUILD_BUDGET_MS = 0.5
+local PROFILER_LABEL = "Compass.QuestieDB.Index"
 local NPC_SLOT, OBJECT_SLOT = 1, 2
 -- QuestieDB service flag name and the Enum.MinimapTrackingFilter field whose icon and label present it.
 local SERVICES = {
@@ -15,6 +16,7 @@ local SERVICES = {
 local NPC_GETTERS = { "GetAllIds", "npcFlags", "spawns", "friendlyToFaction", "name" }
 local OBJECT_GETTERS = { "spawns", "name" }
 local QUEST_GETTERS = { "GetAllIds", "GetAll", "startedBy", "name" }
+local ITEM_GETTERS = { "npcDrops", "objectDrops", "vendors", "name" }
 local Index = {}
 
 -- QuestieDB masks can exceed 32 bits, so single-bit membership uses arithmetic rather than the 32-bit bit library.
@@ -49,6 +51,7 @@ function Index.Provider()
         not HasFunctions(lib.Npc, NPC_GETTERS)
         or not HasFunctions(lib.Object, OBJECT_GETTERS)
         or not HasFunctions(lib.Quest, QUEST_GETTERS)
+        or not HasFunctions(lib.Item, ITEM_GETTERS)
         or type(support) ~= "table"
         or type(support.Get) ~= "function"
         or type(enum) ~= "table"
@@ -249,14 +252,32 @@ local function Step(plugin)
         IndexObject(build, lib.Object, objectID)
     end
     IndexEntrances(build, build.zoneDB)
-    plugin.compassQuestieIndex = { lib = lib, byMap = build.byMap, quests = {} }
+    -- `plans`, `spawns`, `places` and `icons` are the log-objective files' session caches.
+    plugin.compassQuestieIndex = {
+        lib = lib,
+        byMap = build.byMap,
+        areaMaps = build.areaMaps,
+        quests = {},
+        plans = {},
+        spawns = {},
+        places = {},
+        icons = {},
+    }
     plugin.compassQuestieBuild = nil
     return true
 end
 
 local function Drive(plugin)
+    local profiler = Addon.Services.profiler
+    local start, startKB
+    if profiler and profiler.active then
+        start, startKB = profiler:Begin()
+    end
     -- One protected step per frame: a failing build stops for the session instead of erroring every frame.
     local ok, done = pcall(Step, plugin)
+    if start then
+        profiler:End(plugin, PROFILER_LABEL, start, startKB)
+    end
     if ok and not done then
         return
     end

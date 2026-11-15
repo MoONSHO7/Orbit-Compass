@@ -39,9 +39,9 @@ local function FindNext(plugin, route)
         then
             local east = (marker.x - plugin.bearingPlayerX) * plugin.mapWidth
             local north = (marker.y - plugin.bearingPlayerY) * plugin.mapHeight
-            local distance = east * east + north * north
+            local distance, range = east * east + north * north, plugin:GetCompassMarkerRange(marker)
             if
-                distance <= plugin.range * plugin.range
+                distance <= range * range
                 and (not best or distance < bestDistance or (distance == bestDistance and marker.key < best.key))
             then
                 best, bestDistance = marker, distance

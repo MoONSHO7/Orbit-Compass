@@ -3,7 +3,8 @@ local Plugin = Addon.Controller
 local C = Addon.Constants
 local Utils = Addon.SourceUtils
 local Readable, Number, AddMarker = Utils.Readable, Utils.Number, Utils.AddMarker
-local CAPABILITY_VERSION = 1
+-- Orbit publishes the resource snapshot from its blip layer at version 1 and from its corner scanner at version 2.
+local SNAPSHOT_OWNERS = table.freeze({ "MapDots", "MapNativeResources" })
 local MAX_OBSERVATIONS = 64
 local ICON_SCALE = 0.6
 local KIND = "resource"
@@ -15,9 +16,8 @@ local NO_MARKERS = table.freeze({})
 
 local function Capability()
     local host = Addon.OrbitHost
-    if host and host.ExternalUIHost.mapResourceObservationsVersion == CAPABILITY_VERSION then
-        return host.MapDots
-    end
+    local owner = host and SNAPSHOT_OWNERS[host.ExternalUIHost.mapResourceObservationsVersion]
+    return owner and host[owner]
 end
 
 local function SameMarkers(previous, markers)

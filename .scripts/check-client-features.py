@@ -57,7 +57,7 @@ def hosted_settings(family):
                 {label="Points",controls={{key="PointVisibility",type="points"}}}}
         end
         Plugin={resets=0}
-        function Plugin:ResetCompassPointVisibility()self.resets=self.resets+1 end
+        function Plugin:ResetCompassPoints()self.resets=self.resets+1 end
         function Plugin:SetSetting()error("Settings reset must not write frame placement")end
         Addon.Controller=Plugin
     ''')
@@ -128,7 +128,11 @@ check("Unsupported result cannot bypass Points", 'assert(not P:ChooseCompassSear
 check("Disable releases search demand", 'P:AcquireCompassLandmarkDemand("external",true); P:StopCompassLandmarks(); assert(next(P.compassLandmarks.demand)==nil and P.compassLandmarkDriver.OnUpdate==nil and P.compassLandmarks.thread==nil)')
 check("Saved collection survives store roundtrip", 'P:SaveCompassLocation("Home"); local data=CopyTable(Addon.Store.data); local other=Addon.LibOrbitUI.SettingsStore:Create(Addon.Definition.defaults,Addon.Definition.indexDefaults); assert(other:Initialize(data)); assert(other:Collection("CompassLocations"):Get("forever:home").clientFamily=="forever")')
 
-check("Points reset retains hidden Retail choices", 'P:SetSetting(1,"ShowWorldQuests",false); P:SetCompassPointVisibility("ShowWorldQuests","city",true); P:ResetCompassPointVisibility(); assert(P:GetSetting(1,"ShowWorldQuests")==false and P:GetSetting(1,"PointVisibility").ShowWorldQuests.city==true)')
+check("Points reset retains hidden Retail choices", 'P:SetSetting(1,"ShowWorldQuests",false); P:SetCompassPointVisibility("ShowWorldQuests","city",true); P:ResetCompassPoints(); assert(P:GetSetting(1,"ShowWorldQuests")==false and P:GetSetting(1,"PointVisibility").ShowWorldQuests.city==true)')
+check("Shared sources resolve Points rows by kind", 'local R=Addon.CompassMarkerPoint; assert(R("map","event")=="ShowEvents" and R("map","delve")=="ShowPOIs" and R("map","poi")=="ShowPOIs" and R("questie","poi")=="ShowPOIs" and R("questie","service")=="ShowServices" and R("questie","questOffer")=="ShowQuestOffers" and R("offers","questOffer")=="ShowQuestOffers" and R("quests","quest")=="ShowQuestObjectives" and R("quests","worldQuest")=="ShowWorldQuests" and R("vignettes","poi")=="ShowVignettes" and R("taxi","flightMaster")=="ShowFlightMasters" and R("route","route")==nil and R("map","unknown")==nil)')
+check("Collected markers carry their Points range", 'mock.poiIDs={99}; Drain(); local m=P.compassSources.map.markers[1]; assert(m.point=="ShowPOIs" and P:GetCompassMarkerRange(m)==Addon.Constants.DEFAULT_RANGE); P:SetCompassPointRange("ShowPOIs",500); P:CacheCompassRanges(); assert(P:GetCompassMarkerRange(m)==500 and select(2,P:GetCompassPointRange("ShowPOIs")) and not select(2,P:GetCompassPointRange("ShowEvents"))); assert(P:GetCompassMarkerRange({key="route"})==P.range)')
+check("Saved point ranges clamp to slider bounds", 'local C=Addon.Constants; P:SetCompassPointRange("ShowPOIs",C.RANGE_MAX*4); P:CacheCompassRanges(); assert(P.compassPointRanges.ShowPOIs==C.RANGE_MAX and P:GetCompassPointRange("ShowPOIs")==C.RANGE_MAX)')
+check("Points reset clears supported ranges only", 'P:SetCompassPointRange("ShowWorldQuests",750); P:SetCompassPointRange("ShowPOIs",500); P:ResetCompassPoints(); local r=P:GetSetting(1,"PointRanges"); assert(r.ShowWorldQuests==750 and r.ShowPOIs==nil)')
 check("Missing quest classification disables only quests", 'assert(Addon.ClientFeatures.supported and not Addon.ClientFeatures.quests and not Addon.ClientFeatures.offers); Drain(); Build()', before='C_QuestInfoSystem=nil')
 check("Ordinary quests survive missing task API", 'assert(Addon.ClientFeatures.quests); Drain(); Build()', before='C_TaskQuest=nil')
 check("Missing base map API refuses startup contract", 'assert(not Addon.ClientFeatures.supported)', before='C_Map.GetMapInfo=false')
@@ -1038,6 +1042,12 @@ def tracked_pin_client(family):
     return lua
 
 
+def bearings_client(family):
+    lua = client(family)
+    load_modules(lua, ["Foundation/CompassMath.lua", "Navigation/CompassBearings.lua"])
+    return lua
+
+
 def handynotes_client(family):
     lua = client(family)
     prefix = "Integrations/HandyNotes/"
@@ -1192,6 +1202,16 @@ module_scenarios = tuple(
         P.discoveryPending=false
         P:SelectCompassPin({pinType=Enum.SuperTrackingMapPinType.AreaPOI,id=7})
         assert(route.dirty and P.discoveryPending, "pin selection left the route source clean")
+    ''') for family in ("retail", "forever")) + tuple(
+    (f"{family} bearings honour each Points row's range", bearings_client(family), '''
+        P.bearingPlayerX, P.bearingPlayerY, P.bearingRevision = .5, .5, 1
+        local poi = {key="poi:1", x=.5, y=0, point="ShowPOIs", priority=6}
+        local taxi = {key="taxi:1", x=.5, y=0, point="ShowFlightMasters", priority=6}
+        P:SetCompassPointRange("ShowPOIs", 250); P:CacheCompassRanges()
+        P:RefreshCompassMarkerBearing(poi); P:RefreshCompassMarkerBearing(taxi)
+        assert(poi.bearing == nil and taxi.bearing and math.abs(taxi.distance - 500) < 1e-6)
+        P.bearingRevision = 2; P:SetCompassPointRange("ShowPOIs", 750); P:CacheCompassRanges()
+        P:RefreshCompassMarkerBearing(poi); assert(poi.bearing and math.abs(poi.distance - 500) < 1e-6)
     ''') for family in ("retail", "forever")) + tuple(
     (f"{family} HandyNotes {name}", handynotes_client(family), code)
     for family in ("retail", "forever") for name, code in HANDYNOTES_CASES.items()

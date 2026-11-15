@@ -10,8 +10,12 @@ Turn native and addon observations into stable marker snapshots without rescanni
 `Discovery.xml` loads validation and visibility before `Sources/`, then snapshot assembly, the collector catalog,
 display polling and the scheduler. `CompassSourceUtils.lua` owns secret-first record validation and marker construction.
 `CompassPointVisibility.lua` caches Cities, World and Toggle preferences for the 19 point definitions; a point may
-name several sources (Available Quests and Zone POIs also feed the QuestieDB source).
-`CompassDiscoveryCatalog.lua` owns collector order and event routing. `CompassDiscovery.lua` owns job scheduling,
+name several sources (Available Quests, Quest Objectives and Zone POIs also feed the QuestieDB source). It also owns
+scan ranges: `PointRanges` holds optional per-row yards over the global `Range`, and `CompassDiscovery.lua` stamps each
+completed marker's `point` from its source and kind, which Navigation and Ribbon resolve through
+`GetCompassMarkerRange`. Rows sharing a source must list their `kinds`; markers outside any row use `Range`.
+`CompassDiscoveryCatalog.lua` owns collector order and event routing, including the quest-log events the QuestieDB
+log owner coalesces itself (`../Integrations/QuestieDB/README.md`). `CompassDiscovery.lua` owns job scheduling,
 invalidation and refresh deadlines. `CompassSources.lua` assembles snapshots with the user waypoint and, when absent, the
 followed map pin or vignette as a waypoint-priority marker, so a tracked destination shows at any range, even when its
 category is hidden or it sits on another map of the same continent.

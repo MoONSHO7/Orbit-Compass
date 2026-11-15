@@ -76,9 +76,17 @@ def check(name, code, family="forever", modules=LIVE_MODULES, setup=LIVE, real_p
     cases.append((name, code, family, modules, setup, real_pixel))
 
 
-check("Forever capability publishes display-only artwork at the player's world anchor", r'''
+# Each capability version names the Orbit member that answers; the other member trips if Compass reads it.
+VERSIONS = ((1, "MapDots", "MapNativeResources"), (2, "MapNativeResources", "MapDots"))
+
+for version, owner, other in VERSIONS:
+    check(f"Forever capability version {version} publishes display-only artwork from {owner}", r'''
+local host=OrbitResources.Publish(__VERSION__)
+assert(host.__OWNER__ and host.__OTHER__==nil)
+host.__OTHER__={GetResourceSnapshot=function()error("version __VERSION__ read __OTHER__")end}
 local id=OrbitResources.Add(mock.north+10,mock.west-20,"Peacebloom",134414)
 Advance(.5,60)
+assert(OrbitResources.reads>0,"the version __VERSION__ owner was never read")
 local markers=Resources()
 assert(#markers==1 and #P.displayMarkers==1 and P.displayMarkers[1]==markers[1])
 local marker=markers[1]
@@ -88,22 +96,50 @@ Near(marker.x,.52,"x");Near(marker.y,.49,"y");Near(marker.distance,math.sqrt(500
 assert(mock.renderedResources==1)
 for _,actionable in ipairs(P.markers)do assert(not actionable.displayOnly,"display marker became actionable") end
 OrbitResources.AssertImmutable()
-''')
+'''.replace("__VERSION__", str(version)).replace("__OWNER__", owner).replace("__OTHER__", other))
 
-for variant in ("standalone", "older", "future", "string"):
+    check(f"Forever capability version {version} follows its scanner through additions, silence and recovery", r'''
+OrbitResources.Publish(__VERSION__)
+local a=OrbitResources.Add(mock.north+5,mock.west)
+local b=OrbitResources.Add(mock.north-5,mock.west)
+Advance(.5,60);assert(#Resources()==2)
+local snapshot=P.compassDisplaySources.resources.snapshot
+assert(snapshot==OrbitResources.snapshot and snapshot.count==2 and snapshot.instance==OrbitResources.instance)
+OrbitResources.Remove(a);Advance(.21,60)
+assert(#Resources()==1 and Resources()[1].key=="resource:"..b)
+OrbitResources.live=false;Advance(.21,60)
+assert(#Resources()==0 and #P.displayMarkers==0,"a scanner showing none kept its last records")
+OrbitResources.live=true;Advance(.21,60)
+assert(#Resources()==1 and Resources()[1].key=="resource:"..b,"the capability did not recover")
+OrbitResources.AssertImmutable()
+'''.replace("__VERSION__", str(version)))
+
+# Hosts that publish nothing: no host, no version, an unknown future version, malformed versions (with both members
+# present, so only the version refuses them) and a version whose documented member is absent.
+UNSUPPORTED = {
+    "standalone": "Addon.OrbitHost=nil",
+    "older": "Addon.OrbitHost.ExternalUIHost={legacyPluginVersion=1}",
+    "unknown future version 3": "OrbitResources.Publish(3,'MapDots','MapNativeResources')",
+    "malformed string version '1'": "OrbitResources.Publish('1','MapDots','MapNativeResources')",
+    "malformed string version '2'": "OrbitResources.Publish('2','MapDots','MapNativeResources')",
+    "malformed fractional version": "OrbitResources.Publish(1.5,'MapDots','MapNativeResources')",
+    "malformed zero version": "OrbitResources.Publish(0,'MapDots','MapNativeResources')",
+    "malformed negative version": "OrbitResources.Publish(-1,'MapDots','MapNativeResources')",
+    "malformed boolean version": "OrbitResources.Publish(true,'MapDots','MapNativeResources')",
+    "malformed table version": "OrbitResources.Publish({2},'MapDots','MapNativeResources')",
+    "version 1 without MapDots": "OrbitResources.Publish(1,'MapNativeResources')",
+    "version 2 without MapNativeResources": "OrbitResources.Publish(2,'MapDots')",
+}
+for variant, install in UNSUPPORTED.items():
     check(f"Forever {variant} host provides no resource capability and retires polling", r'''
-local variant="__VARIANT__"
-if variant=="standalone" then Addon.OrbitHost=nil
-elseif variant=="older" then Addon.OrbitHost.ExternalUIHost={legacyPluginVersion=1}
-elseif variant=="future" then Addon.OrbitHost.ExternalUIHost.mapResourceObservationsVersion=2
-else Addon.OrbitHost.ExternalUIHost.mapResourceObservationsVersion="1" end
+__INSTALL__
 OrbitResources.Add(mock.north,mock.west)
 Advance(10,240)
 assert(OrbitResources.reads==0 and #P.displayMarkers==0 and #Resources()==0)
 assert(P.compassDisplaySources.resources.nextPoll==math.huge,"an unsupported capability kept polling")
 P:InvalidateCompassSource("PLAYER_ENTERING_WORLD");Advance(1,60)
 assert(OrbitResources.reads==0 and #P.displayMarkers==0)
-'''.replace("__VARIANT__", variant))
+'''.replace("__INSTALL__", install))
 
 check("Retail never reads a capable host or creates display state", r'''
 OrbitResources.Fill(64)

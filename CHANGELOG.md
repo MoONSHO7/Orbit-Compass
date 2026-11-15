@@ -1,13 +1,20 @@
 # Changelog
 
+## 2026-11-14
+
+* Each point type in Points now has a thin range slider underneath it, so quest objectives, flight masters, rares and the rest can each appear from their own distance. Untouched sliders follow Marker Range in Behaviour (shown in grey); right-click a slider to return it to Marker Range.
+* QuestieDB quest givers now respect your professions, known spells and specializations, and draw 25% smaller on Orbit's map. A quest is offered only once the game confirms it exists, so quests this version never had no longer appear.
+* On Forever with QuestieDB installed, Orbit's HUD map shows where the unfinished objectives of quests in your log can be done when the game marks no area or pin for them, and the turn-in when a quest is complete. They follow the Quest Objectives point.
+* Right-click a QuestieDB point on Orbit's HUD map for a menu that removes a quest from the map: its giver, objective icons and turn-in go, on the compass too. The same menu restores every removed quest.
+
 ## 2026-11-13
 
-* With Orbit also installed, those quest givers appear on Orbit's interactive minimap and HUD map too, following the Available Quests point.
+* With Orbit also installed, those quest givers appear on Orbit's HUD map too, following the Available Quests point.
 * On Forever with QuestieDB installed, the compass shows quest givers with quests you can take, dungeon and raid entrances, and a new Town Services point type for innkeepers, repairers, bankers, auctioneers and stable masters. Hovering a quest giver lists its quests with their levels in difficulty colours. A Quest Level Range slider in Appearance (default 5) hides quests too far above or below your level.
 
 ## 2026-10-24
 
-* On Forever with Orbit, herbs and ore spotted by the minimap or HUD now appear below the compass as round icons with thin gold borders. They follow Orbit's existing resource setting.
+* On Forever with Orbit, herbs and ore spotted by the minimap now appear below the compass as round icons with thin gold borders. They follow Orbit's existing resource setting.
 
 ## 2026-10-18
 

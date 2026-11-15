@@ -66,7 +66,7 @@ function Plugin:FindCompassPoint(centered, query)
             and marker.key ~= self.navigationKey
             and marker.kind ~= "route"
             and (not query or marker.name:lower():find(query, 1, true))
-            and marker.distance <= self.range
+            and marker.distance <= self:GetCompassMarkerRange(marker)
             and (not centered or (marker.renderShown and angle <= CENTER_ANGLE))
             and (
                 not best
@@ -110,7 +110,7 @@ function Plugin:ShowCompassNearby()
     for _, marker in ipairs(self.markers) do
         if
             marker.distance
-            and marker.distance <= self.range
+            and marker.distance <= self:GetCompassMarkerRange(marker)
             and marker.key ~= self.navigationKey
             and marker.kind ~= "route"
         then

@@ -60,6 +60,7 @@ Addon.Definition = {
         ViewAngle = C.DEFAULT_VIEW_ANGLE,
         Range = C.DEFAULT_RANGE,
         PointVisibility = {},
+        PointRanges = {},
         ShowPOIs = true,
         ShowVignettes = true,
         ShowQuestObjectives = true,

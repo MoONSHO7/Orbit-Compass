@@ -16,6 +16,11 @@ function Utils.Number(value)
     end
 end
 
+function Utils.Text(value)
+    value = Utils.Readable(value)
+    return type(value) == "string" and value ~= "" and value or nil
+end
+
 function Utils.ReadPosition(position)
     position = Utils.Readable(position)
     if type(position) == "table" then

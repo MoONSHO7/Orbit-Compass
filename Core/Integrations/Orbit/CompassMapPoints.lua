@@ -7,7 +7,10 @@ local REFRESH_SECONDS = 60
 local provider = table.freeze({
     name = "Orbit Compass",
     Collect = function(mapID)
-        return Plugin:CollectCompassQuestieGivers(mapID), REFRESH_SECONDS
+        return Plugin:CollectCompassQuestieMapRows(mapID), REFRESH_SECONDS
+    end,
+    Menu = function(key, root)
+        Addon.CompassQuestieMenu.Build(Plugin, key, root)
     end,
 })
 

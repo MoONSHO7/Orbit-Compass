@@ -164,6 +164,16 @@ local EVENT_SOURCES = {
     ORBIT_COMPASS_HANDYNOTES = "handynotes",
     ORBIT_COMPASS_NAVIGATION_ROUTE = "navigation",
 }
+-- Quest-log events the QuestieDB log owner hears: true ones arrive in bursts, which it coalesces before refreshing.
+local QUESTIE_LOG_EVENTS = {
+    QUEST_LOG_UPDATE = true,
+    QUEST_POI_UPDATE = true,
+    QUEST_ACCEPTED = false,
+    QUEST_TURNED_IN = false,
+    QUEST_REMOVED = false,
+    PLAYER_LEVEL_UP = false,
+    PLAYER_ENTERING_WORLD = false,
+}
 local PATH_SOURCES = { "route", "quests" }
 local CONTEXT_EVENTS = {
     USER_WAYPOINT_UPDATED = true,
@@ -177,6 +187,7 @@ local CONTEXT_EVENTS = {
 Addon.CompassDiscoveryCatalog = {
     sources = SOURCES,
     eventSources = EVENT_SOURCES,
+    questieLogEvents = QUESTIE_LOG_EVENTS,
     pathSources = PATH_SOURCES,
     contextEvents = CONTEXT_EVENTS,
 }

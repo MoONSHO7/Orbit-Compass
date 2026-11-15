@@ -178,7 +178,7 @@ function Bridge.RenderSettings(plugin, dialog, frame)
     end
     schema.onReset = function()
         if current == Addon.L.PLU_COMPASS_POINTS then
-            plugin:ResetCompassPointVisibility()
+            plugin:ResetCompassPoints()
         end
     end
     Engine.Config:Render(dialog, frame, plugin, schema)

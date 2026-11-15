@@ -6,8 +6,13 @@ local Utils = Addon.SourceUtils
 local Readable, Number = Utils.Readable, Utils.Number
 local Index = Addon.CompassQuestieIndex
 local Availability = Addon.CompassQuestieAvailability
+local Lines = Addon.CompassQuestieLines
+local LogRows = Addon.CompassQuestieLogRows
+local Menu = Addon.CompassQuestieMenu
 local REFRESH_INTERVAL = 60
 local GIVER_ATLAS, ENTRANCE_ATLAS = "QuestNormal", "Dungeon"
+-- A giver on the host's map draws at three quarters of its atlas size, so a hub's givers crowd its ground less.
+local MAP_GIVER_SCALE = 0.75
 local DESCRIPTION_SEPARATOR = ", "
 local WHITE = { r = 1, g = 1, b = 1 }
 local NO_ROWS = table.freeze({})
@@ -79,27 +84,17 @@ local function QuestTitle(lib, questID)
     return type(title) == "string" and title ~= "" and title or nil
 end
 
--- Each available quest as a tooltip line, "[level] title" in the client's quest difficulty colour.
-local function QuestLine(context, questID, title)
-    local level = Availability.Level(context, questID)
-    if not level then
-        return { text = title, r = WHITE.r, g = WHITE.g, b = WHITE.b }
-    end
-    local color = type(GetQuestDifficultyColor) == "function" and Readable(GetQuestDifficultyColor(level))
-    color = type(color) == "table" and color or WHITE
-    return { text = L.PLU_COMPASS_QUEST_LEVEL_F:format(level, title), r = color.r, g = color.g, b = color.b }
-end
-
 -- Nil when none of the giver's quests is available; otherwise its summary and per-quest tooltip lines.
 local function GiverQuests(lib, context, record)
-    local first, count, lines = nil, 0, {}
+    local first, count, lines, quests = nil, 0, {}, {}
     for _, questID in ipairs(record.quests) do
         if Availability.IsAvailable(context, questID) then
             count = count + 1
             local title = QuestTitle(lib, questID)
             if title then
                 first = first or title
-                lines[#lines + 1] = QuestLine(context, questID, title)
+                lines[#lines + 1] = Lines.Quest(Availability.Level(context, questID), title)
+                quests[#quests + 1] = { id = questID, title = lines[#lines].text }
             end
         end
     end
@@ -107,7 +102,7 @@ local function GiverQuests(lib, context, record)
         return
     end
     local description = first and (count > 1 and L.PLU_COMPASS_QUEST_MORE_F:format(first, count - 1) or first)
-    return { description = description, lines = lines }
+    return { description = description, lines = lines, quests = quests }
 end
 
 local function ServiceDescription(art, record)
@@ -216,22 +211,12 @@ local function AddEntrances(plugin, markers, mapID, entrances)
     end
 end
 
--- One map's available quest givers as rows for a host's own map (`../Orbit/CompassMapPoints.lua`): nil while the
--- index is still building, an empty list without a provider or with Available Quests off.
-function Plugin:CollectCompassQuestieGivers(mapID)
-    local lib = self.showQuestOffers and Index.Provider()
-    if not lib then
-        return NO_ROWS
-    end
-    local index, building = Index.Request(self, lib)
-    if not index then
-        return not building and NO_ROWS or nil
-    end
+local function AddGiverRows(plugin, rows, lib, index, mapID, menus)
     local entry = index.byMap[mapID]
     if not entry then
-        return NO_ROWS
+        return
     end
-    local context, summaries, rows = Availability.Context(lib, self.questLevelRange, index.quests), {}, {}
+    local context, summaries = Availability.Context(lib, plugin.questLevelRange, index.quests, plugin), {}
     for _, point in ipairs(entry.givers) do
         local record = point.record
         if Availability.Serves(context, record) then
@@ -242,17 +227,41 @@ function Plugin:CollectCompassQuestieGivers(mapID)
             end
             local name = quests and EntityName(lib, record)
             if type(name) == "string" and name ~= "" then
-                rows[#rows + 1] = {
+                local row = {
                     key = ("giver:%s:%d:%d"):format(record.entity, record.id, point.ordinal),
                     x = point.x,
                     y = point.y,
                     atlas = GIVER_ATLAS,
+                    scale = MAP_GIVER_SCALE,
                     name = name,
                     description = quests.description,
                     lines = quests.lines,
                 }
+                for _, quest in ipairs(quests.quests) do
+                    Menu.Add(menus, row, quest.id, quest.title)
+                end
+                rows[#rows + 1] = row
             end
         end
+    end
+end
+
+-- Nil tells the host's map the index is still building; an empty list that there is nothing to draw.
+function Plugin:CollectCompassQuestieMapRows(mapID)
+    local lib = (self.showQuestOffers or self.showQuestObjectives) and Index.Provider()
+    if not lib then
+        return NO_ROWS
+    end
+    local index, building = Index.Request(self, lib)
+    if not index then
+        return not building and NO_ROWS or nil
+    end
+    local rows, menus = {}, Menu.Begin(self, mapID)
+    if self.showQuestOffers then
+        AddGiverRows(self, rows, lib, index, mapID, menus)
+    end
+    if self.showQuestObjectives then
+        LogRows.Add(self, rows, index, mapID, menus)
     end
     return rows
 end
@@ -269,7 +278,7 @@ function Plugin:CollectCompassQuestieDB(markers)
         end
         return REFRESH_INTERVAL
     end
-    local context, summaries = Availability.Context(lib, self.questLevelRange, index.quests), {}
+    local context, summaries = Availability.Context(lib, self.questLevelRange, index.quests, self), {}
     for _, mapID in ipairs(NearbyMaps(self)) do
         local entry = index.byMap[mapID]
         if entry then

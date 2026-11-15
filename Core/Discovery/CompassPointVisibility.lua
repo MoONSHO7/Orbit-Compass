@@ -5,25 +5,50 @@ local Readable, Number = Addon.SourceUtils.Readable, Addon.SourceUtils.Number
 local POINTS = {
     { key = "ShowGatherMate", field = "showGatherMate", source = "gathermate", labelKey = "PLU_COMPASS_GATHERMATE" },
     { key = "ShowHandyNotes", field = "showHandyNotes", source = "handynotes", labelKey = "PLU_COMPASS_HANDYNOTES" },
-    { key = "ShowWaypoint", field = "showWaypoint", labelKey = "PLU_COMPASS_WAYPOINT" },
+    { key = "ShowWaypoint", field = "showWaypoint", labelKey = "PLU_COMPASS_WAYPOINT", ignoresRange = true },
     {
         key = "ShowQuestObjectives",
         field = "showQuestObjectives",
-        source = "quests",
+        source = { "quests", "questie" },
+        kinds = { "quest" },
         labelKey = "PLU_COMPASS_QUEST_OBJECTIVES",
     },
-    { key = "ShowWorldQuests", field = "showWorldQuests", source = "quests", labelKey = "PLU_COMPASS_WORLD_QUESTS" },
+    {
+        key = "ShowWorldQuests",
+        field = "showWorldQuests",
+        source = "quests",
+        kinds = { "worldQuest" },
+        labelKey = "PLU_COMPASS_WORLD_QUESTS",
+    },
     {
         key = "ShowFlightMasters",
         field = "showFlightMasters",
         source = "taxi",
         labelKey = "PLU_COMPASS_FLIGHT_MASTERS",
     },
-    { key = "ShowServices", field = "showServices", source = "questie", labelKey = "PLU_COMPASS_SERVICES" },
-    { key = "ShowEvents", field = "showEvents", source = "map", labelKey = "PLU_COMPASS_EVENTS" },
-    { key = "ShowRaces", field = "showRaces", source = "map", labelKey = "PLU_COMPASS_RACES" },
-    { key = "ShowQuestHubs", field = "showQuestHubs", source = "map", labelKey = "PLU_COMPASS_QUEST_HUBS" },
-    { key = "ShowPOIs", field = "showPOIs", source = { "map", "questie" }, labelKey = "PLU_COMPASS_ZONE_POIS" },
+    {
+        key = "ShowServices",
+        field = "showServices",
+        source = "questie",
+        kinds = { "service" },
+        labelKey = "PLU_COMPASS_SERVICES",
+    },
+    { key = "ShowEvents", field = "showEvents", source = "map", kinds = { "event" }, labelKey = "PLU_COMPASS_EVENTS" },
+    { key = "ShowRaces", field = "showRaces", source = "map", kinds = { "race" }, labelKey = "PLU_COMPASS_RACES" },
+    {
+        key = "ShowQuestHubs",
+        field = "showQuestHubs",
+        source = "map",
+        kinds = { "questHub" },
+        labelKey = "PLU_COMPASS_QUEST_HUBS",
+    },
+    {
+        key = "ShowPOIs",
+        field = "showPOIs",
+        source = { "map", "questie" },
+        kinds = { "poi", "delve" },
+        labelKey = "PLU_COMPASS_ZONE_POIS",
+    },
     { key = "ShowVignettes", field = "showVignettes", source = "vignettes", labelKey = "PLU_COMPASS_VIGNETTES" },
     { key = "ShowDirections", field = "showDirections", source = "directions", labelKey = "PLU_COMPASS_DIRECTIONS" },
     { key = "ShowMapLinks", field = "showMapLinks", source = "links", labelKey = "PLU_COMPASS_MAP_LINKS" },
@@ -39,6 +64,7 @@ local POINTS = {
         key = "ShowQuestOffers",
         field = "showQuestOffers",
         source = { "offers", "questie" },
+        kinds = { "questOffer" },
         labelKey = "PLU_COMPASS_QUEST_OFFERS",
     },
     {
@@ -49,6 +75,26 @@ local POINTS = {
     },
 }
 Addon.CompassPointTypes = table.freeze(POINTS)
+local ANY_KIND = true
+-- A source shared by several rows names each row's marker kinds; a single-row source claims every kind.
+local SOURCE_POINTS = {}
+for _, point in ipairs(POINTS) do
+    for _, source in ipairs(type(point.source) == "table" and point.source or { point.source }) do
+        SOURCE_POINTS[source] = SOURCE_POINTS[source] or {}
+        for _, kind in ipairs(point.kinds or { ANY_KIND }) do
+            SOURCE_POINTS[source][kind] = point.key
+        end
+    end
+end
+
+function Addon.CompassMarkerPoint(source, kind)
+    local points = SOURCE_POINTS[source]
+    return points and (points[kind] or points[ANY_KIND])
+end
+
+local function ClampRange(yards)
+    return math.max(C.RANGE_MIN, math.min(C.RANGE_MAX, yards))
+end
 
 local function PointValue(plugin, visibility, key, area)
     local values = visibility[key]
@@ -77,16 +123,44 @@ function Plugin:SetCompassPointVisibility(key, area, value)
     self:SetSetting(C.SYSTEM_INDEX, "PointVisibility", visibility)
 end
 
-function Plugin:ResetCompassPointVisibility()
+function Plugin:GetCompassPointRange(key)
+    local yards = self:GetSetting(C.SYSTEM_INDEX, "PointRanges")[key]
+    return ClampRange(yards or self:GetSetting(C.SYSTEM_INDEX, "Range")), yards ~= nil
+end
+
+function Plugin:SetCompassPointRange(key, yards)
+    local ranges = CopyTable(self:GetSetting(C.SYSTEM_INDEX, "PointRanges"))
+    ranges[key] = yards
+    self:SetSetting(C.SYSTEM_INDEX, "PointRanges", ranges)
+end
+
+function Plugin:CacheCompassRanges()
+    self.range = ClampRange(self:GetSetting(C.SYSTEM_INDEX, "Range"))
+    local saved, ranges = self:GetSetting(C.SYSTEM_INDEX, "PointRanges"), {}
+    for _, point in ipairs(POINTS) do
+        if saved[point.key] then
+            ranges[point.key] = ClampRange(saved[point.key])
+        end
+    end
+    self.compassPointRanges = ranges
+end
+
+function Plugin:GetCompassMarkerRange(marker)
+    return self.compassPointRanges[marker.point] or self.range
+end
+
+function Plugin:ResetCompassPoints()
     self.compassPointsToggled = false
     local visibility = CopyTable(self:GetSetting(C.SYSTEM_INDEX, "PointVisibility"))
+    local ranges = CopyTable(self:GetSetting(C.SYSTEM_INDEX, "PointRanges"))
     for _, point in ipairs(POINTS) do
         if Addon.ClientFeatures.AllowsPoint(point.key) then
             self:SetSetting(C.SYSTEM_INDEX, point.key, Addon.Definition.defaults[point.key])
-            visibility[point.key] = nil
+            visibility[point.key], ranges[point.key] = nil, nil
         end
     end
     self:SetSetting(C.SYSTEM_INDEX, "PointVisibility", visibility)
+    self:SetSetting(C.SYSTEM_INDEX, "PointRanges", ranges)
 end
 
 local function PlayerArea(mapID)

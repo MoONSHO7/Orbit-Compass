@@ -511,6 +511,13 @@ function PointCells(points, label)
     end
     return cells
 end
+function PointRange(points, label)
+    for row in points.rows:EnumerateActive() do
+        if row.label:GetText() == label and row.range and row.range:IsShown() then
+            return row.range
+        end
+    end
+end
 function OpenPointsTab()
     assert(Command("/orbitcompass"), "/orbitcompass is not registered")
     local dialog = CompassAddon.App.dialogs[1]
@@ -946,6 +953,25 @@ class StandaloneCases(CompassCase):
         self.run_lua("Dialog:Hide()")
         self.assertFalse(self.eval("Points:IsVisible() or Hotkey:IsVisible()"))
 
+    def test_points_rows_set_their_own_scan_range(self):
+        self.boot()
+        self.frames()
+        self.run_lua("Dialog, Points = OpenPointsTab()")
+        self.assertIsNone(self.eval("PointRange(Points, CompassAddon.L.PLU_COMPASS_WAYPOINT)"))
+        self.run_lua("Range = PointRange(Points, CompassAddon.L.PLU_COMPASS_ZONE_POIS)")
+        self.assertEqual(self.eval("Range.valueText:GetText()"), self.eval("OrbitCompass:FormatCompassDistance(2500, 'yards')"))
+        self.run_lua("Range:SetValue(1000); Frames(30)")
+        self.assertEqual(self.eval("OrbitCompass:GetCompassPointRange('ShowPOIs')"), (1000, True))
+        self.assertEqual(self.eval("OrbitCompass:GetCompassMarkerRange(OrbitCompass.markers[1])"), 1000)
+        self.assertEqual(self.eval("Range.valueText:GetText()"), self.eval("OrbitCompass:FormatCompassDistance(1000, 'yards')"))
+        self.run_lua("wow.Hover(Range)")
+        self.assertEqual(self.eval("CompassAddon.Services.tooltip.lines[2].left"),
+                         self.eval("CompassAddon.L.PLU_COMPASS_POINT_RANGE_TT"))
+        self.run_lua('wow.Hover(nil); wow.Click(Range, "RightButton"); Frames(30)')
+        self.assertEqual(self.eval("OrbitCompass:GetCompassPointRange('ShowPOIs')"), (2500, False))
+        self.assertEqual(self.eval("OrbitCompass:GetCompassMarkerRange(OrbitCompass.markers[1])"), 2500)
+        self.run_lua("Dialog:Hide()")
+
     def test_edit_mode_previews_the_arrow_and_resets_it(self):
         self.boot()
         self.frames()
@@ -1180,6 +1206,23 @@ class HostedCases(CompassCase):
         self.run_lua("OrbitCompass:OnCanvasLivePreview()")
         self.eval('Command("/way 50 42 Abbey")')
         self.assertEqual(self.eval("OrbitCompass.navigationView.title:GetText()"), "Abbey")
+
+    def test_hosted_reads_the_real_hosts_resource_capability(self):
+        """Orbit's published capability version names a member Compass reads; an unknown one would retire polling."""
+        self.boot(boot_hosted)
+        self.frames()
+        version = self.eval("Orbit.ExternalUIHost.mapResourceObservationsVersion")
+        owner = {1: "MapDots", 2: "MapNativeResources"}.get(version)
+        self.assertIsNotNone(owner, f"Compass knows no owner for resource capability version {version!r}")
+        self.assertEqual(self.eval(f'type(Orbit.{owner}) == "table" and type(Orbit.{owner}.GetResourceSnapshot)'),
+                         "function", f"the host's version {version} member does not answer")
+        self.assertIsNone(self.eval(f"Orbit.{owner}:GetResourceSnapshot()"), "no corner scanner runs in this boot")
+        state = "OrbitCompass.compassDisplaySources.resources"
+        if self.family == "forever":
+            self.assertTrue(self.eval(f"{state}.nextPoll < math.huge and #{state}.markers == 0"),
+                            "hosted Compass refused the real host's resource capability")
+        else:
+            self.assertTrue(self.eval(f"{state} == nil"))
 
 
 def family_cases(base, prefix):

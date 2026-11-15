@@ -2,11 +2,13 @@ local _, Addon = ...
 local Plugin = Addon.Controller
 local C = Addon.Constants
 local Number = Addon.SourceUtils.Number
+local MarkerPoint = Addon.CompassMarkerPoint
 local SOURCE_RETRY_INTERVAL = 30
 local QUEST_DATA_DIRTY = "questData"
 local Catalog = Addon.CompassDiscoveryCatalog
 local SOURCES = Catalog.sources
 local EVENT_SOURCES = Catalog.eventSources
+local QUESTIE_LOG_EVENTS = Catalog.questieLogEvents
 local PATH_SOURCES = Catalog.pathSources
 local CONTEXT_EVENTS = Catalog.contextEvents
 local SUBZONE_RETAINED_LABELS = {
@@ -152,6 +154,10 @@ function Plugin:InvalidateCompassSource(event)
     local profiler = Addon.Services.profiler
     if profiler and profiler.active and (EVENT_SOURCES[event] or CONTEXT_EVENTS[event]) then
         profiler:Count(self, "Discovery/Invalidate/" .. event)
+    end
+    local burst = QUESTIE_LOG_EVENTS[event]
+    if burst ~= nil then
+        self:NoteCompassQuestieLog(event, burst)
     end
     if event == "USER_WAYPOINT_UPDATED" then
         self.compassSources.route.dirty = true
@@ -398,6 +404,7 @@ function Plugin:DiscoverCompassMarkers()
                     job.nextRefresh = refreshInterval and self.discoveryClock + refreshInterval
                     for _, marker in ipairs(markers) do
                         marker.source = definition.key
+                        marker.point = MarkerPoint(definition.key, marker.kind)
                     end
                     if job.pending then
                         RetainPendingSnapshot(job)

@@ -72,7 +72,8 @@ function Plugin:RefreshCompassMarkerBearing(marker)
     local x, y = self.bearingPlayerX, self.bearingPlayerY
     local east, north = (marker.x - x) * self.mapWidth, (y - marker.y) * self.mapHeight
     marker.distanceSquared = east * east + north * north
-    if marker.distanceSquared <= self.rangeSquared or marker.navigation or marker.priority == C.WAYPOINT_PRIORITY then
+    local range = self:GetCompassMarkerRange(marker)
+    if marker.distanceSquared <= range * range or marker.navigation or marker.priority == C.WAYPOINT_PRIORITY then
         marker.bearing, marker.distance = Addon.Math:Bearing(east, north, marker.distanceSquared)
     else
         marker.bearing, marker.distance = nil, nil
@@ -124,7 +125,6 @@ local function UpdateBearings(self, x, y, profiler)
         end
         self.bearingNextRefresh = self.discoveryClock + C.BEARING_REFRESH_INTERVAL
         self.bearingSampleX, self.bearingSampleY = x, y
-        self.rangeSquared = self.range * self.range
         self.navigationTarget = nil
         for _, marker in ipairs(self.markers) do
             self:RefreshCompassMarkerBearing(marker)
