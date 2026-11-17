@@ -171,6 +171,11 @@ function Plugin:CollectCompassNavigationRoute(markers)
     if marker then
         marker.description = StepLines(guidance) or ReadString(guidance.text)
         marker.routeDestination = destination ~= nil
+        marker.arrival = Number(guidance.arrival)
+        local arrived = Readable(guidance.arrived)
+        if type(arrived) == "boolean" then
+            marker.arrived = arrived
+        end
         if Readable(guidance.key) == WAYPOINT_KEY then
             marker.routeTracking = Enum.SuperTrackingType.UserWaypoint
         end
@@ -187,6 +192,15 @@ function Plugin:GetCompassNavigationWaypointLabel(mapID, x, y)
     if name then
         return name, ReadString(description)
     end
+end
+
+-- The key of the destination Navigation has finished (reached, or its quest area entered), while it stays finished.
+function Plugin:GetCompassNavigationFinishedKey()
+    local provider = self.compassNavigationProvider
+    if not provider or type(Readable(provider.GetFinishedDestination)) ~= "function" then
+        return
+    end
+    return ReadString(Call(self, "GetFinishedDestination"))
 end
 
 -- false only after a dismissal, so Navigation cannot revive the trip from native super-tracking; with nothing

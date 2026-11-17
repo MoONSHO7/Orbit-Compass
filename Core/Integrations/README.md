@@ -43,7 +43,9 @@ reconciles imports and enablement changes. Disable unregisters the owned message
   position is the current step's endpoint and destination is the goal. Navigation's `steps` appear with finished steps
   ticked and greyed, the current `step` white, the rest dimmed, at most six lines (two finished), with the objective tracker's
   check and nub atlases; without steps it is the localized leg text. `../Navigation/CompassTargets.lua` ranks it above
-  the native route step. `GetWaypointLabel` names waypoints that Navigation's nearest buttons placed.
+  the native route step. `GetWaypointLabel` names waypoints that Navigation's nearest buttons placed. The marker also
+  carries Navigation's `arrival` range and `arrived` verdict, and `GetCompassNavigationFinishedKey` reads the optional
+  `GetFinishedDestination`; an older Navigation supplies none of the three and the arrow keeps its distance rule.
 
 The Orbit registration bridge has an earlier phase: `../Plugin/Plugin.xml` loads `Orbit/Orbit.lua` before the controller
 and before consumers capture service hooks. Its `OrbitCanvas.lua` companion loads here after Navigation declarations.

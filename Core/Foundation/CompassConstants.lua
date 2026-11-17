@@ -119,6 +119,7 @@ Addon.Constants = table.freeze({
     SELECTION_MARKER_ATLAS = "Waypoint-MapPin-Tracked",
     SELECTION_MARKER_SUBLEVEL = 4,
     ARRIVAL_DISTANCE = 15,
+    NAVIGATION_FADE_SECONDS = 0.5,
     TICK_WIDTH = 1,
     TICK_HEIGHT = 2,
     LABEL_GAP = 4,

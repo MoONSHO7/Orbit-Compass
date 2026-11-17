@@ -896,7 +896,11 @@ for family in ("retail", "forever"):
         local editMode=false
         Addon.Services.IsEditMode=function() return editMode end
         P.frame=Region();P.frame:Show();P.navigationFrame=Region()
-        P.navigationView={arrow=Region(),distance=Region(),title=Region(),description=Region()}
+        local fade={}
+        function fade:Play() self.playing=true end
+        function fade:Stop() self.playing=false end
+        function fade:IsPlaying() return self.playing==true end
+        P.navigationView={arrow=Region(),distance=Region(),title=Region(),description=Region(),fade=fade}
         P.navigationDisabled,P.distanceUnits={},"yards"
         P.navigationPreview={name="Arrow",distance=40,bearing=0}
         P.navigationTarget={name="Target",distance=200,bearing=90}
@@ -910,6 +914,32 @@ for family in ("retail", "forever"):
         assert(not P:RenderNavigation(0) and not P.navigationFrame.shown and not P.navigationView.arrow.shown)
         P.showArrow=true
         assert(P:RenderNavigation(0) and P.navigationFrame.shown and P.navigationView.title.text=="Target")
+        local arrivedText=Addon.L.PLU_COMPASS_ARRIVED
+        P.navigationTarget={name="Near",distance=10,bearing=90}
+        assert(P:RenderNavigation(0) and P.navigationView.distance.text==arrivedText,"no arrival by distance")
+        P.navigationArrived=false
+        assert(P:RenderNavigation(0) and P.navigationView.distance.text~=arrivedText,
+            "distance overruled Navigation's own arrival")
+        P.navigationArrived,P.navigationTarget.distance=true,200
+        assert(P:RenderNavigation(0) and P.navigationView.distance.text==arrivedText,"Navigation's arrival was not shown")
+        editMode=true
+        assert(P:RenderNavigation(0) and P.navigationView.distance.text~=arrivedText,"the preview read as arrived")
+        editMode=false
+        P.navigationTarget,P.navigationArrived,P.navigationFinished=nil,nil,true
+        assert(not P:RenderNavigation(0) and P.navigationFrame.shown and fade.playing,"a finished destination did not fade")
+        assert(not P:RenderNavigation(0) and fade.playing,"the fade restarted")
+        P:HideNavigationView()
+        assert(not P.navigationFrame.shown and not fade.playing,"the fade's end left the arrow up")
+        assert(not P:RenderNavigation(0) and not fade.playing,"a hidden arrow faded again")
+        P.navigationTarget={name="Next",distance=200,bearing=90}
+        assert(P:RenderNavigation(0) and P.navigationFrame.shown)
+        P.navigationTarget=nil
+        assert(not P:RenderNavigation(0) and fade.playing)
+        P.navigationTarget={name="Next",distance=200,bearing=90}
+        assert(P:RenderNavigation(0) and not fade.playing,"a new target did not stop the fade")
+        P.navigationTarget,P.navigationFinished=nil,false
+        assert(not P:RenderNavigation(0) and not P.navigationFrame.shown and not fade.playing,
+            "a target lost for another reason faded")
     ''', family)
 
 SEARCH_MAP_READS = r'''

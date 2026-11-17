@@ -85,6 +85,8 @@ function Plugin:SelectCompassNavigation()
     end
     local x, y, positionRead
     local target, bestRank, bestDistance, selected, selectedDistance
+    -- A destination Navigation has finished is still published, so Navigation can bring it back, but draws no arrow.
+    local finishedKey = self:GetCompassNavigationFinishedKey()
     for _, marker in ipairs(self.markers) do
         marker.navigation = false
         local rank
@@ -113,11 +115,14 @@ function Plugin:SelectCompassNavigation()
                 selected, selectedDistance = marker, distance
             end
             if
-                not target
-                or rank < bestRank
-                or (
-                    rank == bestRank
-                    and (distance < bestDistance or (distance == bestDistance and marker.key < target.key))
+                marker.key ~= finishedKey
+                and (
+                    not target
+                    or rank < bestRank
+                    or (
+                        rank == bestRank
+                        and (distance < bestDistance or (distance == bestDistance and marker.key < target.key))
+                    )
                 )
             then
                 target, bestRank, bestDistance = marker, rank, distance
@@ -128,12 +133,16 @@ function Plugin:SelectCompassNavigation()
     local dismissed = dismissedKey == ROUTE_DISMISSAL
         or (keys ~= nil and dismissedKey ~= nil and MatchesSelection(dismissedKey, keys, prefix))
     self:PublishCompassNavigationDestination(selected, not keys, dismissed)
+    -- Navigation decides its own arrival (range and floor); without its route the arrow falls back to distance.
+    local provider = target and target.kind == "route" and target.source == PROVIDER_SOURCE and target or nil
+    local arrival = provider and provider.arrival or C.ARRIVAL_DISTANCE
+    self.navigationArrived = provider and provider.arrived
+    self.navigationFinished = finishedKey ~= nil and target == nil
     if target and target.kind == "route" and selected then
         local east, north = (selected.x - target.x) * self.mapWidth, (selected.y - target.y) * self.mapHeight
-        local useSelected = target.source ~= PROVIDER_SOURCE
-            or (x and y and selectedDistance <= C.ARRIVAL_DISTANCE * C.ARRIVAL_DISTANCE)
+        local useSelected = not provider or (x and y and selectedDistance <= arrival * arrival)
         -- Orbit's final walk keeps its step list until the player also reaches the destination.
-        if useSelected and east * east + north * north <= C.ARRIVAL_DISTANCE * C.ARRIVAL_DISTANCE then
+        if useSelected and east * east + north * north <= arrival * arrival then
             target = selected
         end
     end

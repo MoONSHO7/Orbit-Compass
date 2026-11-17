@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-17
+
+* With Orbit Navigation, the arrow now reads Arrived for a moment when you reach a destination and then fades out, and it stays hidden while you are inside your tracked quest's area. Hand-ins read Arrived at 8 yards instead of 15. Needs the matching Orbit Navigation update.
+
 ## 2026-11-14
 
 * Each point type in Points now has a thin range slider underneath it, so quest objectives, flight masters, rares and the rest can each appear from their own distance. Untouched sliders follow Marker Range in Behaviour (shown in grey); right-click a slider to return it to Marker Range.
