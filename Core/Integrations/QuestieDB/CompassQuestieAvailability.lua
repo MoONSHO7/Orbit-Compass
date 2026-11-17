@@ -66,15 +66,6 @@ local function AnyDone(list)
     return false
 end
 
-local function AllDone(list)
-    for _, questID in ipairs(list) do
-        if not Completed(questID) then
-            return false
-        end
-    end
-    return true
-end
-
 local function AnyInLog(list)
     for _, questID in ipairs(list) do
         if InLog(questID) then
@@ -141,6 +132,11 @@ function Availability.Context(lib, levelRange, quests, plugin)
         verdicts = {},
         levels = {},
     }
+end
+
+-- The Quest Level Range: a levelled quest further above or below the character than the range stays hidden.
+local function InRange(context, level)
+    return not (level > 0 and math.abs(context.level - level) > context.levelRange)
 end
 
 local function Requirements(context, quest)
@@ -273,7 +269,7 @@ local function Evaluate(context, questID)
     if not Requirements(context, quest) or not Chain(context, quest) then
         return false
     end
-    if quest.questLevel > 0 and math.abs(context.level - quest.questLevel) > context.levelRange then
+    if not InRange(context, quest.questLevel) then
         return false
     end
     return not Retired(context.lib.Quest.name(questID)) and Existence.Allows(context.plugin, questID)
@@ -291,6 +287,8 @@ function Availability.IsAvailable(context, questID)
     end
     return verdict
 end
+
+Availability.InRange = InRange
 
 -- The quest's own level once IsAvailable has evaluated it; nil for unknown or unlevelled quests.
 function Availability.Level(context, questID)

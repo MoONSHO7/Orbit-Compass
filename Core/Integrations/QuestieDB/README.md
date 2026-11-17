@@ -12,41 +12,44 @@ it installed.
 ## Implementation
 `QuestieDB.xml` loads ten files. `CompassQuestieIndex.lua` admits the provider (`LibQuestieDB.RequireContract(4)`,
 every entity read used) and builds one per-UiMap index: quest starters from each quest's `startedBy` (so the object
-table is never swept), NPCs whose flags mark an innkeeper, repairer, banker, auctioneer or stable master, and instance
-entrances. The build runs on its own driver frame within 0.5 ms per frame, outside discovery's single job slot, then
-invalidates the `questie` source; disabling Compass pauses it and the next request resumes it.
+table is never swept), service NPCs and instance entrances; quests an item starts have no giver and are listed apart
+with their level. The build runs on its own driver frame within 0.5 ms per frame, outside discovery's single job slot,
+then invalidates the `questie` source; disabling Compass pauses it and the next request resumes it.
 `CompassQuestieAvailability.lua` decides whether a quest is available; decoded quest rows stay in the index's session
-cache and verdicts in a per-collection context. A quest that passes is still shown only once
-`CompassQuestieExistence.lua` has the game's word that it exists: cached client data, or the answer to one
-`C_QuestLog.RequestLoadQuestByID` (eight a tenth of a second, each quest asked once a session). `CompassQuestieDB.lua` is the `questie` discovery collector
+cache and verdicts in a per-collection context. A quest that passes is shown only once `CompassQuestieExistence.lua`
+has the game's word that it exists: cached client data, or the answer to one `C_QuestLog.RequestLoadQuestByID` (eight a
+tenth of a second, each quest asked once a session). `CompassQuestieDB.lua` is the `questie` discovery collector
 (`../../Discovery/CompassDiscoveryCatalog.lua`): it reads the player's map, its direct child maps and its parent zone,
-projects each point onto the player's map and publishes `questOffer`, `service` and `poi` markers. They follow the
-Available Quests, Town Services and Zone POIs points. Their tooltip lines (`CompassQuestieLines.lua`) list a giver's
-available quests as "[level] title" in `GetQuestDifficultyColor`'s colour, a service's tracking roles, or the instance
-label; one summary per giver is shared by its spawns within a collection.
+projects each point onto the player's map and publishes `questOffer`, `service` and `poi` markers under the Available
+Quests, Town Services and Zone POIs points. Tooltip lines (`CompassQuestieLines.lua`) list a giver's quests as "[level]
+title" in `GetQuestDifficultyColor`'s colour, a service's tracking roles or the instance label.
 
 The collector also answers a host's map (`CollectCompassQuestieMapRows`, `../Orbit/README.md`) with one UI map's
 givers, then the quest log's rows under the Quest Objectives point. `CompassQuestieLog.lua` snapshots the log through
-`C_QuestLog` (entries, live objectives, completion). `CompassQuestieObjectives.lua` turns a quest's QuestieDB row into
-a plan in the client's objective order and clusters where each part can be done on a map: a creature's or object's
-spawns, an item's droppers and containers (vendors only without either), a kill credit's listed NPCs, the `triggerEnd`
-point and the `finishedBy` spawns. `CompassQuestieLogRows.lua` matches plan and live list by index, skips finished
-objectives, shows a complete quest (or one with no objectives at all) as its turn-in instead, and builds the rows.
-Every row names the quests it stands for (`CompassQuestieMenu.lua`, per collected map, eight maps kept) and carries
-the host's right-click hint; the host's menu then lists those quests under Remove from the map.
-`CompassQuestieHidden.lua` holds the removed quests, which lose their giver offer, objective icons and turn-in on the
-map and the ribbon until the menu's restore row clears the list.
+`C_QuestLog`. `CompassQuestieObjectives.lua` turns a quest's QuestieDB row into a plan in the client's objective order
+and clusters where each part can be done on a map: a creature's or object's spawns, an item's droppers and containers
+(vendors only without either), a kill credit's listed NPCs, the `triggerEnd` point and the `finishedBy` spawns.
+`CompassQuestieLogRows.lua` builds the rows: a complete quest (or one with no objectives at all) as its turn-in, a
+hinted quest as its unfinished objectives. No hint shows until asked for, so something must take the right-click that
+asks: `CompassQuestieMenu.lua` answers the host's `QuestHint`/`QuestMenu` for a log quest whose plan places an
+objective it still needs (its own pin or tracker row), and a quest the client pins nowhere on the map keeps one icon,
+the densest spot of its first unfinished objective. An available quest an item starts is planned from that item's
+droppers (`start` plans) and drawn by the collector as one `!` at the densest spot, or at every spot once hinted. Every
+row names its quests (per collected map, eight maps kept) under the host's right-click hint: its menu shows or hides
+their hints and, for a giver, a dropped start or a turn-in, lists them under Remove from the map.
+`CompassQuestieHidden.lua` holds both lists: hinted quests, and removed ones, which lose their giver offer and turn-in
+until the menu's restore row clears the list.
 
-Bounds. Only the objectives driver reads QuestieDB tables, within 0.5 ms per frame and once per session: one plan per
-log quest and one spawn list per source (at most 16 sources per item or kill credit). Per viewed map it keeps at most
-24 spots per objective, one per occupied 2.5% grid cell at the cell's mean position, densest first, and 4 per
-finisher. A collection reads no QuestieDB table: it queues and skips unprepared quests, visits at most 24 cached spots
-per unfinished objective, publishes at most 240 turn-in and objective icons per map (trimmed evenly across
-objectives), and reads the client's quest pins once when a log quest has places: a quest the client pins on that map
-draws no objective icons (its own pin or area is there) and a turn-in beside its pin is dropped. The driver
-invalidates the host once, and
-only when it found a place. With the optional Orbit profiler active the two drivers and the coalesced log read are
-timed as `Compass.QuestieDB.Index`, `.Prepare` and `.Log`, with `QuestieDB/Log/Event`, `Changed` and `Unchanged` counts.
+Bounds. Only the objectives driver reads spawn tables, within 0.5 ms per frame and once per session: one plan per log
+quest or offered item-started quest and one spawn list per source (at most 16 sources per item or kill credit). Per
+viewed map it keeps at most 24 spots per objective, one per occupied 2.5% grid cell at the cell's mean position,
+densest first, and 4 per finisher. A collection reads no spawn table: it queues and skips unprepared quests, visits at
+most 24 cached spots per unfinished objective of a hinted quest, publishes at most 240 turn-in and objective icons and
+120 dropped-start icons per map, and reads the client's quest pins once: a turn-in beside its quest's pin is dropped,
+and an unhinted quest with a pin there draws nothing. It walks every item-started quest but decodes only those inside
+the Quest Level Range. Every log quest is prepared, hinted or not: its plan decides whether the host offers a hint,
+which a hover asks of the cached log and plan only. The driver invalidates the host once, and only when it found a
+place.
 
 ## Gotchas
 - QuestieDB is never bundled or copied: its licence does not allow it here. Compass reads the installed copy only, and
@@ -68,8 +71,12 @@ timed as `Compass.QuestieDB.Index`, `.Prepare` and `.Log`, with `QuestieDB/Log/E
   Denials count only once some quest was confirmed: a client that confirms nothing within five seconds hides
   none. A quest the server knows but its giver never offers can still appear; Forever-new quests missing from
   QuestieDB never show.
-- Removed quests are per character in the host plugin's CharData (`QuestieRemovedQuests`); a host without that door
-  keeps them for the session only. A removal acts on the quest, not the pin: a giver stays while it offers another.
+- Removed and hinted quests are per character in the host plugin's CharData (`QuestieRemovedQuests`,
+  `QuestieHintQuests`); a host without that door keeps them for the session only. A removal acts on the quest, not the
+  pin: a giver stays while it offers another, and a shown hint stays. Showing a hint drops those of quests completed
+  since. One list serves both kinds, so a hint shown on a dropped start carries into the quest's objectives. Until
+  2026-11-17 every log quest the client did not pin drew all its icons; the user asked for one, the rest on request.
+- A dropped start is no giver: it draws on the host's map only, not the ribbon, and its droppers face no faction rule.
 - Race masks exceed 32 bits; `Index.HasBit` uses arithmetic, never the `bit` library.
 - QuestieDB's dungeon table carries later expansions' entrances. An instance counts only when `GetRealZoneText` names
   its map on this client, which also gives the localized name. Native journal entrances win per map when the client

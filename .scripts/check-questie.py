@@ -102,11 +102,13 @@ Quests[46]={questLevel=28,objectives={nil,nil,{{71,nil,0}}}}
 Quests[47]={questLevel=28,finishedBy={{1}}}
 -- QuestieDB's quest-side starters, derived from the doubles' NPC and object lists at read time.
 local function StartedBy(questID)
- local npcs,objects
+ local npcs,objects,items
+ for id,row in pairs(Items) do for _,q in ipairs(row.questStarts or {}) do if q==questID then items=items or {} items[#items+1]=id end end end
  for id,row in pairs(Npcs) do for _,q in ipairs(row.questStarts or {}) do if q==questID then npcs=npcs or {} npcs[#npcs+1]=id end end end
  for id,row in pairs(Objects) do for _,q in ipairs(row.questStarts or {}) do if q==questID then objects=objects or {} objects[#objects+1]=id end end end
  if npcs then table.sort(npcs) end
- return {npcs,objects}
+ if items then table.sort(items) end
+ return {npcs,objects,items}
 end
 -- Table reads count per field and entity in mock.reads, so a scenario can prove a read happened once.
 local function Entity(store,numeric,fields)
@@ -160,12 +162,14 @@ end
 function Recollect() P.discoveryClock=P.discoveryClock+61; P:InvalidateCompassSourceSettings("questie"); Drain() end
 function Available(id) local A=Addon.CompassQuestieAvailability return A.IsAvailable(A.Context(LibQuestieDB,P.questLevelRange,{},P),id) end
 -- The quest log as the client lists it: a zone header, then each accepted quest with its live objectives.
-function Accept(id,objectives,level)
+function Take(id,objectives,level)
  if #mock.entries==0 then mock.entries[1]={title="Zone",questLogIndex=1,questID=0,level=0,isHeader=true,isHidden=false} end
  local index=#mock.entries+1
  mock.entries[index]={title="Quest "..id,questLogIndex=index,questID=id,level=level or 28,isHeader=false,isHidden=false}
  mock.log[id],mock.objectives[id]=index,objectives or {}
 end
+-- Objective icons draw only for a quest whose hint the player turned on, so most scenarios accept a quest with it.
+function Accept(id,objectives,level) Take(id,objectives,level); Addon.CompassQuestieHints.Add(P,id) end
 function Goal(text,kind,finished)
  return {text=text,type=kind,finished=finished==true,numFulfilled=finished and 1 or 0,numRequired=1}
 end
@@ -208,6 +212,15 @@ function RowMenu(provider,key)
  function menu:CreateButton(text,run) self.rows[#self.rows+1]={text=text,run=run} end
  function menu:CreateDivider() self.divided=true end
  provider.Menu(key,menu)
+ return menu
+end
+-- The entries Compass adds to a menu of the host's for a quest the host draws itself.
+function QuestMenu(provider,questID)
+ local menu={rows={}}
+ function menu:CreateTitle(text) self.title=text end
+ function menu:CreateButton(text,run) self.rows[#self.rows+1]={text=text,run=run} end
+ function menu:CreateDivider() self.divided=true end
+ provider.QuestMenu(questID,menu)
  return menu
 end
 -- A hosted Compass keeps per-character data in the host plugin's store.
@@ -664,15 +677,15 @@ CASES = {
         P:InvalidateCompassSource("QUEST_REMOVED")
         assert(#Pick(Collect(3),"objective:41:1:")==0, "an abandoned quest kept its icons")
     ''',
-    "a client pin hides that quest's objective icons and its matching turn-in, and a moved pin re-checks both": '''
+    "a client pin keeps a hinted quest's objective icons and takes over its matching turn-in, and a moved pin re-checks it": '''
         local calls=Host()
         Accept(40,{Goal("Kobold Miner slain: 0/8","monster")}); Drain()
-        assert(#Pick(Collect(3),"objective:40:1:")>0, "a quest the client does not mark drew no objective icons")
+        assert(#Pick(Collect(3),"objective:40:1:")==2, "a hinted quest drew no objective icons")
         local before=calls.invalidate
         mock.pins[3]={{questID=40,numObjectives=1,mapID=3,x=0.5,y=0.5,isQuestStart=false,isMapIndicatorQuest=false}}
         P:InvalidateCompassSource("QUEST_POI_UPDATE"); Advance(0.25)
         assert(calls.invalidate==before+1, "a new client pin left the map rows as they were")
-        assert(#Pick(Collect(3),"objective:40:1:")==0, "a quest the client marks kept its objective icons")
+        assert(#Pick(Collect(3),"objective:40:1:")==2, "the client's pin took a hint the player asked for")
         mock.pins[3]=nil
         mock.complete[40]=true; P:InvalidateCompassSource("QUEST_LOG_UPDATE"); Advance(0.25)
         assert(calls.invalidate==before+2 and #Pick(Collect(3),"turnin:")==1)
@@ -680,7 +693,7 @@ CASES = {
         P:InvalidateCompassSource("QUEST_POI_UPDATE"); Advance(0.25)
         assert(calls.invalidate==before+3 and #Pick(Collect(3),"turnin:")==0, "the client's late pin left a double")
     ''',
-    "a row's menu removes a quest from the map with its giver, objectives and turn-in, and restores them": '''
+    "a row's menu removes a quest from the map with its giver and turn-in, and restores them": '''
         local calls=Host(); HostStore()
         local L=Addon.L
         mock.done[11]=true
@@ -688,7 +701,7 @@ CASES = {
         local rows=Collect(3)
         local giver=Pick(rows,"giver:npc:1:1")[1]
         assert(giver.menu==L.PLU_COMPASS_MAP_REMOVE, "a giver row offers no right-click")
-        assert(Pick(rows,"objective:")[1].menu and Pick(rows,"turnin:")[1].menu, "a log row offers no right-click")
+        assert(Pick(rows,"turnin:")[1].menu==L.PLU_COMPASS_MAP_REMOVE, "a turn-in row offers no right-click")
         local menu=RowMenu(calls.provider,giver.key)
         assert(menu.title==L.PLU_COMPASS_MAP_REMOVE and #menu.rows==1 and not menu.divided)
         assert(menu.rows[1].text:find("Quest 10",1,true), menu.rows[1].text)
@@ -698,24 +711,136 @@ CASES = {
         assert(P.store.QuestieRemovedQuests[10]==true, "a removal was not saved with the character")
         Drain(); rows=Collect(3)
         assert(#Pick(rows,"giver:npc:1:1")==0 and not Available(10), "a removed quest kept its giver")
-        menu=RowMenu(calls.provider,Pick(rows,"objective:")[1].key)
-        assert(#menu.rows==2 and menu.rows[1].text=="[28] Quest 40" and menu.divided, menu.rows[1].text)
+        menu=RowMenu(calls.provider,Pick(rows,"turnin:")[1].key)
+        assert(#menu.rows==2 and menu.rows[1].text=="[28] Quest 47" and menu.divided, menu.rows[1].text)
         assert(menu.rows[2].text==L.PLU_COMPASS_MAP_RESTORE_F:format(1), menu.rows[2].text)
         menu.rows[1].run(); rows=Collect(3)
-        assert(#Pick(rows,"objective:")==0 and #Pick(rows,"turnin:")==1, "a removed quest kept its objective icons")
-        menu=RowMenu(calls.provider,Pick(rows,"turnin:")[1].key)
-        assert(menu.rows[1].text=="[28] Quest 47", menu.rows[1].text)
-        menu.rows[1].run(); rows=Collect(3)
         assert(#Pick(rows,"turnin:")==0, "a removed quest kept its turn-in")
+        assert(#Pick(rows,"objective:")==2, "removing another quest took a hint the player asked for")
         P.compassQuestieHidden=nil
         assert(not Available(10), "a removal did not survive into the next session")
         menu=RowMenu(calls.provider,giver.key)
-        assert(#menu.rows==1 and menu.rows[1].text==L.PLU_COMPASS_MAP_RESTORE_F:format(3), menu.rows[1].text)
+        assert(#menu.rows==1 and menu.rows[1].text==L.PLU_COMPASS_MAP_RESTORE_F:format(2), menu.rows[1].text)
         menu.rows[1].run()
         assert(P.store.QuestieRemovedQuests==nil, "restoring left the saved list behind")
         Drain(); rows=Collect(3)
         assert(#Pick(rows,"giver:npc:1:1")==1 and #Pick(rows,"objective:")==2 and #Pick(rows,"turnin:")==1,
             "restored quests did not come back")
+    ''',
+    "objective icons wait for a quest's hint, which a right-click on the quest shows and hides": '''
+        local calls=Host(); HostStore()
+        local L=Addon.L
+        Take(40,{Goal("Kobold Miner slain: 0/8","monster")}); Take(47,{}); Take(999,{Goal("Unknown: 0/1","monster")})
+        mock.pins[3]={{questID=40,numObjectives=1,mapID=3,x=0.5,y=0.5,isQuestStart=false,isMapIndicatorQuest=false}}
+        Drain()
+        local provider=calls.provider
+        assert(provider.QuestHint(40)==nil, "a hint was offered before QuestieDB's plan for the quest was read")
+        local rows=Collect(3)
+        assert(#Pick(rows,"objective:")==0 and #Pick(rows,"turnin:")==1, "an objective icon drew without its hint")
+        assert(provider.QuestHint(40)==L.PLU_COMPASS_MAP_HINT_SHOW, "a quest QuestieDB places offered no hint")
+        assert(provider.QuestHint(47)==nil and provider.QuestHint(999)==nil and provider.QuestHint(12345)==nil,
+            "a quest QuestieDB adds nothing to offered a hint")
+        assert(#QuestMenu(provider,47).rows==0, "a quest with no hint took a menu entry")
+        local menu=QuestMenu(provider,40)
+        assert(#menu.rows==1 and menu.rows[1].text==L.PLU_COMPASS_MAP_HINT_SHOW and not menu.title and not menu.divided)
+        local before=calls.invalidate
+        menu.rows[1].run()
+        assert(calls.invalidate>before, "showing a hint left the host's rows stale")
+        assert(P.store.QuestieHintQuests[40]==true, "a hint was not saved with the character")
+        rows=Collect(3)
+        assert(RowKeys(rows,"objective:")=="objective:40:1:164,objective:40:1:492", RowKeys(rows,"objective:"))
+        assert(Pick(rows,"objective:")[1].menu==L.PLU_COMPASS_MAP_HINT_HIDE, "a hint icon does not name its right-click")
+        assert(provider.QuestHint(40)==L.PLU_COMPASS_MAP_HINT_HIDE)
+        P.compassQuestieHints=nil
+        assert(#Pick(Collect(3),"objective:")==2, "a hint did not survive into the next session")
+        menu=RowMenu(provider,Pick(rows,"objective:")[1].key)
+        assert(menu.title==L.PLU_COMPASS_MAP_HINT_HIDE and #menu.rows==1 and menu.rows[1].text=="[28] Quest 40")
+        assert(not menu.divided, "a hint icon's menu offered to restore removed quests")
+        menu.rows[1].run()
+        assert(P.store.QuestieHintQuests==nil and #Pick(Collect(3),"objective:")==0, "a hidden hint kept its icons")
+        QuestMenu(provider,40).rows[1].run()
+        assert(#Pick(Collect(3),"objective:")==2, "the quest's own right-click did not show the hint again")
+        menu=QuestMenu(provider,40)
+        assert(menu.rows[1].text==L.PLU_COMPASS_MAP_HINT_HIDE)
+        menu.rows[1].run()
+        assert(#Pick(Collect(3),"objective:")==0, "the quest's own right-click did not hide the hint")
+        mock.objectives[40][1].finished=true; P:InvalidateCompassSource("QUEST_LOG_UPDATE"); Advance(0.25)
+        assert(provider.QuestHint(40)==nil, "a quest with nothing left to find offered a hint")
+        mock.objectives[40][1].finished=false; P:InvalidateCompassSource("QUEST_LOG_UPDATE"); Advance(0.25)
+        P:SetCompassPointVisibility("ShowQuestObjectives","world",false); P:CacheCompassPointVisibility()
+        assert(provider.QuestHint(40)==nil, "a hidden Quest Objectives point still offered hints")
+    ''',
+    "a quest the client marks nowhere on the map keeps one icon, whose right-click shows its hint": '''
+        local calls=Host(); HostStore()
+        local L=Addon.L
+        Take(45,{Goal("Kobold Miner slain: 0/8","monster"),Goal("Kobold Candle: 0/8","item")}); Drain()
+        local rows=Collect(3)
+        assert(RowKeys(rows,"objective:")=="objective:45:1:164", "one icon does not stand for the quest: "..RowKeys(rows,"objective:"))
+        local icon=Pick(rows,"objective:")[1]
+        assert(icon.menu==L.PLU_COMPASS_MAP_HINT_SHOW and icon.scale==0.6, "the icon does not offer the hint")
+        assert(Texts(icon)=="[28] Quest 45|Kobold Miner slain: 0/8", Texts(icon))
+        local menu=RowMenu(calls.provider,icon.key)
+        assert(menu.title==L.PLU_COMPASS_MAP_HINT_SHOW and #menu.rows==1 and menu.rows[1].text=="[28] Quest 45"
+            and not menu.divided, "the icon's menu does not show the quest's hint")
+        menu.rows[1].run(); rows=Collect(3)
+        assert(#Pick(rows,"objective:45:1:")==2 and #Pick(rows,"objective:45:2:")>0, "the hint did not show every spot")
+        assert(Pick(rows,"objective:")[1].menu==L.PLU_COMPASS_MAP_HINT_HIDE)
+        RowMenu(calls.provider,Pick(rows,"objective:")[1].key).rows[1].run()
+        assert(RowKeys(Collect(3),"objective:")=="objective:45:1:164", "hiding the hint left no icon to show it again")
+        -- The first objective done, the next one stands for the quest; with the client's own pin, nothing does.
+        mock.objectives[45][1].finished=true; P:InvalidateCompassSource("QUEST_LOG_UPDATE"); Advance(0.25)
+        rows=Pick(Collect(3),"objective:")
+        assert(#rows==1 and rows[1].key:find("objective:45:2:",1,true)==1, "a finished objective still stood for the quest")
+        mock.pins[3]={{questID=45,numObjectives=1,mapID=3,x=0.5,y=0.5,isQuestStart=false,isMapIndicatorQuest=false}}
+        P:InvalidateCompassSource("QUEST_POI_UPDATE"); Advance(0.25)
+        assert(#Pick(Collect(3),"objective:")==0, "a quest with the client's pin kept a stand-in icon")
+    ''',
+    "a quest an item starts shows one icon where the item drops, and its hint shows every spot": '''
+        local calls=Host(); HostStore()
+        local L=Addon.L
+        Items[72]={name="Torn Note",npcDrops={50,51},questStarts={48}}; Quests[48]={questLevel=28}
+        Items[73]={name="Old Map",npcDrops={50},questStarts={49}}; Quests[49]={questLevel=12}
+        Drain()
+        local first=P:CollectCompassQuestieMapRows(3)
+        assert(#Pick(first,"start:")==0 and #Pick(first,"giver:")==2, "givers waited for a dropped item's places")
+        local rows=Collect(3)
+        assert(RowKeys(rows,"start:")=="start:48:1:164", RowKeys(rows,"start:"))
+        assert(mock.reads.npcDrops73==nil, "a quest the character cannot take had its item read")
+        assert(mock.reads.quest48==2 and mock.reads.quest49==1, "a quest out of the level range was decoded")
+        local row=Pick(rows,"start:")[1]
+        assert(row.atlas=="QuestNormal" and row.scale==0.75 and row.name=="Torn Note", row.name)
+        assert(row.menu==L.PLU_COMPASS_MAP_HINT_SHOW, "the icon does not offer the hint")
+        assert(Texts(row)=="[28] Quest 48|Kobold Miner, Kobold Tunneler", Texts(row))
+        local menu=RowMenu(calls.provider,row.key)
+        assert(#menu.rows==2 and menu.rows[1].text=="[28] Quest 48" and menu.rows[2].text=="[28] Quest 48" and menu.divided,
+            "the icon's menu does not offer the hint and the removal")
+        menu.rows[1].run(); rows=Collect(3)
+        assert(RowKeys(rows,"start:")=="start:48:1:1312,start:48:1:164,start:48:1:492", RowKeys(rows,"start:"))
+        assert(Pick(rows,"start:")[1].menu==L.PLU_COMPASS_MAP_HINT_HIDE)
+        assert(RowKeys(Collect(5),"start:")=="start:48:1:656", "another map lost the item's spots there")
+        RowMenu(calls.provider,Pick(rows,"start:")[1].key).rows[1].run()
+        rows=Collect(3)
+        assert(RowKeys(rows,"start:")=="start:48:1:164", "hiding the hint left no icon to show it again")
+        RowMenu(calls.provider,Pick(rows,"start:")[1].key).rows[2].run()
+        Drain()
+        assert(#Pick(Collect(3),"start:")==0 and not Available(48), "a removed quest kept its drop icon")
+        P.compassQuestieHidden=nil; P.store.QuestieRemovedQuests=nil
+        assert(#Pick(Collect(3),"start:")==1, "the quest did not come back")
+        Take(48,{}); P:InvalidateCompassSource("QUEST_ACCEPTED")
+        assert(#Pick(Collect(3),"start:")==0, "a quest already taken still marked where its item drops")
+    ''',
+    "showing a hint drops the hints of quests completed since": '''
+        local calls=Host(); HostStore()
+        Take(40,{Goal("Kobold Miner slain: 0/8","monster")}); Take(41,{Goal("Ore Crate opened: 0/1","object")}); Drain()
+        mock.pins[3]={{questID=40,numObjectives=1,mapID=3,x=0.5,y=0.5,isQuestStart=false,isMapIndicatorQuest=false},
+            {questID=41,numObjectives=1,mapID=3,x=0.4,y=0.4,isQuestStart=false,isMapIndicatorQuest=false}}
+        Collect(3)
+        QuestMenu(calls.provider,41).rows[1].run()
+        assert(P.store.QuestieHintQuests[41]==true)
+        mock.done[41]=true
+        assert(P.store.QuestieHintQuests[41]==true, "a completed quest's hint left before the list was next saved")
+        QuestMenu(calls.provider,40).rows[1].run()
+        assert(P.store.QuestieHintQuests[40]==true and P.store.QuestieHintQuests[41]==nil, "a completed quest kept its hint")
     ''',
     "without a host store a removal lasts the session and nothing is written": '''
         local calls=Host()

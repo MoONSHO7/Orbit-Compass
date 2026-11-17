@@ -2,7 +2,7 @@ local _, Addon = ...
 local Utils = Addon.SourceUtils
 local Readable, Number = Utils.Readable, Utils.Number
 local Objectives, Log, Lines = Addon.CompassQuestieObjectives, Addon.CompassQuestieLog, Addon.CompassQuestieLines
-local Menu, Hidden = Addon.CompassQuestieMenu, Addon.CompassQuestieHidden
+local Menu, Hidden, Hints = Addon.CompassQuestieMenu, Addon.CompassQuestieHidden, Addon.CompassQuestieHints
 local OBJECTIVE_SCALE = 0.6
 -- Turn-ins and objective icons one map may show together: ten objectives at their full 24 spots.
 local MAX_MAP_ROWS = 240
@@ -21,18 +21,6 @@ local FALLBACK_ATLAS = "Bonus-Objective-Star"
 local LISTS_SOURCES = { item = true, credit = true }
 local NONE = table.freeze({})
 local Rows = {}
-
-local function Aligned(plan, live)
-    if #live ~= #plan.objectives then
-        return false
-    end
-    for position, objective in ipairs(plan.objectives) do
-        if objective.type and live[position].type ~= objective.type then
-            return false
-        end
-    end
-    return true
-end
 
 local function Serves(snapshot, source)
     local faction = source.faction
@@ -112,7 +100,7 @@ local function Group(tasks, limit)
     for rank = 1, Objectives.MAX_SPOTS do
         local ranked = false
         for _, task in ipairs(tasks) do
-            local spot = task.spots[rank]
+            local spot = (rank == 1 or not task.single) and task.spots[rank]
             if spot then
                 ranked = true
                 local group = Sharing(cells[spot.cell], spot)
@@ -196,7 +184,7 @@ local function GroupRow(index, group, menus)
     }
     for _, entry in ipairs(group.entries) do
         local quest = entry.task.quest
-        Menu.Add(menus, row, quest.id, quest.line and quest.line.text or quest.title)
+        Menu.Add(menus, row, quest.id, quest.line and quest.line.text or quest.title, not entry.task.single)
     end
     return row
 end
@@ -205,22 +193,24 @@ function Rows.Add(plugin, rows, index, mapID, menus)
     local snapshot = Log.Read(plugin, index.lib)
     local turnIns, tasks, pins = {}, {}, nil
     for _, quest in ipairs(snapshot.quests) do
-        local shown = not quest.failed and not Hidden.Has(plugin, quest.id)
-        local places = shown and Objectives.Places(index, quest.id, mapID)
+        -- Every quest is prepared, shown or not: its plan decides whether the host offers its hint.
+        local places = not quest.failed and Objectives.Places(index, quest.id, mapID)
         if places == nil then
             Objectives.Request(plugin, index, quest.id, mapID)
         elseif places then
             local plan, live = places.plan, quest.objectives
             if quest.complete or #live == 0 and #plan.objectives == 0 then
-                for _, spot in ipairs(places.turnIns) do
+                for _, spot in ipairs(Hidden.Has(plugin, quest.id) and NONE or places.turnIns) do
                     turnIns[#turnIns + 1] = { quest = quest, spot = spot }
                 end
             else
-                pins = pins or ClientPins(mapID)
-                -- The client's own pin or area marks a quest it shows on this map, so only other quests draw spots.
-                if not pins[quest.id] then
-                    -- Objectives that cannot be matched to the client's list all show, rather than none.
-                    local aligned = Aligned(plan, live)
+                local hinted = Hints.Has(plugin, quest.id)
+                pins = pins or not hinted and ClientPins(mapID) or nil
+                -- A hinted quest shows every spot. One the client marks nowhere on this map shows a single spot
+                -- to stand for it, since nothing else there could take the right-click that shows its hint.
+                if hinted or not pins[quest.id] then
+                    -- Objectives that cannot be matched to the client's list all count, rather than none.
+                    local aligned = Objectives.Aligned(plan, live)
                     for position, objective in ipairs(plan.objectives) do
                         local spots = places.spots[position]
                         if spots and not (aligned and live[position].finished) then
@@ -230,7 +220,11 @@ function Rows.Add(plugin, rows, index, mapID, menus)
                                 position = position,
                                 spots = spots,
                                 live = aligned and live[position] or nil,
+                                single = not hinted,
                             }
+                            if not hinted then
+                                break
+                            end
                         end
                     end
                 end

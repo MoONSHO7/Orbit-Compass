@@ -51,7 +51,9 @@ independently, and native detection, CPU and heap still need in-game verificatio
 `check-questie.py` drives the QuestieDB adapter through a double of QuestieDB's documented contract-4 reads: provider
 admission, per-map indexing, quest availability rules (including race masks beyond 32 bits), faction service filters,
 client-named entrances, point toggles and Retail silence. For the quest log's host-map rows it covers each objective
-kind, finished and misaligned objectives, turn-ins and their de-duplication against client pins, clustering and caps,
+kind, finished and misaligned objectives, hints shown and hidden from a quest's right-click and off until then, the
+one icon that stands for a quest the client pins nowhere, quests an item starts,
+turn-ins and their de-duplication against client pins, clustering and caps,
 merged tooltips, coalesced log events and read bounds. Real QuestieDB data still needs in-game verification.
 Release CI runs these four suites.
 

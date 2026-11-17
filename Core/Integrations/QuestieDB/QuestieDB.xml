@@ -2,11 +2,11 @@
     <Script file="CompassQuestieIndex.lua"/>
     <Script file="CompassQuestieExistence.lua"/>
     <Script file="CompassQuestieHidden.lua"/>
-    <Script file="CompassQuestieMenu.lua"/>
     <Script file="CompassQuestieAvailability.lua"/>
     <Script file="CompassQuestieLines.lua"/>
     <Script file="CompassQuestieObjectives.lua"/>
     <Script file="CompassQuestieLog.lua"/>
+    <Script file="CompassQuestieMenu.lua"/>
     <Script file="CompassQuestieLogRows.lua"/>
     <Script file="CompassQuestieDB.lua"/>
 </Ui>

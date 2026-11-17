@@ -25,7 +25,15 @@ function Plugin:CreateNavigationView()
     description:SetWordWrap(true)
     description:SetNonSpaceWrap(true)
     description:SetAlpha(C.NAVIGATION_DESCRIPTION_ALPHA)
-    self.navigationView = { arrow = arrow, distance = distance, title = title, description = description }
+    local fade = frame:CreateAnimationGroup()
+    local alpha = fade:CreateAnimation("Alpha")
+    alpha:SetFromAlpha(1)
+    alpha:SetToAlpha(0)
+    alpha:SetDuration(C.NAVIGATION_FADE_SECONDS)
+    fade:SetScript("OnFinished", function()
+        self:HideNavigationView()
+    end)
+    self.navigationView = { arrow = arrow, distance = distance, title = title, description = description, fade = fade }
     frame.Name, frame.Distance = title, distance
     if Bridge then
         Bridge.AttachText(title, frame, "Name")
@@ -79,6 +87,7 @@ end
 
 function Plugin:HideNavigationView()
     local view = self.navigationView
+    view.fade:Stop()
     if view.shown == false then
         return
     end
@@ -94,31 +103,48 @@ function Plugin:HideNavigationView()
     end
 end
 
+-- A destination Navigation finished leaves by fading; every other reason to hide is immediate.
+function Plugin:FadeNavigationView()
+    local view = self.navigationView
+    if view.shown and not view.fade:IsPlaying() then
+        view.fade:Play()
+    end
+end
+
 function Plugin:RenderNavigation(facing)
     local preview = Addon.Services.IsEditMode()
     local target = preview and self.navigationPreview or self.navigationTarget
-    if
-        self.inInstance
+    local unavailable = self.inInstance
         or self.hiddenByGame
         or not self:IsActive()
         or self:IsProfileSuppressed()
         or not self.frame:IsShown()
+        or (not preview and not self.showArrow)
+    if
+        unavailable
         or (
             not preview
             and (
-                not self.showArrow
-                or not target
+                not target
                 or not target.distance
                 or not facing
                 or (target.distance > C.ARRIVAL_DISTANCE and not target.bearing)
             )
         )
     then
-        self:HideNavigationView()
+        if not unavailable and not target and self.navigationFinished then
+            self:FadeNavigationView()
+        else
+            self:HideNavigationView()
+        end
         return false
     end
     local view = self.navigationView
+    view.fade:Stop()
     local arrived = target.distance <= C.ARRIVAL_DISTANCE
+    if not preview and self.navigationArrived ~= nil then
+        arrived = self.navigationArrived
+    end
     local rotation = (preview or arrived) and 0 or -math.rad(Addon.Math:WrapDegrees(facing - target.bearing))
     if view.rotation ~= rotation then
         view.arrow:SetRotation(rotation)

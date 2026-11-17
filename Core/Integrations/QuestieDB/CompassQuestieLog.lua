@@ -37,7 +37,7 @@ local function Objectives(questID, parts)
 end
 
 local function Take(state)
-    local quests, parts = {}, {}
+    local quests, byID, parts = {}, {}, {}
     for position = 1, Number(C_QuestLog.GetNumQuestLogEntries()) or 0 do
         local info = Readable(C_QuestLog.GetInfo(position))
         local questID = type(info) == "table" and Number(info.questID)
@@ -53,7 +53,7 @@ local function Take(state)
                 .. (failed and "f" or complete and "c" or "-")
                 .. (level or 0)
                 .. (title or "")
-            quests[#quests + 1] = {
+            local quest = {
                 id = questID,
                 title = title,
                 line = title and Lines.Quest(level, title) or nil,
@@ -61,12 +61,14 @@ local function Take(state)
                 failed = failed,
                 objectives = Objectives(questID, parts),
             }
+            quests[#quests + 1], byID[questID] = quest, quest
         end
     end
     table.sort(quests, ByID)
     local faction = Readable(UnitFactionGroup("player"))
     local snapshot = {
         quests = quests,
+        byID = byID,
         signature = table.concat(parts, FIELD_SEPARATOR),
         factionLetter = faction == "Alliance" and "A" or faction == "Horde" and "H" or nil,
         readAt = GetTime(),
@@ -75,8 +77,8 @@ local function Take(state)
     return snapshot
 end
 
--- A burst only changes the host's rows when the log itself did, or the client moved a pin: a pinned quest draws
--- no objective spots and a turn-in is matched to its pin, so any quest in the log can depend on one.
+-- A burst only changes the host's rows when the log itself did, or the client moved a pin: a turn-in is matched
+-- to its quest's pin, so any quest in the log can depend on one.
 local refresh = Addon.LibOrbitUI.Callbacks:Wrap(function()
     local state = Plugin.compassQuestieLog
     if not state then

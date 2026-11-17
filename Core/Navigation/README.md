@@ -58,7 +58,10 @@ Own destinations and guidance independently of how the ribbon chooses visible ic
   actions run only on explicit selection, and following a guide retains its parent instructions.
 - Route steps are guidance, not destinations. Clicks, menus, the target hotkey and auto-advance skip them. A step within
   arrival range of the selected destination yields to it; Orbit Navigation also requires a valid player position within
-  arrival range, keeping its step list during the final walk. Dismissing a routed pin hides the whole trip until the
+  arrival range, keeping its step list during the final walk. While Navigation's route is the target the arrow reads
+  Arrived by Navigation's own verdict and range, not the 15-yard distance. A destination Navigation has finished stays
+  published, so Navigation can bring it back, but draws no arrow: the arrow fades out over `NAVIGATION_FADE_SECONDS`;
+  every other reason to hide is immediate. Dismissing a routed pin hides the whole trip until the
   native selection changes, observed even without Follow Targets so Orbit Navigation can follow the next super-track.
   Saving a routed target stores its resolved destination, and is refused when the pin's destination is unknown.
 - Waypoint adoption compares against the last observed pin, so login, reloads and zone changes never re-track an
