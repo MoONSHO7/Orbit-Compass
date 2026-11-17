@@ -12,6 +12,7 @@ local PLAN_FIELDS = { "objectives", "triggerEnd", "finishedBy" }
 local NPC_SLOT, OBJECT_SLOT = 1, 2
 local GROUP_SLOTS = { creature = 1, object = 2, item = 3, reputation = 4, credit = 5, spell = 6 }
 local DEFAULT_ORDER = { "creature", "object", "item", "reputation", "credit", "spell" }
+local START_PREFIX = "start:"
 local NONE = table.freeze({})
 local Objectives = { MAX_SPOTS = MAX_SPOTS }
 
@@ -181,6 +182,25 @@ local function AddFinishers(lib, finishers, entity, ids)
     end
 end
 
+local function Plan(objectives, finishers)
+    local plan = { objectives = objectives, finishers = finishers, sources = {} }
+    local seen = {}
+    local function Gather(sources)
+        for _, source in ipairs(sources or NONE) do
+            if not seen[source.ref] then
+                seen[source.ref] = true
+                plan.sources[#plan.sources + 1] = source
+            end
+        end
+    end
+    for _, objective in ipairs(objectives) do
+        Gather(objective.sources)
+    end
+    Gather(finishers)
+    plan.nowhere = { plan = plan, spots = NONE, turnIns = NONE }
+    return plan
+end
+
 local function BuildPlan(index, questID)
     local lib = index.lib
     local values = lib.Quest.GetAll(questID, PLAN_FIELDS)
@@ -209,22 +229,16 @@ local function BuildPlan(index, questID)
         AddFinishers(lib, finishers, "npc", finishedBy[NPC_SLOT])
         AddFinishers(lib, finishers, "object", finishedBy[OBJECT_SLOT])
     end
-    local plan = { objectives = objectives, finishers = finishers, sources = {} }
-    local seen = {}
-    local function Gather(sources)
-        for _, source in ipairs(sources or NONE) do
-            if not seen[source.ref] then
-                seen[source.ref] = true
-                plan.sources[#plan.sources + 1] = source
-            end
-        end
+    return Plan(objectives, finishers)
+end
+
+-- The plan of a quest an item starts: each such item is one "objective", placed where the item drops.
+local function BuildStartPlan(index, questID)
+    local tuples = {}
+    for position, itemID in ipairs(index.startItems[questID] or NONE) do
+        tuples[position] = { itemID }
     end
-    for _, objective in ipairs(objectives) do
-        Gather(objective.sources)
-    end
-    Gather(finishers)
-    plan.nowhere = { plan = plan, spots = NONE, turnIns = NONE }
-    return plan
+    return #tuples > 0 and Plan(Items(index.lib, tuples), {})
 end
 
 local function Denser(first, second)
@@ -294,11 +308,12 @@ local function Place(index, plan, mapID)
     return { plan = plan, spots = spots, turnIns = turnIns }
 end
 
-local function Prepare(index, questID, mapID, deadline)
-    local plan = index.plans[questID]
+local function Prepare(index, job, deadline)
+    local key, mapID = job.planKey, job.mapID
+    local plan = index.plans[key]
     if plan == nil then
-        plan = BuildPlan(index, questID)
-        index.plans[questID] = plan
+        plan = (job.start and BuildStartPlan or BuildPlan)(index, job.questID)
+        index.plans[key] = plan
         if plan and debugprofilestop() >= deadline then
             return false
         end
@@ -309,7 +324,7 @@ local function Prepare(index, questID, mapID, deadline)
         index.places[mapID] = places
     end
     if not plan then
-        places[questID] = false
+        places[key] = false
         return true
     end
     for _, source in ipairs(plan.sources) do
@@ -321,7 +336,7 @@ local function Prepare(index, questID, mapID, deadline)
             end
         end
     end
-    places[questID] = Place(index, plan, mapID)
+    places[key] = Place(index, plan, mapID)
     return true
 end
 
@@ -329,10 +344,10 @@ local function Step(state)
     local queue, deadline = state.queue, debugprofilestop() + PREPARE_BUDGET_MS
     while #queue > 0 do
         local job = queue[#queue]
-        if not Prepare(job.index, job.questID, job.mapID, deadline) then
+        if not Prepare(job.index, job, deadline) then
             return false
         end
-        local places = job.index.places[job.mapID][job.questID]
+        local places = job.index.places[job.mapID][job.planKey]
         state.found = state.found or places and places ~= places.plan.nowhere
         queue[#queue], state.queued[job.key] = nil, nil
         if debugprofilestop() >= deadline then
@@ -358,7 +373,7 @@ local function Drive(plugin)
         local job = table.remove(state.queue)
         state.queued[job.key] = nil
         local places = job.index.places[job.mapID] or {}
-        job.index.places[job.mapID], places[job.questID] = places, false
+        job.index.places[job.mapID], places[job.planKey] = places, false
         if not state.reported then
             state.reported = true
             geterrorhandler()(done)
@@ -375,15 +390,50 @@ local function Drive(plugin)
     end
 end
 
--- The quest's cached places on the map: nil until prepared, false for a quest QuestieDB does not know.
-function Objectives.Places(index, questID, mapID)
+-- The quest's plan: nil until prepared for some map, false for a quest QuestieDB does not know.
+function Objectives.Plan(index, questID)
+    return index.plans[questID]
+end
+
+-- Whether the client's live list lines up with the plan, so a position in one is the same objective in the other.
+function Objectives.Aligned(plan, live)
+    if #live ~= #plan.objectives then
+        return false
+    end
+    for position, objective in ipairs(plan.objectives) do
+        if objective.type and live[position].type ~= objective.type then
+            return false
+        end
+    end
+    return true
+end
+
+-- Whether the plan places an objective the quest still needs; a list that does not line up needs them all.
+function Objectives.Locates(plan, live)
+    local aligned = Objectives.Aligned(plan, live)
+    for position, objective in ipairs(plan.objectives) do
+        if objective.kind and not (aligned and live[position].finished) then
+            return true
+        end
+    end
+    return false
+end
+
+-- A log quest's plan and the plan of where an offered quest's starting item drops are kept apart by this key.
+local function PlanKey(questID, start)
+    return start and START_PREFIX .. questID or questID
+end
+
+-- The quest's cached places on the map: nil until prepared, false for a quest QuestieDB does not know. `start`
+-- asks for where the item that starts the quest drops instead of where its objectives are done.
+function Objectives.Places(index, questID, mapID, start)
     local places = index.places[mapID]
     if places then
-        return places[questID]
+        return places[PlanKey(questID, start)]
     end
 end
 
-function Objectives.Request(plugin, index, questID, mapID)
+function Objectives.Request(plugin, index, questID, mapID, start)
     local state = plugin.compassQuestiePrepare
     if not state then
         state = { queue = {}, queued = {}, driver = CreateFrame("Frame") }
@@ -392,10 +442,12 @@ function Objectives.Request(plugin, index, questID, mapID)
         end
         plugin.compassQuestiePrepare = state
     end
-    local key = mapID .. ":" .. questID
+    local planKey = PlanKey(questID, start)
+    local key = mapID .. ":" .. planKey
     if not state.queued[key] then
         state.queued[key] = true
-        state.queue[#state.queue + 1] = { key = key, index = index, questID = questID, mapID = mapID }
+        state.queue[#state.queue + 1] =
+            { key = key, index = index, questID = questID, mapID = mapID, planKey = planKey, start = start }
     end
     if not state.driving then
         state.driving = true

@@ -26,13 +26,16 @@ poll; a new one reuses markers by record id and unchanged position, and projects
 through Navigation's player world anchor, `ProjectCompassWorldPoint`. Item artwork becomes display-only ribbon markers.
 
 `CompassMapPoints.lua` gives Orbit's interactive map Forever's QuestieDB points and, through the provider's `Menu`,
-the right-click menu that removes a quest from it (`../QuestieDB/CompassQuestieMenu.lua`). While integrations run and the
+`QuestHint` and `QuestMenu`, the right-click menus that remove a quest from it or show and hide a log quest's hint on
+that quest's own pin and tracker row (`../QuestieDB/CompassQuestieMenu.lua`). While integrations run and the
 host reports `Orbit.ExternalUIHost.mapPointProviderVersion == 1`, it registers one provider with
 `Orbit.MapPOICompanion`; Orbit asks it for one UI map at a time and `CollectCompassQuestieMapRows`
-(`../QuestieDB/CompassQuestieDB.lua`) answers that map's rows: available givers under Available Quests (scale 0.75),
-then the quest log's turn-ins and unfinished objectives under Quest Objectives (scale 0.6). It answers nil while the
-index builds and none with both points off. Whatever marks the `questie` source dirty also invalidates the provider,
-as do a changed quest log and finished objective preparation; `../QuestieDB/README.md` owns those rows' bounds.
+(`../QuestieDB/CompassQuestieDB.lua`) answers that map's rows: under Available Quests (scale 0.75) the givers and,
+for a quest an item starts, where that item drops; then, under Quest Objectives, the quest log's turn-ins and
+unfinished objectives (scale 0.6), one icon per quest the client pins nowhere or every spot of a hinted quest. It
+answers nil while the index builds and none with both points off. Whatever marks the `questie` source dirty also
+invalidates the provider, as do a changed quest log and finished objective preparation; `../QuestieDB/README.md` owns
+those rows' bounds.
 
 Search places reach Orbit through LibOrbitSearch rather than this bridge; see `../README.md`. Presentation hooks resolve
 Orbit UI Chat from Orbit's private media catalog, while standalone Compass uses its own private catalog. Both resolve

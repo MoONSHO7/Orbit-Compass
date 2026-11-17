@@ -12,6 +12,12 @@ local provider = table.freeze({
     Menu = function(key, root)
         Addon.CompassQuestieMenu.Build(Plugin, key, root)
     end,
+    QuestHint = function(questID)
+        return Addon.CompassQuestieMenu.QuestHint(Plugin, questID)
+    end,
+    QuestMenu = function(questID, root)
+        Addon.CompassQuestieMenu.BuildQuest(Plugin, questID, root)
+    end,
 })
 
 local function Capability()

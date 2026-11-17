@@ -4,7 +4,7 @@ local REQUIRED_CONTRACT = 4
 local PERCENT = 100
 local BUILD_BUDGET_MS = 0.5
 local PROFILER_LABEL = "Compass.QuestieDB.Index"
-local NPC_SLOT, OBJECT_SLOT = 1, 2
+local NPC_SLOT, OBJECT_SLOT, ITEM_SLOT = 1, 2, 3
 -- QuestieDB service flag name and the Enum.MinimapTrackingFilter field whose icon and label present it.
 local SERVICES = {
     { flag = "INNKEEPER", filter = "Innkeeper" },
@@ -17,6 +17,7 @@ local NPC_GETTERS = { "GetAllIds", "npcFlags", "spawns", "friendlyToFaction", "n
 local OBJECT_GETTERS = { "spawns", "name" }
 local QUEST_GETTERS = { "GetAllIds", "GetAll", "startedBy", "name" }
 local ITEM_GETTERS = { "npcDrops", "objectDrops", "vendors", "name" }
+local LEVEL_FIELDS = { "questLevel" }
 local Index = {}
 
 -- QuestieDB masks can exceed 32 bits, so single-bit membership uses arithmetic rather than the 32-bit bit library.
@@ -136,6 +137,17 @@ local function IndexQuest(build, quest, id)
     if type(startedBy) == "table" then
         AddStarters(build.npcQuests, startedBy[NPC_SLOT], id)
         AddStarters(build.objectQuests, startedBy[OBJECT_SLOT], id)
+        -- A quest an item starts has no giver to stand at. Its level is kept so that only a quest in the
+        -- character's range is ever decoded, and its droppers are read only once it is offered.
+        local items = {}
+        for _, itemID in ipairs(type(startedBy[ITEM_SLOT]) == "table" and startedBy[ITEM_SLOT] or items) do
+            items[#items + 1] = Number(itemID)
+        end
+        if #items > 0 then
+            local values = quest.GetAll(id, LEVEL_FIELDS)
+            local level = type(values) == "table" and Number(values[1]) or 0
+            build.startQuests[#build.startQuests + 1], build.startItems[id] = { id = id, level = level }, items
+        end
     end
 end
 
@@ -223,6 +235,8 @@ local function StartBuild(lib)
         byMap = {},
         npcQuests = {},
         objectQuests = {},
+        startQuests = {},
+        startItems = {},
         questIDs = lib.Quest.GetAllIds(),
         npcIDs = lib.Npc.GetAllIds(),
         questCursor = 0,
@@ -257,6 +271,8 @@ local function Step(plugin)
         lib = lib,
         byMap = build.byMap,
         areaMaps = build.areaMaps,
+        startQuests = build.startQuests,
+        startItems = build.startItems,
         quests = {},
         plans = {},
         spawns = {},

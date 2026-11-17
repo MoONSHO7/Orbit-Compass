@@ -9,10 +9,13 @@ local Availability = Addon.CompassQuestieAvailability
 local Lines = Addon.CompassQuestieLines
 local LogRows = Addon.CompassQuestieLogRows
 local Menu = Addon.CompassQuestieMenu
+local Objectives, Hints = Addon.CompassQuestieObjectives, Addon.CompassQuestieHints
 local REFRESH_INTERVAL = 60
 local GIVER_ATLAS, ENTRANCE_ATLAS = "QuestNormal", "Dungeon"
 -- A giver on the host's map draws at three quarters of its atlas size, so a hub's givers crowd its ground less.
 local MAP_GIVER_SCALE = 0.75
+-- Icons one map may show for quests an item starts: five such quests with their hints on at their full 24 spots.
+local MAX_START_ROWS = 120
 local DESCRIPTION_SEPARATOR = ", "
 local WHITE = { r = 1, g = 1, b = 1 }
 local NO_ROWS = table.freeze({})
@@ -211,12 +214,56 @@ local function AddEntrances(plugin, markers, mapID, entrances)
     end
 end
 
+-- A quest an item starts has no giver, so it draws where that item drops: one icon at the densest spot to stand
+-- for it, or every spot once the player shows its hint from that icon's right-click.
+local function AddStartRows(plugin, rows, lib, index, context, mapID, menus)
+    local count = 0
+    for _, start in ipairs(index.startQuests) do
+        local questID = start.id
+        local places = Availability.InRange(context, start.level)
+            and Availability.IsAvailable(context, questID)
+            and Objectives.Places(index, questID, mapID, true)
+        local title = places and QuestTitle(lib, questID)
+        if places == nil then
+            Objectives.Request(plugin, index, questID, mapID, true)
+        elseif title then
+            local hinted = Hints.Has(plugin, questID)
+            local line = Lines.Quest(Availability.Level(context, questID), title)
+            for position, item in ipairs(places.plan.objectives) do
+                local spots = places.spots[position]
+                for rank = 1, spots and (hinted and #spots or 1) or 0 do
+                    if count >= MAX_START_ROWS then
+                        return
+                    end
+                    count = count + 1
+                    local spot = spots[rank]
+                    local row = {
+                        key = ("start:%d:%d:%d"):format(questID, position, spot.cell),
+                        x = spot.x,
+                        y = spot.y,
+                        atlas = GIVER_ATLAS,
+                        scale = MAP_GIVER_SCALE,
+                        name = item.name or title,
+                        lines = { line, Lines.Sources(spot.sources) },
+                    }
+                    Menu.Add(menus, row, questID, line.text, hinted, true)
+                    rows[#rows + 1] = row
+                end
+                if spots and not hinted then
+                    break
+                end
+            end
+        end
+    end
+end
+
 local function AddGiverRows(plugin, rows, lib, index, mapID, menus)
+    local context, summaries = Availability.Context(lib, plugin.questLevelRange, index.quests, plugin), {}
+    AddStartRows(plugin, rows, lib, index, context, mapID, menus)
     local entry = index.byMap[mapID]
     if not entry then
         return
     end
-    local context, summaries = Availability.Context(lib, plugin.questLevelRange, index.quests, plugin), {}
     for _, point in ipairs(entry.givers) do
         local record = point.record
         if Availability.Serves(context, record) then

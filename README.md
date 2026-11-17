@@ -44,8 +44,10 @@ place of the standalone store.
   auto-advance can visit them in sequence.
 - **QuestieDB (Forever).** With QuestieDB installed, Available Quests shows givers whose quests this character can take,
   Zone POIs gains dungeon and raid entrances, and a Town Services row shows innkeepers, repairers, bankers, auctioneers
-  and stable masters. On a compatible Orbit host's map, Quest Objectives also marks where the log's unfinished
-  objectives can be done and where complete quests turn in. Compass reads the installed database only
+  and stable masters. On a compatible Orbit host's map, Available Quests also marks where an item that starts a quest
+  drops, and Quest Objectives where complete quests turn in. A quest's right-click there shows or hides a hint of
+  every place its objectives can be done or its starting item drops; until asked, at most one icon stands for the
+  quest. Compass reads the installed database only
   (`Core/Integrations/QuestieDB/README.md`).
 - **Live resources.** On Forever with a compatible Orbit host, the ribbon mirrors the herb/ore item icons detected by
   Orbit's active minimap/HUD resource scanner. These temporary, approximate observations appear below the line and
