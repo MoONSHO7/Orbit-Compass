@@ -39,7 +39,8 @@ those rows' bounds.
 
 Search places reach Orbit through LibOrbitSearch rather than this bridge; see `../README.md`. Presentation hooks resolve
 Orbit UI Chat from Orbit's private media catalog, while standalone Compass uses its own private catalog. Both resolve
-that name to Blizzard's locale-aware font on Korean and Chinese clients.
+that name to Blizzard's locale-aware font on Korean and Chinese clients. Hosted `Services.GetFont` passes the chosen
+`TextFont` name to `Orbit.Skin:SkinText`, or Orbit's theme font when none is chosen.
 
 ## Gotchas
 - An absent host uses standalone services. An unsupported host or an existing bundled Compass pauses startup, preserving

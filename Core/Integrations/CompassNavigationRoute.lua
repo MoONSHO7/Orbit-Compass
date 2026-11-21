@@ -93,6 +93,18 @@ local function StepLines(guidance)
     return table.concat(lines, STEP_SEPARATOR)
 end
 
+-- Navigation's estimate of the travel left heads the steps, dimmed like those still ahead; an older Navigation
+-- sends none.
+local function Description(guidance)
+    local lines = StepLines(guidance) or ReadString(guidance.text)
+    local time = ReadString(guidance.time)
+    if not time then
+        return lines
+    end
+    time = "|c" .. STEP_AHEAD_COLOR .. (time:gsub("|", "||")) .. "|r"
+    return lines and time .. STEP_SEPARATOR .. lines or time
+end
+
 local function ReadDestination(value)
     value = Readable(value)
     if type(value) ~= "table" or not Utils.IsMapPosition(value) then
@@ -169,7 +181,7 @@ function Plugin:CollectCompassNavigationRoute(markers)
         destination
     )
     if marker then
-        marker.description = StepLines(guidance) or ReadString(guidance.text)
+        marker.description = Description(guidance)
         marker.routeDestination = destination ~= nil
         marker.arrival = Number(guidance.arrival)
         local arrived = Readable(guidance.arrived)

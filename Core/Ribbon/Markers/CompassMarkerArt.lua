@@ -60,8 +60,8 @@ end
 local function BindMarkerArt(button, marker, questSymbol)
     SetResourceStyle(button, marker.kind == "resource")
     if marker.texture then
-        local valid = Addon.Artwork.ApplyTexture(button.icon, marker.texture)
-        Addon.Artwork.ApplyTexture(button.shadow, marker.texture)
+        local valid = Addon.Artwork.ApplyTexture(button.icon, marker.texture, marker.textureFilter)
+        Addon.Artwork.ApplyTexture(button.shadow, marker.texture, marker.textureFilter)
         if valid then
             local left, right = marker.texLeft or FULL_TEX_COORDS.left, marker.texRight or FULL_TEX_COORDS.right
             local top, bottom = marker.texTop or FULL_TEX_COORDS.top, marker.texBottom or FULL_TEX_COORDS.bottom

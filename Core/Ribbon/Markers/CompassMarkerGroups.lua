@@ -67,10 +67,10 @@ function Plugin:LayoutCompassMarkerGroups(selection)
     for index, marker in ipairs(selection) do
         marker.projectedBelowLine = marker.kind == "resource"
             or marker.kind:sub(1, #GATHERMATE_KIND_PREFIX) == GATHERMATE_KIND_PREFIX
-        local distanceFraction = math.max(
-            0,
-            math.min(1, (marker.distance - C.MARKER_NEAR_DISTANCE) / (C.MARKER_FAR_DISTANCE - C.MARKER_NEAR_DISTANCE))
-        )
+        -- Size falls across each point type's own visibility range (up to RANGE_MAX); places at half the rate.
+        local rate = marker.cityRegion and C.CITY_DISTANCE_SHRINK or 1
+        local span = self:GetCompassMarkerRange(marker) - C.MARKER_NEAR_DISTANCE
+        local distanceFraction = math.max(0, math.min(1, (marker.distance - C.MARKER_NEAR_DISTANCE) * rate / span))
         local distanceScale = C.MARKER_FAR_SCALE + (1 - distanceFraction) * (C.MARKER_NEAR_SCALE - C.MARKER_FAR_SCALE)
         marker.projectedIconSize = Pixel:Snap(self.iconSize * marker.sizeScale * distanceScale, scale)
         marker.projectedHitSize = marker.projectedIconSize + outline
@@ -110,8 +110,8 @@ function Plugin:LayoutCompassMarkerGroups(selection)
     for index, marker in ipairs(order) do
         local record = marker.overlapGroup
         record.markers[#record.markers + 1] = marker
-        -- Clicks, counts and choice menus offer only these members; display-only observations stay visual.
-        if not marker.displayOnly then
+        -- Clicks, counts and choice menus offer only these members; observations and fading fold sides stay visual.
+        if not marker.displayOnly and not marker.projectedRetiring then
             record.actions[#record.actions + 1] = marker
         end
         marker.depthLevel = C.MARKER_BASE_LEVEL + #order - index

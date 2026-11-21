@@ -14,6 +14,22 @@ name several sources (Available Quests, Quest Objectives and Zone POIs also feed
 scan ranges: `PointRanges` holds optional per-row yards over the global `Range`, and `CompassDiscovery.lua` stamps each
 completed marker's `point` from its source and kind, which Navigation and Ribbon resolve through
 `GetCompassMarkerRange`. Rows sharing a source must list their `kinds`; markers outside any row use `Range`.
+`CompassCities.lua` groups points by place: `RebuildCompassMarkers` ends by stamping each marker with the Foundation
+catalogue place that holds it once projected onto the current map: a city's whole map, or a town's terrain outline
+within its rectangle. Bounds are read once per map until a context reset, membership once per marker position. The
+player is inside a city found in their map ancestry (`RefreshCompassPointArea`), a town the client names as the subzone,
+or a town whose outline holds their position (checked on each full bearings refresh, left only `TOWN_EXIT_YARDS` past
+the edge). Each bearings ordering moves a place's fold state toward that side over `CITY_FOLD_SECONDS`;
+`BlendCompassCityFolds` then fades the icon and glides the selected points out of it, or back in, and the earliest
+pending settle reorders the ribbon (`SettleCompassPlaceFolds`) even with every point off screen. The Cities & Towns
+Points row (`ShowPlaces`, `showPlaces`) gates folding and the icons; while off, no place bearings, fold states or
+position-town checks run, but stamping stays so re-enabling folds at once. Stamping also flags a place that holds any
+collected Available Quests point (`offersQuests`), whatever its distance. `GetCompassTownMaps` lists, per map, the
+towns on other maps within `RANGE_MAX` of its edge, for collectors that can read those maps. Each icon carries that
+row's range and a destination on its own map (a town across a zone border projects outside the current one).
+`GetCompassPlaceMarkers` hands Navigation the map's icons to rank as points in their own right; its bearings swap a
+folded place's points for its one marker, and its menu lists them. Profiler: `Compass.Cities` spans stamping; `Cities/Bounds`, `Cities/Stamped`,
+`Cities/FoldStarted`.
 `CompassDiscoveryCatalog.lua` owns collector order and event routing, including the quest-log events the QuestieDB
 log owner coalesces itself (`../Integrations/QuestieDB/README.md`). `CompassDiscovery.lua` owns job scheduling,
 invalidation and refresh deadlines. `CompassSources.lua` assembles snapshots with the user waypoint and, when absent, the
@@ -53,16 +69,34 @@ Display polls are timed under their row's label; `Discovery/DisplayChanged/<key>
   retry or active scan remains. Provider notifications still invalidate their own pack. Indoor/new-area events,
   changed/unknown artwork, pending work and map/world/phase transitions refresh normally; area visibility is always
   reconciled.
-- Cancelled jobs cannot publish stale results. Changed preferences invalidate only affected sources, and visibility
-  switches retain completed HandyNotes provider data. A quests pass triggered only by quest-data loads keeps the
-  full-scan deadline, like targeted path refreshes. Path events mark only route and quests path-dirty; tracked content
-  depends on content/tracking events and its recovery deadline, not navigation-path notifications.
+- Cancelled jobs cannot publish stale results; a failing collector re-raises only after the pass rebuilds from sources
+  that completed with it. Change detection also compares route state (`arrival`, `arrived`, `routeTracking`,
+  `routeDestination`) and guide flags, which can flip alone. Changed preferences invalidate only affected sources, and
+  visibility switches retain completed HandyNotes provider data. A quests pass triggered only by quest-data loads keeps
+  the full-scan deadline, like targeted path refreshes. Path events mark only route and quests path-dirty; tracked
+  content depends on content/tracking events and its recovery deadline, not navigation-path notifications.
 - A path-dirty route settles without a job while its last completed collection's receipt (tracking type, next hop,
   item-sourced name) still matches, including no hop on this map and no route target; unreadable reads and the
   30-second deadline re-collect.
   Every other route input (waypoint, pin choice, landmark index, Follow Targets, map) raises its own invalidation, so a
   new route input needs one too or the receipt will hide its changes.
-- City ancestry includes child maps; unknown ancestry hides normal points until retry. Unconfigured city/world cells
+- City grouping ignores `C_Map.IsCityMap`: Retail flags only Valdrakken, Dornogal and Silvermoon and Forever flags
+  none, so each family's catalogue lists maps. Area flags mark no towns either, so towns are generated (see
+  Foundation). A town is the terrain the game names it, so it opens where the zone text does: ~70 yards past
+  Gadgetzan's south wall, where its overlay hit box reached ~190. A city's whole map rectangle can still fold points
+  just outside its walls. Inns and halls are separate subzones; their town's outline covers them.
+  The destination, waypoint-priority markers and route steps never fold.
+- A place animates only while consecutive orderings include it; first sight or a gap (another continent) snaps, so
+  arriving by hearth or portal never replays a fold. Inside a capital or hub, towns share nothing: neither their icon
+  nor their folded points reach the ribbon. City detection keys on `cityRegion`, never kind: Search's `IsCityMap`
+  results keep kind "city" on an ordinary waypoint.
+- Capitals switch maps, and a map change resets the discovery context (sources, bounds, fold state), so a capital
+  snaps while towns, being subzones of one map, animate. Kept fold state would animate only points re-collected in time.
+- Faction is catalogue data: capitals by hand, towns from their flight masters' TaxiNodes flags, else the zone's
+  AreaTable mask (subzones carry none), with two generator overrides. `UnitFactionGroup` is read when a tooltip or menu
+  opens; an enemy place still folds, but offers only its points.
+- The Points Cities column still follows `IsCityMap` ancestry, which includes child maps; unknown ancestry hides normal
+  points until retry. Unconfigured city/world cells
   inherit legacy preferences, while Toggle defaults off. Edits copy all three values through the controller.
 - The hotkey uses the cached alternate set independently of area; a second press restores the current area. Disable,
   profile switch and Points reset clear that temporary mode. Effective visibility intersects saved choices with client

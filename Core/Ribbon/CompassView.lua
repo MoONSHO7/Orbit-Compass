@@ -29,16 +29,29 @@ local function IsTrackedPoint(marker, target)
         and math.abs(destination.y - tracked.y) < PEEK_DESTINATION_EPSILON
 end
 
+-- Hidden beneath one tracked icon in its own row: inside its span, behind it and no larger.
+local function Covered(tracked, marker)
+    for _, cover in ipairs(tracked) do
+        if
+            cover.projectedBelowLine == marker.projectedBelowLine
+            and marker.depthLevel < cover.depthLevel
+            and marker.projectedLeftPx >= cover.projectedLeftPx
+            and marker.projectedRightPx <= cover.projectedRightPx
+            and marker.projectedHitSize <= cover.projectedHitSize
+        then
+            return true
+        end
+    end
+    return false
+end
+
 function Plugin:FindCompassPeekMarker()
-    local target = self.navigationTarget
-    local trackedLeft, trackedRight, trackedSize, trackedLevel
+    local target, tracked = self.navigationTarget, self.compassPeek.tracked
+    wipe(tracked)
     for _, marker in ipairs(self.markerGroupOrder) do
         local slot = self.markerSlotsByKey[marker.key]
-        if slot.marker == marker and slot.renderShown and slot.renderAlpha > 0 and IsTrackedPoint(marker, target) then
-            trackedLeft = trackedLeft and math.min(trackedLeft, marker.projectedLeftPx) or marker.projectedLeftPx
-            trackedRight = trackedRight and math.max(trackedRight, marker.projectedRightPx) or marker.projectedRightPx
-            trackedSize = math.max(trackedSize or 0, marker.projectedHitSize)
-            trackedLevel = math.max(trackedLevel or 0, marker.depthLevel)
+        if slot.marker == marker and slot.renderShown and IsTrackedPoint(marker, target) then
+            tracked[#tracked + 1] = marker
         end
     end
     for _, marker in ipairs(self.markerGroupOrder) do
@@ -46,17 +59,11 @@ function Plugin:FindCompassPeekMarker()
         if
             slot.marker == marker
             and slot.renderShown
-            and slot.renderAlpha > 0
+            and not marker.projectedRetiring
             and not IsTrackedPoint(marker, target)
+            and not Covered(tracked, marker)
         then
-            local covered = trackedLeft
-                and marker.depthLevel < trackedLevel
-                and marker.projectedLeftPx >= trackedLeft
-                and marker.projectedRightPx <= trackedRight
-                and marker.projectedHitSize <= trackedSize
-            if not covered then
-                return marker, slot
-            end
+            return marker, slot
         end
     end
 end
@@ -108,6 +115,7 @@ function Plugin:CreateCompassView()
     self.detail:SetMaxLines(1)
     self.detail:Hide()
     self:CreateCompassPeek()
+    self:CreateCompassPlaceLabel()
 end
 
 -- Display lists change membership only by replacement, so their identity keys the below-line ring reservation.
@@ -135,8 +143,10 @@ function Plugin:LayoutCompassArtwork()
         layout.displayMarkers, layout.displayResourceScale = self.displayMarkers, ResourceScale(self.displayMarkers)
     end
     local resourceScale = layout.displayResourceScale
+    local gatherMate = self.showGatherMate and self.compassGatherMateProvider ~= nil
     if
-        layout.width == frameWidth
+        layout.gatherMate == gatherMate
+        and layout.width == frameWidth
         and layout.height == frameHeight
         and layout.centerX == centerX
         and layout.centerY == centerY
@@ -151,7 +161,7 @@ function Plugin:LayoutCompassArtwork()
     layout.width, layout.height, layout.centerX, layout.centerY = frameWidth, frameHeight, centerX, centerY
     layout.scale, layout.thickness = scale, thickness
     layout.headingHeight, layout.iconSize = self.headingHeight, self.iconSize
-    layout.resourceScale = resourceScale
+    layout.resourceScale, layout.gatherMate = resourceScale, gatherMate
     self.renderDirty, self.selectionDirty, self.headingsDirty = true, true, true
     self.detail:SetWidth(frameWidth)
     local width = math.max(0, frameWidth - Pixel:Multiple(C.EDGE_INSET * 2, scale))
@@ -167,25 +177,25 @@ function Plugin:LayoutCompassArtwork()
     local markerBottom = layout.markerY
         - maxMarkerSize * (1 + C.SELECTION_MARKER_SCALE) / 2
         - Pixel:Multiple(C.MARKER_OUTLINE, scale)
+    local outline = Pixel:Multiple(C.MARKER_OUTLINE * 2, scale)
+    local belowLine = lineY - thickness - Pixel:Multiple(C.MARKER_BELOW_LINE_GAP, scale)
     if resourceScale then
         local resourceIconSize = Pixel:Snap(self.iconSize * resourceScale * C.MARKER_NEAR_SCALE, scale)
-        local resourceHitSize =
-            self:CalculateCompassResourceSizes(resourceIconSize, Pixel:Multiple(C.MARKER_OUTLINE * 2, scale), scale)
-        local resourceBottom = lineY - thickness - Pixel:Multiple(C.MARKER_BELOW_LINE_GAP, scale) - resourceHitSize
-        markerBottom = math.min(markerBottom, resourceBottom)
+        markerBottom =
+            math.min(markerBottom, belowLine - self:CalculateCompassResourceSizes(resourceIconSize, outline, scale))
+    end
+    -- GatherMate's unringed nodes also hang under the line whenever its row can show them.
+    if gatherMate then
+        local nodeSize = Pixel:Snap(self.iconSize * C.GATHERMATE_ICON_SCALE * C.MARKER_NEAR_SCALE, scale)
+        markerBottom = math.min(markerBottom, belowLine - nodeSize - outline)
     end
     layout.headingY = Pixel:Snap(
         centerY + math.min(pointerY - pointerHeight, markerBottom) - Pixel:Multiple(C.HEADING_GAP, scale),
         scale
     ) - centerY
+    layout.labelY = layout.headingY - Pixel:Snap(self.headingHeight, scale) - Pixel:Multiple(C.LABEL_GAP, scale)
     self.detail:ClearAllPoints()
-    self.detail:SetPoint(
-        "TOP",
-        frame,
-        "CENTER",
-        0,
-        layout.headingY - Pixel:Snap(self.headingHeight, scale) - Pixel:Multiple(C.LABEL_GAP, scale)
-    )
+    self.detail:SetPoint("TOP", frame, "CENTER", 0, layout.labelY)
     local fadeWidth = width * C.LINE_FADE_FRACTION
     local sizes = { fadeWidth, width - fadeWidth * 2, fadeWidth }
     local left = -width / 2
@@ -208,7 +218,8 @@ end
 
 function Plugin:StyleCompassView()
     self.renderDirty, self.selectionDirty, self.headingsDirty = true, true, true
-    local font = Services.GetFont()
+    local fontOverride = self:GetSetting(C.SYSTEM_INDEX, "TextFont") or nil
+    local font = Services.GetFont(fontOverride)
     local fontSize = self:GetSetting(C.SYSTEM_INDEX, "FontSize")
     self.headingHeight = 0
     for _, tick in ipairs(self.ticks) do
@@ -221,6 +232,7 @@ function Plugin:StyleCompassView()
     end
     Services.StyleText(self.detail, { font = font, textSize = fontSize, textColor = WHITE })
     self:StyleCompassPeek(font, fontSize, true)
+    self:StyleCompassPlaceLabel(fontOverride)
     self:StyleNavigationView(font)
     self:StyleCompassSearch()
     for _, texture in ipairs(self.artwork) do
@@ -232,6 +244,7 @@ end
 
 function Plugin:ClearCompassMarkers()
     self:HideCompassPeek()
+    self:HideCompassPlaceLabel()
     self.markerPool:ReleaseAll()
     wipe(self.markerSlots)
     wipe(self.nextMarkerSlots)
@@ -310,6 +323,7 @@ function Plugin:RenderCompass(facing, live)
     local outline = Pixel:Multiple(C.MARKER_OUTLINE * 2, scale)
     local interactive = not Addon.Services.IsEditMode()
     local selection = self:SelectCompassMarkers(facing, width, live)
+    self:BlendCompassCityFolds(selection, facing, width)
     local profiler = Services.profiler
     local start, startKB
     if profiler and profiler.active then
@@ -330,7 +344,7 @@ function Plugin:RenderCompass(facing, live)
         marker.renderShown = self:RenderCompassMarker(
             slot,
             marker,
-            interactive,
+            interactive and not marker.projectedRetiring,
             marker.projectedX,
             marker.projectedAlpha,
             layout.markerY,
@@ -340,6 +354,7 @@ function Plugin:RenderCompass(facing, live)
         local absoluteDelta = math.abs(marker.projectedDelta)
         if
             marker.renderShown
+            and not marker.projectedRetiring
             and absoluteDelta <= C.DETAIL_ANGLE
             and (
                 not nearestDelta
@@ -356,17 +371,18 @@ function Plugin:RenderCompass(facing, live)
     self:RefreshCompassTooltip()
     self:RefreshCompassSearchButton(interactive)
     local navigating = self:RenderNavigation(facing)
+    -- Alt's callout claims the line under the headings only while it actually draws.
+    local peekMarker, peekSlot
     if self.peekAltHeld and interactive then
-        local marker, slot = self:FindCompassPeekMarker()
-        if marker then
-            self:ShowCompassPeek(marker, slot)
-        else
-            self:HideCompassPeek()
-        end
-    else
+        peekMarker, peekSlot = self:FindCompassPeekMarker()
+    end
+    local peeking = peekMarker ~= nil and self:ShowCompassPeek(peekMarker, peekSlot)
+    if not peeking then
         self:HideCompassPeek()
     end
-    if nearest and self.showLabel and not navigating and not self.peekAltHeld then
+    local facedPlace = facing and self.placeNameMode ~= "off" and self:FindCompassFacedPlace(selection) or nil
+    local placeLabelBelow = self:RenderCompassPlaceLabel(facedPlace, peeking)
+    if nearest and self.showLabel and not navigating and not peeking and not placeLabelBelow then
         local distance = self:CompassDisplayDistance(nearest.distance)
         if
             self.detailName ~= nearest.name

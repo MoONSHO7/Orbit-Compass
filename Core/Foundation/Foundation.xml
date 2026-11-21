@@ -2,6 +2,8 @@
     <Script file="CompassConstants.lua"/>
     <Script file="CompassFonts.lua"/>
     <Script file="CompassArtwork.lua"/>
+    <Script file="CompassTownCatalog.lua"/>
+    <Script file="CompassCityCatalog.lua"/>
     <Script file="CompassMath.lua"/>
     <Script file="CompassText.lua"/>
     <Include file="CompassTemplates.xml"/>

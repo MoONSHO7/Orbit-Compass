@@ -19,7 +19,8 @@ fetches the same pinned libraries, symlinks `Orbit-Libs/LibOrbitUI/LibOrbitUI-1.
 (the sibling path `.scripts/check-client-features.py` reads, mirroring the workspace layout), then runs the client suite
 and `.scripts/check-landmark-budget.py` for cooperative work bounds and balanced profiler phases, then
 `.scripts/check-resources.py` against a double of Orbit's documented resource capability, and
-`.scripts/check-questie.py` against a double of QuestieDB's documented reads. All use simulated native boundaries and
+`.scripts/check-questie.py` against a double of QuestieDB's documented reads, and `.scripts/check-cities.py` for
+city grouping. All use simulated native boundaries and
 need no Orbit checkout or fixtures beyond the libraries.
 
 Successful `main` pushes choose the next `MAJOR.MINOR` tag, starting at `1.0`; later automatic releases increment the

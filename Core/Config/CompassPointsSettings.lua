@@ -25,7 +25,14 @@ local COLUMNS = {
     { key = "toggle", labelKey = "PLU_COMPASS_TOGGLE", tooltipKey = "PLU_COMPASS_TOGGLE_TT" },
 }
 local POINTS = Addon.CompassPointTypes
-local REQUIRED_ADDONS = { ShowGatherMate = "GatherMate2", ShowHandyNotes = "HandyNotes", ShowServices = "QuestieDB" }
+local FOREVER = Addon.ClientFeatures.family == "forever"
+-- Forever's quest-offer APIs return no givers, so its Available Quests exist only through QuestieDB.
+local REQUIRED_ADDONS = {
+    ShowGatherMate = "GatherMate2",
+    ShowHandyNotes = "HandyNotes",
+    ShowServices = "QuestieDB",
+    ShowQuestOffers = FOREVER and "QuestieDB" or nil,
+}
 
 -- [ RANGE SLIDER ]-----------------------------------------------------------------------------------------------------
 local function SetColor(texture, color)
@@ -174,6 +181,21 @@ local function CreateTable(layout, container)
     return frame
 end
 
+local function CreateRowHover(layout, row)
+    local GameTooltip, GameTooltip_Hide = layout.tooltip, layout.tooltipHide
+    local hover = CreateFrame("Frame", nil, row)
+    hover:EnableMouse(true)
+    hover:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(self.title)
+        GameTooltip:AddLine(self.description, 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    hover:SetScript("OnLeave", GameTooltip_Hide)
+    hover:SetScript("OnHide", GameTooltip_Hide)
+    return hover
+end
+
 local function CreateCell(layout, frame, row, point, column)
     local cell = layout:CreateCheckbox(
         row,
@@ -223,7 +245,8 @@ local function RenderTable(layout, container)
     for _, point in ipairs(POINTS) do
         local requiredAddon = REQUIRED_ADDONS[point.key]
         if
-            Addon.ClientFeatures.AllowsPoint(point.key) and (not requiredAddon or C_AddOns.IsAddOnLoaded(requiredAddon))
+            Addon.ClientFeatures.AllowsPoint(point.key)
+            and (not requiredAddon or C_AddOns.IsAddOnLoaded(requiredAddon))
         then
             visibleIndex = visibleIndex + 1
             local row = frame.rows:Acquire()
@@ -234,8 +257,11 @@ local function RenderTable(layout, container)
                 row.shade = row:CreateTexture(nil, "BACKGROUND")
                 row.shade:SetAllPoints()
                 row.shade:SetColorTexture(ROW_SHADE.r, ROW_SHADE.g, ROW_SHADE.b, ROW_SHADE.a)
+                row.hover = CreateRowHover(layout, row)
             end
             row.label:SetText(L[point.labelKey])
+            row.hover.title = L[point.labelKey]
+            row.hover.description = L[FOREVER and point.foreverTooltipKey or point.tooltipKey]
             row.label:SetWidth(labelWidth - textPadding * 2)
             local top = pixel:Snap(math.max(ROW_HEIGHT, row.label:GetStringHeight() + textPadding * 2), scale)
             local middle = pixel:Snap(top / 2, scale)
@@ -248,6 +274,7 @@ local function RenderTable(layout, container)
             row:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, -y)
             row.label:ClearAllPoints()
             row.label:SetPoint("LEFT", row, "TOPLEFT", textPadding, -middle)
+            row.hover:SetAllPoints(row.label)
             row.shade:SetShown(visibleIndex % 2 == 0)
             for columnIndex, column in ipairs(COLUMNS) do
                 local cell = CreateCell(layout, frame, row, point, column)

@@ -2,6 +2,7 @@ local _, Addon = ...
 local C = Addon.Constants
 local Plugin = Addon.Controller
 local Number = Addon.SourceUtils.Number
+local NO_PLACES = table.freeze({})
 
 local function MarkerBefore(a, b)
     -- Display-only markers carry no navigation flag; they rank with ordinary markers.
@@ -32,9 +33,15 @@ end
 local function OrderBearings(plugin, forceSort, profiler)
     plugin.selectionDirty = true
     local markers, display = plugin.markers, plugin.displayMarkers
+    local places = plugin.showPlaces and plugin:GetCompassPlaceMarkers() or NO_PLACES
+    for _, place in ipairs(places) do
+        place.compassRaisedBy = nil
+        plugin:RefreshCompassMarkerBearing(place)
+    end
     if forceSort or plugin.sortElapsed >= C.SORT_INTERVAL then
         SortMarkers(plugin, markers)
         SortMarkers(plugin, display)
+        SortMarkers(plugin, places)
         plugin.sortElapsed, plugin.sortPending = 0, false
         if profiler then
             profiler:Count(plugin, "Bearings/OrderSorted")
@@ -45,22 +52,68 @@ local function OrderBearings(plugin, forceSort, profiler)
             profiler:Count(plugin, "Bearings/OrderDeferred")
         end
     end
-    -- Display-only markers join the ribbon here, merged in order; actionable consumers read `plugin.markers` alone.
+    -- Display-only markers and place icons merge in here by rank; actionable consumers read `plugin.markers` alone.
+    -- A place joins once: alone within its own range, or where its nearest-ranked folded member would have been.
     local bearings = plugin.bearings
     wipe(bearings)
-    local index, displayIndex = 1, 1
-    local marker, displayMarker = markers[1], display[1]
-    while marker or displayMarker do
-        local chosen
-        if marker and (not displayMarker or not MarkerBefore(displayMarker, marker)) then
-            chosen, index = marker, index + 1
-            marker = markers[index]
-        else
-            chosen, displayIndex = displayMarker, displayIndex + 1
-            displayMarker = display[displayIndex]
+    local foldRevision = plugin.compassCityFoldRevision + 1
+    plugin.compassCityFoldRevision = foldRevision
+    if plugin.showPlaces then
+        plugin:UpdateCompassPlaceFolds(foldRevision)
+    end
+    local index, displayIndex, placeIndex = 1, 1, 1
+    local marker, displayMarker, place = markers[1], display[1], places[1]
+    while marker or displayMarker or place do
+        local chosen = marker
+        if displayMarker and (not chosen or MarkerBefore(displayMarker, chosen)) then
+            chosen = displayMarker
         end
-        if chosen.bearing then
-            bearings[#bearings + 1] = chosen
+        if place and (not chosen or MarkerBefore(place, chosen)) then
+            chosen = place
+        end
+        if chosen == marker then
+            index = index + 1
+            marker = markers[index]
+        elseif chosen == displayMarker then
+            displayIndex = displayIndex + 1
+            displayMarker = display[displayIndex]
+        else
+            placeIndex = placeIndex + 1
+            place = places[placeIndex]
+        end
+        if chosen.cityRegion then
+            local range = plugin:GetCompassMarkerRange(chosen)
+            if chosen.foldRevision ~= foldRevision and chosen.distanceSquared <= range * range then
+                local _, placeShown = plugin:CompassCityFoldShares(chosen.cityRegion)
+                if placeShown then
+                    chosen.foldRevision = foldRevision
+                    bearings[#bearings + 1] = chosen
+                end
+            end
+        elseif chosen.bearing then
+            local region = plugin:CompassCityFoldRegion(chosen)
+            chosen.compassFoldRegion = region
+            if not region then
+                bearings[#bearings + 1] = chosen
+            else
+                local membersShown, cityShown = plugin:CompassCityFoldShares(region)
+                if membersShown then
+                    bearings[#bearings + 1] = chosen
+                end
+                local city = region.marker
+                local remaining = plugin:GetCompassMarkerRange(chosen) - chosen.distance
+                if cityShown and remaining >= 0 then
+                    -- The member deepest inside its own range lights the icon, whose own range applies only alone.
+                    if not city.compassRaisedBy or remaining > city.compassRaisedRemaining then
+                        city.compassRaisedBy, city.compassRaisedRemaining = chosen, remaining
+                    end
+                    if city.foldRevision ~= foldRevision then
+                        city.foldRevision = foldRevision
+                        plugin:RefreshCompassMarkerBearing(city)
+                        bearings[#bearings + 1] = city
+                    end
+                end
+            end
         end
     end
 end
@@ -73,7 +126,14 @@ function Plugin:RefreshCompassMarkerBearing(marker)
     local east, north = (marker.x - x) * self.mapWidth, (y - marker.y) * self.mapHeight
     marker.distanceSquared = east * east + north * north
     local range = self:GetCompassMarkerRange(marker)
-    if marker.distanceSquared <= range * range or marker.navigation or marker.priority == C.WAYPOINT_PRIORITY then
+    -- Place icons and the points inside a town keep a bearing at any distance: a shown town lists all of its points.
+    if
+        marker.distanceSquared <= range * range
+        or marker.navigation
+        or marker.priority == C.WAYPOINT_PRIORITY
+        or marker.cityRegion
+        or self:IsCompassTownPoint(marker)
+    then
         marker.bearing, marker.distance = Addon.Math:Bearing(east, north, marker.distanceSquared)
     else
         marker.bearing, marker.distance = nil, nil
@@ -82,6 +142,7 @@ function Plugin:RefreshCompassMarkerBearing(marker)
 end
 
 local function UpdateBearings(self, x, y, profiler)
+    self:SettleCompassPlaceFolds()
     local resort = self.sortPending and self.sortElapsed >= C.SORT_INTERVAL
     local settle = x
         and self.bearingSampleX
@@ -126,6 +187,7 @@ local function UpdateBearings(self, x, y, profiler)
         self.bearingNextRefresh = self.discoveryClock + C.BEARING_REFRESH_INTERVAL
         self.bearingSampleX, self.bearingSampleY = x, y
         self.navigationTarget = nil
+        self:RefreshCompassPositionTown(x, y)
         for _, marker in ipairs(self.markers) do
             self:RefreshCompassMarkerBearing(marker)
             if marker.key == self.navigationKey then

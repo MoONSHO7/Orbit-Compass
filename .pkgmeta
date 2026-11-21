@@ -18,6 +18,11 @@ externals:
     url: https://github.com/MoONSHO7/Orbit-Libs
     commit: 0bd8378c47203771139d701a989d1d3bb3d19d63
     path: LibOrbitSearch/LibOrbitSearch-1.0
+  # LibOrbitBridge release 1.0 provides API 1; pin its verified release commit.
+  Libs/LibOrbitBridge-1.0:
+    url: https://github.com/MoONSHO7/Orbit-Libs
+    commit: c9a111983c2dd53ba59c9a2c410f33f0cd74dc59
+    path: LibOrbitBridge/LibOrbitBridge-1.0
 
 ignore:
   - .git

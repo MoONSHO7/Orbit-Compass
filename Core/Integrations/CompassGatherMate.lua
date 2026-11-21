@@ -5,7 +5,6 @@ local L = Addon.L
 local Utils = Addon.SourceUtils
 local Readable, Number = Utils.Readable, Utils.Number
 local REFRESH_INTERVAL = 30
-local ICON_SCALE = 0.6
 local MESSAGES = {
     "GatherMate2NodeAdded",
     "GatherMate2NodeDeleted",
@@ -91,7 +90,7 @@ function Plugin:CollectCompassGatherMate(markers)
                     C.POI_PRIORITY,
                     "gathermate:" .. nodeType
                 )
-                marker.sizeScale = ICON_SCALE
+                marker.sizeScale = C.GATHERMATE_ICON_SCALE
                 marker.texture = record.texture
                 marker.description = L.PLU_COMPASS_GATHERMATE_LOCATION
                 self:CompassDiscoveryCheckpoint()

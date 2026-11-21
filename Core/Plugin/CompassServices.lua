@@ -20,9 +20,11 @@ function Services.IsEditMode()
     return Addon.App:IsEditMode()
 end
 
-function Services.GetFont()
-    return Addon.Fonts.Path.UI
+function Services.GetFont(name)
+    return Addon.Fonts.Fetch(name) or Addon.Fonts.Path.UI
 end
+
+Services.FontPath = Services.GetFont
 
 function Services.StyleText(region, options)
     UI.Text.ApplyFont(region, options.font, options.textSize, "OUTLINE")

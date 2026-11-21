@@ -32,9 +32,11 @@ them. `CompassDefaults.lua` owns both surfaces' defaults; settings continue thro
   default must join `CompassStandaloneStore.lua`'s retired list; the unreleased route-guidance keys already do.
 - Appearance changes reuse discovery caches. Category changes invalidate only their source; profile switches also
   refresh saved locations.
-- Standalone visibility applies when pet/vehicle hiding changes. Edit Mode transitions redraw without restarting
-  discovery. Disabling or entering an instance stops scans and hides both surfaces without clearing the player's native
-  waypoint.
+- Standalone visibility applies when pet/vehicle hiding changes. Hosted, Orbit hides the ribbon by alpha alone, which
+  would keep updates and transparent buttons alive, so Compass registers the pet-battle and player-vehicle events itself
+  and pauses as it does in an instance; Orbit's un-hide reapplies settings. Edit Mode transitions redraw without
+  restarting discovery. Disabling or entering an instance stops scans and hides both surfaces without clearing the
+  player's native waypoint.
 - `UpdateCompass` refreshes Discovery's display-only sources before bearings without naming them; Retail declares none.
 - The event/update owner exists before hosted activation, but frame construction waits for the lifecycle. All methods
   must be declared before boot starts that lifecycle.

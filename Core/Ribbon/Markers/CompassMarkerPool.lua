@@ -88,7 +88,7 @@ function Plugin:AssignCompassMarkerSlots(selection, live)
             slot.markerKey, slot.markerGeneration = marker.key, generation
             byKey[marker.key], nextSlots[index] = slot, slot
         end
-        if not live or marker.navigation or marker.priority <= C.TRACKED_QUEST_PRIORITY then
+        if not live or marker.navigation or marker.priority <= C.TRACKED_QUEST_PRIORITY or marker.projectedMoving then
             slot.revealAt = nil
         elseif not slot.selected or not slot.marker or slot.marker.key ~= marker.key then
             slot.revealAt = self.markerClock + C.MARKER_REVEAL_DELAY

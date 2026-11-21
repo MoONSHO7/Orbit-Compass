@@ -110,7 +110,9 @@ local function CollectWaypoint(plugin, mapID, x, y, title, description, sourceKe
         end
         if artwork then
             for _, field in ipairs(C.MARKER_ART_FIELDS) do
-                marker[field] = artwork[field]
+                if artwork[field] ~= nil then
+                    marker[field] = artwork[field]
+                end
             end
         end
     end
@@ -219,4 +221,5 @@ function Plugin:RebuildCompassMarkers()
     CollectWaypoint(self, mapID, x, y, title, description, sourceKey)
     CollectPinDestination(self)
     self:SelectCompassNavigation()
+    self:GroupCompassCityMarkers()
 end

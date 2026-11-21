@@ -3,15 +3,41 @@ local Plugin = Addon.Controller
 local C = Addon.Constants
 local Readable, Number = Addon.SourceUtils.Readable, Addon.SourceUtils.Number
 local POINTS = {
-    { key = "ShowGatherMate", field = "showGatherMate", source = "gathermate", labelKey = "PLU_COMPASS_GATHERMATE" },
-    { key = "ShowHandyNotes", field = "showHandyNotes", source = "handynotes", labelKey = "PLU_COMPASS_HANDYNOTES" },
-    { key = "ShowWaypoint", field = "showWaypoint", labelKey = "PLU_COMPASS_WAYPOINT", ignoresRange = true },
+    {
+        key = "ShowGatherMate",
+        field = "showGatherMate",
+        source = "gathermate",
+        labelKey = "PLU_COMPASS_GATHERMATE",
+        tooltipKey = "PLU_COMPASS_GATHERMATE_TT",
+    },
+    {
+        key = "ShowHandyNotes",
+        field = "showHandyNotes",
+        source = "handynotes",
+        labelKey = "PLU_COMPASS_HANDYNOTES",
+        tooltipKey = "PLU_COMPASS_HANDYNOTES_TT",
+    },
+    {
+        key = "ShowWaypoint",
+        field = "showWaypoint",
+        labelKey = "PLU_COMPASS_WAYPOINT",
+        tooltipKey = "PLU_COMPASS_WAYPOINT_TT",
+        ignoresRange = true,
+    },
+    {
+        key = "ShowPlaces",
+        field = "showPlaces",
+        labelKey = "PLU_COMPASS_PLACES",
+        tooltipKey = "PLU_COMPASS_PLACES_TT",
+        places = true,
+    },
     {
         key = "ShowQuestObjectives",
         field = "showQuestObjectives",
         source = { "quests", "questie" },
         kinds = { "quest" },
         labelKey = "PLU_COMPASS_QUEST_OBJECTIVES",
+        tooltipKey = "PLU_COMPASS_QUEST_OBJECTIVES_TT",
     },
     {
         key = "ShowWorldQuests",
@@ -19,12 +45,14 @@ local POINTS = {
         source = "quests",
         kinds = { "worldQuest" },
         labelKey = "PLU_COMPASS_WORLD_QUESTS",
+        tooltipKey = "PLU_COMPASS_WORLD_QUESTS_TT",
     },
     {
         key = "ShowFlightMasters",
         field = "showFlightMasters",
         source = "taxi",
         labelKey = "PLU_COMPASS_FLIGHT_MASTERS",
+        tooltipKey = "PLU_COMPASS_FLIGHT_MASTERS_TT",
     },
     {
         key = "ShowServices",
@@ -32,15 +60,31 @@ local POINTS = {
         source = "questie",
         kinds = { "service" },
         labelKey = "PLU_COMPASS_SERVICES",
+        tooltipKey = "PLU_COMPASS_SERVICES_TT",
     },
-    { key = "ShowEvents", field = "showEvents", source = "map", kinds = { "event" }, labelKey = "PLU_COMPASS_EVENTS" },
-    { key = "ShowRaces", field = "showRaces", source = "map", kinds = { "race" }, labelKey = "PLU_COMPASS_RACES" },
+    {
+        key = "ShowEvents",
+        field = "showEvents",
+        source = "map",
+        kinds = { "event" },
+        labelKey = "PLU_COMPASS_EVENTS",
+        tooltipKey = "PLU_COMPASS_EVENTS_TT",
+    },
+    {
+        key = "ShowRaces",
+        field = "showRaces",
+        source = "map",
+        kinds = { "race" },
+        labelKey = "PLU_COMPASS_RACES",
+        tooltipKey = "PLU_COMPASS_RACES_TT",
+    },
     {
         key = "ShowQuestHubs",
         field = "showQuestHubs",
         source = "map",
         kinds = { "questHub" },
         labelKey = "PLU_COMPASS_QUEST_HUBS",
+        tooltipKey = "PLU_COMPASS_QUEST_HUBS_TT",
     },
     {
         key = "ShowPOIs",
@@ -48,17 +92,50 @@ local POINTS = {
         source = { "map", "questie" },
         kinds = { "poi", "delve" },
         labelKey = "PLU_COMPASS_ZONE_POIS",
+        tooltipKey = "PLU_COMPASS_ZONE_POIS_TT",
+        foreverTooltipKey = "PLU_COMPASS_ZONE_POIS_FOREVER_TT",
     },
-    { key = "ShowVignettes", field = "showVignettes", source = "vignettes", labelKey = "PLU_COMPASS_VIGNETTES" },
-    { key = "ShowDirections", field = "showDirections", source = "directions", labelKey = "PLU_COMPASS_DIRECTIONS" },
-    { key = "ShowMapLinks", field = "showMapLinks", source = "links", labelKey = "PLU_COMPASS_MAP_LINKS" },
-    { key = "ShowPetTamers", field = "showPetTamers", source = "tamers", labelKey = "PLU_COMPASS_PET_TAMERS" },
-    { key = "ShowDigSites", field = "showDigSites", source = "digsites", labelKey = "PLU_COMPASS_DIG_SITES" },
+    {
+        key = "ShowVignettes",
+        field = "showVignettes",
+        source = "vignettes",
+        labelKey = "PLU_COMPASS_VIGNETTES",
+        tooltipKey = "PLU_COMPASS_VIGNETTES_TT",
+    },
+    {
+        key = "ShowDirections",
+        field = "showDirections",
+        source = "directions",
+        labelKey = "PLU_COMPASS_DIRECTIONS",
+        tooltipKey = "PLU_COMPASS_DIRECTIONS_TT",
+    },
+    {
+        key = "ShowMapLinks",
+        field = "showMapLinks",
+        source = "links",
+        labelKey = "PLU_COMPASS_MAP_LINKS",
+        tooltipKey = "PLU_COMPASS_MAP_LINKS_TT",
+    },
+    {
+        key = "ShowPetTamers",
+        field = "showPetTamers",
+        source = "tamers",
+        labelKey = "PLU_COMPASS_PET_TAMERS",
+        tooltipKey = "PLU_COMPASS_PET_TAMERS_TT",
+    },
+    {
+        key = "ShowDigSites",
+        field = "showDigSites",
+        source = "digsites",
+        labelKey = "PLU_COMPASS_DIG_SITES",
+        tooltipKey = "PLU_COMPASS_DIG_SITES_TT",
+    },
     {
         key = "ShowTrackedContent",
         field = "showTrackedContent",
         source = "content",
         labelKey = "PLU_COMPASS_TRACKED_CONTENT",
+        tooltipKey = "PLU_COMPASS_TRACKED_CONTENT_TT",
     },
     {
         key = "ShowQuestOffers",
@@ -66,12 +143,15 @@ local POINTS = {
         source = { "offers", "questie" },
         kinds = { "questOffer" },
         labelKey = "PLU_COMPASS_QUEST_OFFERS",
+        tooltipKey = "PLU_COMPASS_QUEST_OFFERS_TT",
+        foreverTooltipKey = "PLU_COMPASS_QUEST_OFFERS_FOREVER_TT",
     },
     {
         key = "ShowSavedLocations",
         field = "showSavedLocations",
         source = "locations",
         labelKey = "PLU_COMPASS_SAVED_LOCATIONS",
+        tooltipKey = "PLU_COMPASS_SAVED_LOCATIONS_TT",
     },
 }
 Addon.CompassPointTypes = table.freeze(POINTS)
@@ -185,9 +265,11 @@ local function PlayerArea(mapID)
 end
 
 function Plugin:RefreshCompassPointArea(mapID)
-    local area = PlayerArea(mapID or Number(C_Map.GetBestMapForUnit("player")))
+    mapID = mapID or Number(C_Map.GetBestMapForUnit("player"))
+    local area = PlayerArea(mapID)
     self.compassPointArea = area
     self.compassPointAreaRetry = not area and self.discoveryClock + C.DISCOVERY_INTERVAL or nil
+    self:RefreshCompassCityArea(mapID)
     self:ApplyCompassPointVisibility()
 end
 
@@ -209,6 +291,8 @@ function Plugin:ApplyCompassPointVisibility()
                 end
             elseif point.source then
                 self:InvalidateCompassSourceSettings(point.source, true)
+            elseif point.places then
+                self.bearingsDirty = true
             else
                 self.waypointDirty = true
             end

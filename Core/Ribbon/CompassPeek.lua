@@ -39,6 +39,7 @@ function Plugin:CreateCompassPeek()
         name = name,
         distance = distance,
         connector = connector,
+        tracked = {},
         shown = false,
         measureDirty = true,
     }
@@ -90,14 +91,16 @@ function Plugin:ShowCompassPeek(marker, slot)
     local textGap = Pixel:Multiple(TEXT_GAP, scale)
     local ribbonLeft = Pixel:Snap(centerX - layout.contentWidth / 2, scale)
     local ribbonRight = Pixel:Snap(centerX + layout.contentWidth / 2, scale)
-    local width = math.min(
-        Pixel:Snap(MAX_WIDTH, scale),
-        ribbonRight - ribbonLeft,
-        Pixel:Snap(math.max(peek.nameWidth, peek.distanceWidth) + padding * 2, scale)
-    )
+    -- Rounded up to whole pixels: a box narrower than its text wraps or truncates the name.
+    local needed = math.max(peek.nameWidth, peek.distanceWidth) + padding * 2
+    local fitted = Pixel:Snap(needed, scale)
+    if fitted < needed then
+        fitted = fitted + Pixel:Multiple(1, scale)
+    end
+    local width = math.min(Pixel:Snap(MAX_WIDTH, scale), ribbonRight - ribbonLeft, fitted)
     if width <= padding * 2 then
         self:HideCompassPeek()
-        return
+        return false
     end
     if measured or peek.width ~= width or peek.scale ~= scale then
         local textWidth = width - padding * 2
@@ -156,4 +159,5 @@ function Plugin:ShowCompassPeek(marker, slot)
         peek.frame:Show()
         peek.shown = true
     end
+    return true
 end

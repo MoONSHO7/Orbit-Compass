@@ -12,11 +12,17 @@ P.questLevelRange=5
 Addon.L.PLU_COMPASS_QUEST_LEVEL_F="[%d] %s"
 function geterrorhandler() return function(message) mock.reported=message end end
 RawDrain=Drain
+Bridge=LibStub("LibOrbitBridge-1.0")
+-- The bridge hears quest events on its own frame; Compass's discovery hears the same event.
+function Fire(event,...) Bridge._events.OnEvent(Bridge._events,event,...); P:InvalidateCompassSource(event) end
+function Exist(id,ok) Bridge._events.OnEvent(Bridge._events,"QUEST_DATA_LOAD_RESULT",id,ok) end
+function Driving(name) local driver=Bridge._drivers[name] return driver~=nil and driver.running end
+function Step(name) local driver=Bridge._drivers[name]; driver.frame.OnUpdate(driver.frame,0.016) end
 -- The index builds on its own driver frame; run it to completion around discovery.
 function Drain()
  RawDrain()
  local steps=0
- while P.compassQuestieDriving and steps<10000 do P.compassQuestieDriver.OnUpdate(P.compassQuestieDriver,0.016); steps=steps+1 end
+ while Driving("QuestieIndex") and steps<10000 do Step("QuestieIndex"); steps=steps+1 end
  mock.buildSteps=(mock.buildSteps or 0)+steps
  RawDrain()
 end
@@ -57,8 +63,21 @@ C_SkillInfo={GetSkillLineInfoByID=function(id) return mock.skills[id] and {skill
 C_SpellBook=C_SpellBook or {}
 C_SpellBook.IsSpellKnown=function(id) return mock.spells[id]==true end
 function GetQuestDifficultyColor(level) return level>=29 and {r=1,g=1,b=0} or {r=0.25,g=0.75,b=0.25} end
-Enum.MinimapTrackingFilter=Enum.MinimapTrackingFilter or {Innkeeper=32,Repair=512,Banker=2,Auctioneer=1,Stablemaster=2048}
-local tracking={{name="Innkeeper",texture=1001,filter=32},{name="Repair",texture=1002,filter=512}}
+Enum.MinimapTrackingFilter=Enum.MinimapTrackingFilter
+ or {Innkeeper=32,Repair=512,Banker=2,Auctioneer=1,Stablemaster=2048,Mailbox=64}
+-- The Mailbox entry carries a translated name, as a German client's tracking list would.
+local tracking={{name="Innkeeper",texture=1001,filter=32},{name="Repair",texture=1002,filter=512},
+ {name="Briefkasten",texture=1003,filter=64}}
+-- Forever 1.60.1.70938 packs each 64px service atlas at pixels 261-325 x 1-65 of a 1024px sheet.
+local serviceAtlas={crosshair_innkeeper_64=5001,crosshair_mail_64=5002,crosshair_repairnpc_64=5003}
+local atlasInfo=C_Texture.GetAtlasInfo
+C_Texture.GetAtlasInfo=function(atlas)
+ if serviceAtlas[atlas] and not (mock.missingArt and mock.missingArt[atlas]) then
+  return {file=serviceAtlas[atlas],width=64,height=64,leftTexCoord=261/1024,rightTexCoord=325/1024,
+   topTexCoord=1/1024,bottomTexCoord=65/1024}
+ end
+ return atlasInfo(atlas)
+end
 C_Minimap.GetNumTrackingTypes=function() return #tracking end
 C_Minimap.GetTrackingInfo=function(i) return {name=tracking[i].name,texture=tracking[i].texture} end
 C_Minimap.GetTrackingFilter=function(i) return {filterID=tracking[i].filter} end
@@ -127,7 +146,7 @@ local function Entity(store,numeric,fields)
  return entity
 end
 local NPC_FIELDS={"name","questStarts","npcFlags","spawns","friendlyToFaction"}
-local ZoneDB={private={areaIdToUiMapId="return {[100]=3,[200]=5,[300]=3}",
+local ZoneDB={private={areaIdToUiMapId="return {[100]=3,[200]=5,[300]=3,[400]=7}",
  dungeons={[718]={"Wailing Caverns",nil,17,{{300,46,36.5}}},[9999]={"Utgarde Keep",nil,495,{{300,10,10}}}}},
  instanceIdToAreaId={[43]=718,[574]=9999}}
 LibQuestieDB={
@@ -160,7 +179,11 @@ function Marker(key)
  for _,marker in ipairs(P.compassSources.questie.markers) do if marker.key==key then return marker end end
 end
 function Recollect() P.discoveryClock=P.discoveryClock+61; P:InvalidateCompassSourceSettings("questie"); Drain() end
-function Available(id) local A=Addon.CompassQuestieAvailability return A.IsAvailable(A.Context(LibQuestieDB,P.questLevelRange,{},P),id) end
+function Available(id)
+ local Q=Bridge.Questie
+ local index=Bridge._questie.index or {lib=LibQuestieDB,quests={}}
+ return Q.IsAvailable(Q.Context(index,P.questLevelRange,function(quest) return Addon.CompassQuestieHidden.Has(P,quest) end),id)
+end
 -- The quest log as the client lists it: a zone header, then each accepted quest with its live objectives.
 function Take(id,objectives,level)
  if #mock.entries==0 then mock.entries[1]={title="Zone",questLogIndex=1,questID=0,level=0,isHeader=true,isHidden=false} end
@@ -183,8 +206,8 @@ function Advance(seconds)
 end
 -- Objective places prepare on their own driver frame; this runs it until it is idle and counts its frames.
 function Prepare()
- local state,steps=P.compassQuestiePrepare,0
- while state and state.driving and steps<10000 do state.driver.OnUpdate(state.driver,0.016); steps=steps+1 end
+ local steps=0
+ while Driving("QuestiePrepare") and steps<10000 do Step("QuestiePrepare"); steps=steps+1 end
  return steps
 end
 -- One host collection, repeated once preparation finishes, as the host does when the provider invalidates.
@@ -266,7 +289,7 @@ CASES = {
         assert(calls.register==1 and type(calls.provider.Collect)=="function" and calls.provider.name~="")
         Drain()
         local before=calls.invalidate
-        P:InvalidateCompassSource("QUEST_ACCEPTED")
+        Fire("QUEST_ACCEPTED")
         assert(calls.invalidate==before+1,"an accepted quest left the host's givers stale")
         local rows,refresh=calls.provider.Collect(3)
         assert(type(rows)=="table" and refresh==60)
@@ -284,6 +307,23 @@ CASES = {
         assert(giver.name=="Giver" and giver.atlas=="QuestNormal" and giver.kind=="questOffer")
         assert(giver.description=="Quest 10", giver.description)
         assert(giver.destination.mapID==3 and giver.destination.x==0.5)
+    ''',
+    "a nearby town on another map adds the points inside it and nothing else from that map": '''
+        Npcs[90]={name="Town Giver",questStarts={10},spawns={[400]={{50,50}}},friendlyToFaction="AH"}
+        Npcs[91]={name="Town Innkeeper",npcFlags=128+16384,spawns={[400]={{45,55}}},friendlyToFaction="H"}
+        Npcs[92]={name="Field Giver",questStarts={10},spawns={[400]={{10,10}}},friendlyToFaction="AH"}
+        function P:GetCompassTownMaps() return {{mapID=7,rects={{0.4,0.4,0.6,0.6}}}} end
+        local project=P.ProjectCompassDestination
+        function P:ProjectCompassDestination(mapID,x,y)
+         if mapID==7 then return {x=x+1,y=y} end
+         return project(self,mapID,x,y)
+        end
+        Drain()
+        local giver,inn=Marker("questie:giver:npc:90:7:1"),Marker("questie:service:npc:91:7:1")
+        assert(giver and inn, Keys("giver").." / "..Keys("service"))
+        assert(giver.x==1.5 and giver.destination.mapID==7 and giver.destination.x==0.5, "its own map, projected here")
+        assert(Marker("questie:giver:npc:92:7:1")==nil, "a giver outside the town stays out")
+        assert(Marker("questie:giver:npc:1:3:1"), "the player's own map still lists everything")
     ''',
     "several available quests name the first and count the rest": '''
         Npcs[1].questStarts={10,22}
@@ -364,7 +404,7 @@ CASES = {
         Drain()
         local lines=Marker("questie:giver:npc:1:3:1").tooltipLines
         assert(#lines==2 and lines[2].text=="[28] Quest 11", lines[2].text)
-        mock.done[11]=true; P.discoveryClock=P.discoveryClock+1; P:InvalidateCompassSource("QUEST_TURNED_IN"); Drain()
+        mock.done[11]=true; P.discoveryClock=P.discoveryClock+1; Fire("QUEST_TURNED_IN"); Drain()
         lines=Marker("questie:giver:npc:1:3:1").tooltipLines
         assert(#lines==2 and lines[2].text=="[28] Quest 12", lines[2] and lines[2].text)
     ''',
@@ -372,18 +412,18 @@ CASES = {
         for id=1000,1600 do Npcs[id]={name="Filler",spawns={[100]={{1,1}}},friendlyToFaction="AH"} end
         local clock=0; debugprofilestop=function() clock=clock+0.01 return clock end
         RawDrain()
-        assert(P.compassQuestieDriving and not P.compassQuestieIndex, "built inside discovery")
+        assert(Driving("QuestieIndex") and not Bridge._questie.index, "built inside discovery")
         assert(P.compassSources.locations.status=="ready", "other sources waited for the build")
         local steps=0
-        while P.compassQuestieDriving do P.compassQuestieDriver.OnUpdate(); steps=steps+1 end
+        while Driving("QuestieIndex") do Step("QuestieIndex"); steps=steps+1 end
         assert(steps>5, steps)
         assert(P.compassSources.questie.dirty, "completion did not request a collection")
         RawDrain(); assert(Marker("questie:giver:npc:1:3:1"))
     ''',
     "a failing build stops instead of erroring every frame": '''
         mock.brokenStarters=true; Drain()
-        assert(not P.compassQuestieDriving and mock.reported and Keys()=="", tostring(mock.reported))
-        local calls=mock.idReads; Recollect(); assert(not P.compassQuestieDriving and mock.idReads==calls)
+        assert(not Driving("QuestieIndex") and mock.reported and Keys()=="", tostring(mock.reported))
+        local calls=mock.idReads; Recollect(); assert(not Driving("QuestieIndex") and mock.idReads==calls)
     ''',
     "a same-map subzone keeps QuestieDB markers": '''
         Drain(); local source=P.compassSources.questie; assert(not source.dirty)
@@ -402,7 +442,35 @@ CASES = {
         Drain()
         assert(Keys("service")=="questie:service:npc:2:3:1", Keys("service"))
         local inn=Marker("questie:service:npc:2:3:1")
-        assert(inn.texture==1001 and inn.kind=="service" and inn.description=="Innkeeper, Repair", inn.description)
+        assert(inn.texture==5001 and inn.kind=="service" and inn.description=="Innkeeper, Repair", inn.description)
+        assert(inn.texLeft==261/1024 and inn.texRight==325/1024 and inn.texTop==1/1024 and inn.texBottom==65/1024,
+            "the innkeeper's 64px art was not windowed whole")
+        assert(inn.sizeScale==0.8 and Marker("questie:giver:npc:1:3:1").sizeScale==0.8, "ribbon icons not trimmed")
+        assert(Marker("questie:entrance:instance:43:3:1").sizeScale==1, "an entrance lost its native size")
+    ''',
+    "a client without the 64px service art keeps the tracking icon": '''
+        mock.missingArt={crosshair_innkeeper_64=true}
+        Drain()
+        local inn=Marker("questie:service:npc:2:3:1")
+        assert(inn.texture==1001 and inn.texLeft==nil and inn.sizeScale==0.8, tostring(inn.texture))
+    ''',
+    "mailboxes join Town Services under QuestieDB's or the tracking list's name": '''
+        Objects[80]={name="Mailbox",spawns={[100]={{25,25},{26,26}}}}
+        Objects[81]={name="Briefkasten",spawns={[200]={{12,12}}}}
+        Objects[82]={name="Mailbag",spawns={[100]={{27,27}}}}
+        Drain()
+        assert(Keys("service:object")=="questie:service:object:80:3:1,questie:service:object:80:3:2,"..
+            "questie:service:object:81:5:1", Keys("service:object"))
+        local box=Marker("questie:service:object:80:3:1")
+        assert(box.name=="Mailbox" and box.texture==5002 and box.kind=="service" and box.sizeScale==0.8)
+        assert(box.texLeft==270/1024 and box.texRight==325/1024 and box.texTop==9.5/1024 and box.texBottom==64.5/1024,
+            "the envelope was not centred")
+        assert(box.description=="Briefkasten", tostring(box.description))
+        local local_=Marker("questie:service:object:81:5:1")
+        assert(local_.description==nil and local_.tooltipLines==nil, "a name was repeated as its role")
+        P:SetCompassPointVisibility("ShowServices","world",false); P:SetCompassPointVisibility("ShowServices","city",false)
+        P:CacheCompassPointVisibility(); Drain()
+        assert(Keys("service:object")=="", Keys("service:object"))
     ''',
     "services follow their point toggle": '''
         Drain(); assert(Keys("service")~="")
@@ -416,6 +484,25 @@ CASES = {
         local entrance=Marker("questie:entrance:instance:43:3:1")
         assert(entrance.name=="Wailing Caverns" and entrance.atlas=="Dungeon" and entrance.kind=="poi")
     ''',
+    "the group finder marks raids green with their level and keeps a dungeon's own range": '''
+        local rows={[796]={mapID=43,categoryID=2,isNormalActivity=true,minLevelSuggestion=15,maxLevelSuggestion=24},
+            [839]={mapID=43,categoryID=114,isNormalActivity=false,minLevelSuggestion=60,maxLevelSuggestion=60}}
+        local dungeons={}
+        C_LFGList.GetAvailableActivities=function(category) return category==114 and {839} or dungeons end
+        C_LFGList.GetActivityInfoTable=function(id) return rows[id] end
+        Drain()
+        local raid=Marker("questie:entrance:instance:43:3:1")
+        assert(raid.atlas=="Raid" and raid.description=="PLU_COMPASS_TYPE_RAID", tostring(raid.atlas))
+        assert(raid.tooltipLines[1].text=="PLU_COMPASS_TYPE_RAID" and raid.tooltipLines[2].text=="60",
+            tostring(raid.tooltipLines[2] and raid.tooltipLines[2].text))
+        assert(mock.calls["C_LFGList.RequestAvailableActivities"]==1, "the group finder list was never asked for")
+        dungeons={796}
+        P.discoveryClock=P.discoveryClock+1; P:InvalidateCompassSource("LFG_LIST_AVAILABILITY_UPDATE"); Drain()
+        local dungeon=Marker("questie:entrance:instance:43:3:1")
+        assert(dungeon.atlas=="Dungeon" and dungeon.description=="PLU_COMPASS_TYPE_INSTANCE", tostring(dungeon.atlas))
+        assert(dungeon.tooltipLines[2].text=="PLU_COMPASS_LEVEL_RANGE_F", "a raid version replaced the dungeon's range")
+        assert(mock.calls["C_LFGList.RequestAvailableActivities"]==1, "the group finder list was asked for again")
+    ''',
     "native journal entrances suppress QuestieDB entrances": '''
         Addon.ClientFeatures=setmetatable({dungeonEntrances=true},{__index=Addon.ClientFeatures})
         mock.entrances={{areaPoiID=1,name="Native",position={x=0.1,y=0.1},atlasName="Dungeon"}}
@@ -423,11 +510,11 @@ CASES = {
     ''',
     "the index builds once across collections": '''
         Drain(); Recollect(); Recollect()
-        assert(mock.idReads==1, mock.idReads)
+        assert(mock.idReads==2, "NPC and object ids were not read once each: "..mock.idReads)
     ''',
     "quest events refresh the source": '''
         Drain(); local source=P.compassSources.questie; assert(not source.dirty)
-        P:InvalidateCompassSource("QUEST_ACCEPTED"); assert(source.dirty)
+        Fire("QUEST_ACCEPTED"); assert(source.dirty)
     ''',
     "an incompatible QuestieDB contributes nothing": '''
         mock.contract=3; Drain(); assert(Keys()=="", Keys())
@@ -536,7 +623,7 @@ CASES = {
         assert(Texts(Pick(rows,"objective:45:1:164")[1])=="[28] Quest 45|Kobold Miner|Kobold Candle|Kobold Miner, Kobold Tunneler",
             Texts(Pick(rows,"objective:45:1:164")[1]))
         mock.objectives[45]={Goal("Kobold Candle: 8/8","item",true),Goal("Kobold Miner slain: 0/8","monster")}
-        P:InvalidateCompassSource("QUEST_ACCEPTED")
+        Fire("QUEST_ACCEPTED")
         assert(RowKeys(Collect(3),"objective:")==expected, "a list in another order hid an objective as finished")
     ''',
     "a complete quest shows its turn-in instead of its objectives": '''
@@ -650,19 +737,19 @@ CASES = {
         local calls=Host()
         Accept(40,{Goal("Kobold Miner slain: 0/8","monster")}); Drain(); Collect(3)
         local invalidations,reads=calls.invalidate,mock.logReads
-        for _=1,20 do P:InvalidateCompassSource("QUEST_LOG_UPDATE") end
+        for _=1,20 do Fire("QUEST_LOG_UPDATE") end
         assert(#mock.timers==1 and calls.invalidate==invalidations and mock.logReads==reads, "a burst acted per event")
         Advance(0.25)
         assert(mock.logReads==reads+1 and calls.invalidate==invalidations, "an unchanged log refreshed the host")
         mock.objectives[40][1].text="Kobold Miner slain: 1/8"
-        for _=1,20 do P:InvalidateCompassSource("QUEST_LOG_UPDATE") end
+        for _=1,20 do Fire("QUEST_LOG_UPDATE") end
         Advance(0.1); assert(calls.invalidate==invalidations, "refreshed before the burst settled")
         Advance(0.2)
         assert(calls.invalidate==invalidations+1 and mock.logReads==reads+2, "progress did not refresh the host once")
         reads=mock.logReads
         assert(Texts(Pick(Collect(3),"objective:40:1:164")[1])=="[28] Quest 40|Kobold Miner slain: 1/8")
         assert(mock.logReads==reads, "the collection read the log the burst had just read")
-        mock.complete[40]=true; P:InvalidateCompassSource("QUEST_LOG_UPDATE"); Advance(0.25)
+        mock.complete[40]=true; Fire("QUEST_LOG_UPDATE"); Advance(0.25)
         assert(calls.invalidate==invalidations+2 and RowKeys(Collect(3),"turnin:")=="turnin:n1:820")
     ''',
     "accepting or abandoning a quest refreshes at once, without waiting for a burst": '''
@@ -670,11 +757,11 @@ CASES = {
         Accept(40,{Goal("Kobold Miner slain: 0/8","monster")}); Drain(); Collect(3)
         Accept(41,{Goal("Ore Crate opened: 0/1","object")})
         local before=calls.invalidate
-        P:InvalidateCompassSource("QUEST_ACCEPTED")
+        Fire("QUEST_ACCEPTED")
         assert(calls.invalidate==before+1 and #mock.timers==0)
         assert(#Pick(Collect(3),"objective:41:1:")==1, "an accepted quest waited for the backstop")
         table.remove(mock.entries); mock.log[41]=nil
-        P:InvalidateCompassSource("QUEST_REMOVED")
+        Fire("QUEST_REMOVED")
         assert(#Pick(Collect(3),"objective:41:1:")==0, "an abandoned quest kept its icons")
     ''',
     "a client pin keeps a hinted quest's objective icons and takes over its matching turn-in, and a moved pin re-checks it": '''
@@ -683,14 +770,14 @@ CASES = {
         assert(#Pick(Collect(3),"objective:40:1:")==2, "a hinted quest drew no objective icons")
         local before=calls.invalidate
         mock.pins[3]={{questID=40,numObjectives=1,mapID=3,x=0.5,y=0.5,isQuestStart=false,isMapIndicatorQuest=false}}
-        P:InvalidateCompassSource("QUEST_POI_UPDATE"); Advance(0.25)
+        Fire("QUEST_POI_UPDATE"); Advance(0.25)
         assert(calls.invalidate==before+1, "a new client pin left the map rows as they were")
         assert(#Pick(Collect(3),"objective:40:1:")==2, "the client's pin took a hint the player asked for")
         mock.pins[3]=nil
-        mock.complete[40]=true; P:InvalidateCompassSource("QUEST_LOG_UPDATE"); Advance(0.25)
+        mock.complete[40]=true; Fire("QUEST_LOG_UPDATE"); Advance(0.25)
         assert(calls.invalidate==before+2 and #Pick(Collect(3),"turnin:")==1)
         mock.pins[3]={{questID=40,numObjectives=0,mapID=3,x=0.5,y=0.5,isQuestStart=false,isMapIndicatorQuest=false}}
-        P:InvalidateCompassSource("QUEST_POI_UPDATE"); Advance(0.25)
+        Fire("QUEST_POI_UPDATE"); Advance(0.25)
         assert(calls.invalidate==before+3 and #Pick(Collect(3),"turnin:")==0, "the client's late pin left a double")
     ''',
     "a row's menu removes a quest from the map with its giver and turn-in, and restores them": '''
@@ -764,9 +851,9 @@ CASES = {
         assert(menu.rows[1].text==L.PLU_COMPASS_MAP_HINT_HIDE)
         menu.rows[1].run()
         assert(#Pick(Collect(3),"objective:")==0, "the quest's own right-click did not hide the hint")
-        mock.objectives[40][1].finished=true; P:InvalidateCompassSource("QUEST_LOG_UPDATE"); Advance(0.25)
+        mock.objectives[40][1].finished=true; Fire("QUEST_LOG_UPDATE"); Advance(0.25)
         assert(provider.QuestHint(40)==nil, "a quest with nothing left to find offered a hint")
-        mock.objectives[40][1].finished=false; P:InvalidateCompassSource("QUEST_LOG_UPDATE"); Advance(0.25)
+        mock.objectives[40][1].finished=false; Fire("QUEST_LOG_UPDATE"); Advance(0.25)
         P:SetCompassPointVisibility("ShowQuestObjectives","world",false); P:CacheCompassPointVisibility()
         assert(provider.QuestHint(40)==nil, "a hidden Quest Objectives point still offered hints")
     ''',
@@ -788,11 +875,11 @@ CASES = {
         RowMenu(calls.provider,Pick(rows,"objective:")[1].key).rows[1].run()
         assert(RowKeys(Collect(3),"objective:")=="objective:45:1:164", "hiding the hint left no icon to show it again")
         -- The first objective done, the next one stands for the quest; with the client's own pin, nothing does.
-        mock.objectives[45][1].finished=true; P:InvalidateCompassSource("QUEST_LOG_UPDATE"); Advance(0.25)
+        mock.objectives[45][1].finished=true; Fire("QUEST_LOG_UPDATE"); Advance(0.25)
         rows=Pick(Collect(3),"objective:")
         assert(#rows==1 and rows[1].key:find("objective:45:2:",1,true)==1, "a finished objective still stood for the quest")
         mock.pins[3]={{questID=45,numObjectives=1,mapID=3,x=0.5,y=0.5,isQuestStart=false,isMapIndicatorQuest=false}}
-        P:InvalidateCompassSource("QUEST_POI_UPDATE"); Advance(0.25)
+        Fire("QUEST_POI_UPDATE"); Advance(0.25)
         assert(#Pick(Collect(3),"objective:")==0, "a quest with the client's pin kept a stand-in icon")
     ''',
     "a quest an item starts shows one icon where the item drops, and its hint shows every spot": '''
@@ -826,7 +913,7 @@ CASES = {
         assert(#Pick(Collect(3),"start:")==0 and not Available(48), "a removed quest kept its drop icon")
         P.compassQuestieHidden=nil; P.store.QuestieRemovedQuests=nil
         assert(#Pick(Collect(3),"start:")==1, "the quest did not come back")
-        Take(48,{}); P:InvalidateCompassSource("QUEST_ACCEPTED")
+        Take(48,{}); Fire("QUEST_ACCEPTED")
         assert(#Pick(Collect(3),"start:")==0, "a quest already taken still marked where its item drops")
     ''',
     "showing a hint drops the hints of quests completed since": '''
@@ -860,7 +947,7 @@ CASES = {
         assert(table.concat(requests,",")=="10,14", "each unconfirmed quest was not asked for once: "..table.concat(requests,","))
         assert(not Available(10)); Advance(0.1); assert(#requests==2, "a quest was asked for twice")
         local before=calls.invalidate
-        P:NoteCompassQuestExistence(10,true); P:NoteCompassQuestExistence(14,false); P:NoteCompassQuestExistence(99,true)
+        Exist(10,true); Exist(14,false); Exist(99,true)
         Advance(0.25)
         assert(calls.invalidate==before+1, "the answers did not refresh the map once")
         assert(Available(10) and not Available(14), "the game's answer was not followed")
@@ -871,9 +958,19 @@ CASES = {
         C_QuestLog.GetTitleForQuestID=function() return nil end
         C_QuestLog.RequestLoadQuestByID=function() end
         assert(not Available(10), "an unanswered quest was offered at once")
-        P:NoteCompassQuestExistence(10,false)
+        Exist(10,false)
         Advance(5)
         assert(Available(10) and Available(14), "denials were trusted from a client that confirmed nothing")
+    ''',
+    "a quest on the bridge's curated list is never indexed or offered": '''
+        Bridge._questieRetired[10]=true; Drain()
+        assert(not Available(10) and Available(14), "a curated quest was offered")
+        for _,quests in pairs(Bridge._questie.index.byMap) do
+            for _,point in ipairs(quests.givers) do
+                for _,id in ipairs(point.record.quests or {}) do assert(id~=10, "a curated quest reached a giver") end
+            end
+        end
+        Bridge._questieRetired[10]=nil
     ''',
     "a quest whose title carries a retired marker is never offered": '''
         Host()
@@ -883,16 +980,18 @@ CASES = {
         LibQuestieDB.Quest.name=name
     ''',
     "the log is read again at the backstop, and bursts stop reading it once no map collects": '''
-        Host(); Accept(40,{Goal("Kobold Miner slain: 0/8","monster")}); Drain(); Collect(3)
+        local calls=Host(); Accept(40,{Goal("Kobold Miner slain: 0/8","monster")}); Drain(); Collect(3)
         local reads=mock.logReads
         mock.now=mock.now+29; Collect(3); assert(mock.logReads==reads, "a fresh snapshot was read again")
         mock.now=mock.now+2; Collect(3); assert(mock.logReads==reads+1, "the backstop reused an old snapshot")
         mock.now=mock.now+91
-        for _=1,20 do P:InvalidateCompassSource("QUEST_LOG_UPDATE") end
+        for _=1,20 do Fire("QUEST_LOG_UPDATE") end
         assert(#mock.timers==0 and mock.logReads==reads+1, "an unwatched log was still read")
         Collect(3); assert(mock.logReads==reads+2, "the first collection after idling reused a stale snapshot")
         P:SetCompassPointVisibility("ShowQuestObjectives","world",false); P:CacheCompassPointVisibility()
-        P:InvalidateCompassSource("QUEST_LOG_UPDATE"); assert(#mock.timers==0, "a hidden point still coalesced bursts")
+        local before=calls.invalidate
+        mock.objectives[40][1].text="Kobold Miner slain: 2/8"; Fire("QUEST_LOG_UPDATE"); Advance(0.25)
+        assert(calls.invalidate==before, "a hidden point still refreshed the host")
     ''',
     "a collection reads no QuestieDB table, and preparation keeps to its frame budget": '''
         local calls=Host()
@@ -930,11 +1029,11 @@ CASES = {
         assert(RowKeys(Collect(3),"objective:")=="objective:40:1:164,objective:40:1:492")
         P:CollectCompassQuestieMapRows(3); assert(Prepare()==0, "an unknown quest was prepared again")
     ''',
-    "disabling pauses preparation and forgets the log; the next collection resumes both": '''
+    "disabling releases the bridge's demand; the next collection resumes preparation": '''
         Accept(40,{Goal("Kobold Miner slain: 0/8","monster")}); Drain(); P:CollectCompassQuestieMapRows(3)
-        Addon.CompassQuestieObjectives.Stop(P); Addon.CompassQuestieLog.Forget(P)
-        assert(Prepare()==0 and P.compassQuestieLog==nil)
-        P:InvalidateCompassSource("QUEST_LOG_UPDATE"); assert(#mock.timers==0)
+        P:DisconnectCompassQuestie()
+        assert(Prepare()==0, "preparation ran without demand")
+        P:ConnectCompassQuestie()
         assert(#Pick(Collect(3),"objective:")==2)
     ''',
     "QuestieDB absent, older or without item reads publishes nothing and reads no log": '''
@@ -964,7 +1063,7 @@ RETAIL = '''
     local calls=Host()
     assert(calls.register==0, "Retail registered the map point provider")
     Accept(40,{Goal("Kobold Miner slain: 0/8","monster")})
-    P:InvalidateCompassSource("QUEST_LOG_UPDATE"); P:InvalidateCompassSource("QUEST_ACCEPTED")
+    Fire("QUEST_LOG_UPDATE"); Fire("QUEST_ACCEPTED")
     assert(#mock.timers==0 and (mock.logReads or 0)==0 and calls.invalidate==0, "Retail read the log for QuestieDB")
 '''
 

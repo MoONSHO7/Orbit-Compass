@@ -26,10 +26,16 @@ Own destinations and guidance independently of how the ribbon chooses visible ic
   same-type filter; the existing update owner checks settled discovery at a bounded cadence. Visited identities belong
   to the current selection sequence and reset with settings or discovery context.
 - **Position, bearings and the arrow.** `CompassPosition.lua` calibrates validated map/world coordinates and projects
-  north/west yards through that anchor (`ProjectCompassWorldPoint`); `CompassBearings.lua` derives heading and distance.
-  `CompassNavigation.lua` owns the root and placement, `CompassNavigationView.lua` draws it, and
-  `CompassNavigationSettings.lua` resolves component preferences and units. The optional Orbit Canvas adapter stays in
-  `../Integrations/Orbit/`.
+  north/west yards through that anchor (`ProjectCompassWorldPoint`); `CompassBearings.lua` derives heading and distance,
+  refreshes the town the player stands in, and swaps the points of a city or town the player is outside for its marker
+  (`../Discovery/CompassCities.lua`). A member within its own range raises that marker at any range, the deepest one
+  recorded (`compassRaisedBy`) for the ribbon's fade; alone, a place marker joins by rank within the Cities & Towns
+  range. A town's points keep a bearing beyond their own range (`IsCompassTownPoint`), so a shown town's menu lists
+  them all and entering it shows them all; capitals keep each point type's range. While a place folds or unfolds, both stay. A city marker's click opens
+  `ShowCompassCityMenu`: the place first (omitted for an enemy place, titled in red),
+  then its points by distance. `CompassNavigation.lua` owns the root and
+  placement, `CompassNavigationView.lua` draws it, and `CompassNavigationSettings.lua` resolves component preferences
+  and units. The optional Orbit Canvas adapter stays in `../Integrations/Orbit/`.
 - **Cadence and profiling.** Selection reads the current map position only when an eligible, non-dismissed candidate
   needs ranking. Position and selected targets update per frame, full refreshes settle movement, and ordering keeps its
   interval. Under the optional profiler, `Compass.Bearings.Position` and `Compass.Bearings.Update` split

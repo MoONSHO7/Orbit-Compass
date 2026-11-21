@@ -214,3 +214,7 @@ jobs:
       - name: Check the QuestieDB adapter against its documented contract
         working-directory: Orbit-Compass
         run: python .scripts/check-questie.py
+
+      - name: Check city grouping
+        working-directory: Orbit-Compass
+        run: python .scripts/check-cities.py

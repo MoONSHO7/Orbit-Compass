@@ -53,6 +53,29 @@ function Addon.GetFrames()
     }
 end
 
+local FONT_LABELS = {
+    [Addon.Fonts.Name.Default] = L.PLU_COMPASS_FONT_DEFAULT,
+    [Addon.Fonts.Name.Blizzard] = L.PLU_COMPASS_FONT_BLIZZARD,
+}
+
+local media = {
+    defaultFont = Addon.Fonts.Name.Default,
+    firstFont = Addon.Fonts.Name.Default,
+    fontLabel = function(name)
+        return FONT_LABELS[name] or name
+    end,
+    fallbackFont = STANDARD_TEXT_FONT,
+    list = function(kind)
+        return kind == "font" and Addon.Fonts.List() or {}
+    end,
+    fetch = function(kind, name)
+        return kind == "font" and Addon.Services.GetFont(name) or STANDARD_TEXT_FONT
+    end,
+    isValid = function(path)
+        return path == STANDARD_TEXT_FONT or C_UIFileAsset.IsKnownFile(path)
+    end,
+}
+
 Addon.App = UI.Addon:Create({
     addonName = addonName,
     name = "OrbitCompass",
@@ -81,6 +104,8 @@ Addon.App = UI.Addon:Create({
     },
     slashKey = "ORBITCOMPASS",
     slash = { "/orbitcompass" },
+    media = media,
+    isPreferredItem = Addon.Fonts.IsOwn,
 })
 
 if not Addon.OrbitBridge then

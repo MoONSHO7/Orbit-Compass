@@ -11,10 +11,10 @@ place of the standalone store.
 
 ## Implementation
 - **Load order.** `Orbit_Compass.toc` loads the embedded libraries (`Libs/LibOrbitUI-1.0`, `Libs/LibStub`,
-  `Libs/LibOrbitSearch-1.0`), `Core/Foundation/CompassClientFeatures.lua` (frozen client policy),
-  `Core/CompassCompatibility.lua` (host selection), `Localization/Localization.xml` and `Core/Core.xml`. Core follows
-  Orbit's module conventions: Foundation, Plugin, Discovery, Navigation, Integrations, Ribbon, Search and Config each
-  own a directory, XML bundle and README; [Core/README.md](Core/README.md) maps the data flow and startup phases.
+  `Libs/LibOrbitSearch-1.0`, `Libs/LibOrbitBridge-1.0`), `Core/Foundation/CompassClientFeatures.lua` (frozen client
+  policy), `Core/CompassCompatibility.lua` (host selection), `Localization/Localization.xml` and `Core/Core.xml`. Core
+  follows Orbit's module conventions: Foundation, Plugin, Discovery, Navigation, Integrations, Ribbon, Search and Config
+  each own a directory, XML bundle and README; [Core/README.md](Core/README.md) maps the data flow and startup phases.
   `Assets/` owns the arrow texture, logo and private fonts.
 - **Orbit boundary.** The TOC declares `## OptionalDeps: Orbit, HandyNotes, GatherMate2, Orbit_Navigation, QuestieDB`.
   `Core/CompassCompatibility.lua` accepts a host only when `Orbit.ExternalUIHost.legacyPluginVersion == 1` and no
@@ -28,27 +28,33 @@ place of the standalone store.
   Search, HandyNotes, GatherMate2 and command code. Search places reach Orbit's Spotlight through LibOrbitSearch, not
   through the bridge.
 - **Player surface.** `/orbitcompass` opens Appearance and Points settings; `/orbitcompass move` enters Edit Mode and
-  `reset` restores the ribbon. Points selects visibility in Cities, World and an alternate Toggle column, including
-  HandyNotes and GatherMate2, and a hotkey above the table switches between the current area and the Toggle choices.
-  A thin slider under each row sets how far away that type appears; untouched rows follow Behaviour's Marker Range.
-  Zarillion's packs provide native tooltips, numbered instructions and coloured guide dots; following a dot keeps the
-  note's instructions. Hold Alt to label the nearest visible untracked POI. The search field at the ribbon's bottom-left
-  finds any dungeon, raid, delve, zone, city, continent, flight master, portal or named point; category words ("raids",
-  "flight masters") and place names ("Khaz Algar") narrow the list. With a compatible Orbit the ribbon hides its own
-  search because places appear in Orbit's search instead. Tracked world-map pins, placed map pins and search choices
-  follow the game's own route, including portal shortcuts. Arrow controls live in Compass: Arrow settings, opened by
-  selecting the arrow in Edit Mode. `/oway` and `/orbitway` keep waypoint, saved-location and nearby-target commands;
-  `/way` is claimed only when free. `ORBIT_COMPASS_TARGET` and `ORBIT_COMPASS_TOGGLE_POINTS` are this addon's bindings.
+  `reset` restores the ribbon. Points selects visibility in Cities, World and an alternate Toggle column (hover a row to
+  see what it shows; types the client cannot supply stay hidden), including HandyNotes and GatherMate2, and a hotkey
+  above the table switches between the current area and the Toggle choices. A thin slider under each row sets how far
+  away that type appears; untouched rows follow Behaviour's Marker Range. Zarillion's packs provide native tooltips,
+  numbered instructions and coloured guide dots; following a dot keeps the note's instructions. Hold Alt to label the
+  nearest visible untracked POI. Points' Cities & Towns row shows capitals, hubs and towns as icons within its range,
+  shrinking half as much with distance, and folds the points inside each into its icon, whose click lists the place and
+  every point inside it; inside, they show as usual (in towns gliding out of the icon as you enter and back in as you
+  leave). Facing a place names it in Blizzard's own gold text with its distance underneath, above or below the ribbon as
+  Place Names (Off, Above, Below) chooses. Appearance's Font overrides every Compass text face without touching Orbit's
+  (Default follows Orbit's font). Enemy places are named in red and list only their points. The search field at the
+  ribbon's bottom-left finds any dungeon, raid, delve, zone, city, continent, flight master, portal or named point;
+  category words ("raids", "flight masters") and place names ("Khaz Algar") narrow the list. With a compatible Orbit the
+  ribbon hides its own search because places appear in Orbit's search instead. Tracked world-map pins, placed map pins
+  and search choices follow the game's own route, including portal shortcuts. Arrow controls live in Compass: Arrow
+  settings, opened by selecting the arrow in Edit Mode. `/oway` and `/orbitway` keep waypoint, saved-location and
+  nearby-target commands; `/way` is claimed only when free. `ORBIT_COMPASS_TARGET` and `ORBIT_COMPASS_TOGGLE_POINTS` are
+  this addon's bindings.
 - **GatherMate2.** One GatherMate2 row in Points shows recorded locations for every category enabled in GatherMate2;
   import GatherMate2_Data there for a prebuilt database. Records are possible spawn locations, and arrival-based
   auto-advance can visit them in sequence.
 - **QuestieDB (Forever).** With QuestieDB installed, Available Quests shows givers whose quests this character can take,
-  Zone POIs gains dungeon and raid entrances, and a Town Services row shows innkeepers, repairers, bankers, auctioneers
-  and stable masters. On a compatible Orbit host's map, Available Quests also marks where an item that starts a quest
-  drops, and Quest Objectives where complete quests turn in. A quest's right-click there shows or hides a hint of
-  every place its objectives can be done or its starting item drops; until asked, at most one icon stands for the
-  quest. Compass reads the installed database only
-  (`Core/Integrations/QuestieDB/README.md`).
+  Zone POIs gains dungeon and raid entrances, and a Town Services row shows innkeepers, repairers, bankers, auctioneers,
+  stable masters and mailboxes. On a compatible Orbit host's map, Available Quests also marks where an item that starts
+  a quest drops, and Quest Objectives where complete quests turn in. A quest's right-click there shows or hides a hint
+  of every place its objectives can be done or its starting item drops; until asked, at most one icon stands for the
+  quest. Compass reads the installed database only (`Core/Integrations/QuestieDB/README.md`).
 - **Live resources.** On Forever with a compatible Orbit host, the ribbon mirrors the herb/ore item icons detected by
   Orbit's active minimap/HUD resource scanner. These temporary, approximate observations appear below the line and
   cannot be selected for navigation. They follow Orbit's resource switch and do not start another minimap scan.

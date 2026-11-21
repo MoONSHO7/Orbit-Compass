@@ -16,6 +16,9 @@ CONTRACTS = {
 }
 UI_DIRECTORY = "Libs/LibOrbitUI-1.0/"
 PICKER_DIRECTORY = "Libs/LibOrbitColorPicker-1.0/"
+BRIDGE_DIRECTORY = "Libs/LibOrbitBridge-1.0/"
+BRIDGE_API = ("RegisterCallback", "UnregisterCallback", "Release", "SetProfiler", "Provider", "TrackingArt", "Request",
+    "Context", "InRange", "IsAvailable", "Level", "Serves", "Plan", "Aligned", "Locates", "Places", "Prepare", "ReadLog")
 TEXTURE_EXTENSIONS = (".tga", ".blp", ".png")
 
 spec = importlib.util.spec_from_file_location("fetch_libraries", ROOT / ".scripts/fetch-libs.py")
@@ -53,7 +56,7 @@ def validate(root, release=False):
     externals = fetcher.dependencies(ROOT)
     required = {UI_DIRECTORY.rstrip("/")}
     if addon == "Orbit_Compass" and release:
-        required.update({"Libs/LibOrbitSearch-1.0", "Libs/LibStub"})
+        required.update({"Libs/LibOrbitSearch-1.0", "Libs/LibOrbitBridge-1.0", "Libs/LibStub"})
     if needs_picker:
         required.update({PICKER_DIRECTORY.rstrip("/"), "Libs/LibStub"})
     if not required <= externals.keys():
@@ -210,6 +213,17 @@ def validate(root, release=False):
         for method in ("RegisterProvider", "UnregisterProvider", "IsKindIncluded", "NotifyProviderChanged"):
             if not re.search(r"function\s+lib:" + method + r"\s*\(", search):
                 raise ValueError(f"Required LibOrbitSearch API is absent: {method}")
+        bridge = "\n".join(code for name, code in loaded.items() if name.startswith(BRIDGE_DIRECTORY))
+        asset(BRIDGE_DIRECTORY + "LICENSE")
+        if order.index("Libs/LibStub/LibStub.lua") > next(i for i, name in enumerate(order) if name.startswith(BRIDGE_DIRECTORY)):
+            raise ValueError("LibStub must load before LibOrbitBridge")
+        if not re.search(r'local\s+MAJOR\s*,\s*MINOR\s*=\s*"LibOrbitBridge-1\.0"\s*,\s*\d+', bridge) or not re.search(
+            r"lib\.API\s*=\s*([1-9]\d*)", bridge
+        ):
+            raise ValueError("Compass requires LibOrbitBridge API 1")
+        for method in BRIDGE_API:
+            if not re.search(r"function\s+(?:lib[.:]|Questie\.)" + re.escape(method) + r"\s*\(", bridge):
+                raise ValueError(f"Required LibOrbitBridge API is absent: {method}")
     print(f"PASS: {addon}; {len(loaded)} runtime files; Lua 5.1; {len(asset_paths)} assets; required library APIs")
 
 

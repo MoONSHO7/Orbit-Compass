@@ -14,6 +14,13 @@ local EVENTS = {
     "DISPLAY_SIZE_CHANGED",
     "MODIFIER_STATE_CHANGED",
 }
+-- Orbit hides a hosted ribbon by alpha alone, so Compass pauses itself in a vehicle or pet battle (true: unit event).
+local HOSTED_PAUSE_EVENTS = {
+    PET_BATTLE_OPENING_START = false,
+    PET_BATTLE_CLOSE = false,
+    UNIT_ENTERED_VEHICLE = true,
+    UNIT_EXITED_VEHICLE = true,
+}
 
 local Plugin = Addon.Controller
 local update = Addon.LibOrbitUI.Callbacks:Wrap(function(owner, elapsed)
@@ -83,11 +90,14 @@ function Plugin:OnLoad()
         Bridge.AttachFrame(frame, self, C.SYSTEM_INDEX)
     end
     Services.RestorePosition(frame, C.SYSTEM_INDEX)
-    self.events:SetScript("OnEvent", function(_, event, payload, detail)
+    self.events:SetScript("OnEvent", function(_, event, payload)
         if event == "MODIFIER_STATE_CHANGED" then
             if payload == "LALT" or payload == "RALT" then
                 self:RefreshCompassPeekModifier()
             end
+            return
+        elseif HOSTED_PAUSE_EVENTS[event] ~= nil then
+            self:RefreshCompassInstanceState()
             return
         end
         if event == "QUESTLINE_UPDATE" and Addon.SourceUtils.Readable(payload) == true then
@@ -96,8 +106,6 @@ function Plugin:OnLoad()
             self.dismissedNavigationKey = nil
         elseif event == "PLAYER_ALIVE" or event == "PLAYER_UNGHOST" then
             self.dismissedNavigationKey = nil
-        elseif event == "QUEST_DATA_LOAD_RESULT" then
-            self:NoteCompassQuestExistence(payload, detail)
         end
         if event == "PLAYER_ENTERING_WORLD" then
             self:InvalidateCompassLandmarkScope()
@@ -136,6 +144,13 @@ function Plugin:OnEnable()
     self:RegisterStandardEvents()
     self:RegisterVisibilityEvents()
     if Bridge then
+        for event, unitEvent in pairs(HOSTED_PAUSE_EVENTS) do
+            if unitEvent then
+                self.events:RegisterUnitEvent(event, "player")
+            elseif C_EventUtils.IsEventValid(event) then
+                self.events:RegisterEvent(event)
+            end
+        end
         Bridge.EnableNavigationEditMode(self)
         self:WatchCanvasChanges()
         self:RegisterNavigationCanvasSettings()
@@ -184,8 +199,8 @@ end
 
 function Plugin:RefreshCompassInstanceState()
     self.inInstance = IsInInstance()
-    self.hiddenByGame = not Bridge
-        and ((C_PetBattles and C_PetBattles.IsInBattle and C_PetBattles.IsInBattle()) or UnitHasVehicleUI("player"))
+    self.hiddenByGame = (C_PetBattles and C_PetBattles.IsInBattle and C_PetBattles.IsInBattle())
+        or UnitHasVehicleUI("player")
     if self.inInstance or self.hiddenByGame then
         self.events:SetScript("OnUpdate", nil)
         self.compassUpdating = false
@@ -263,6 +278,8 @@ function Plugin:UpdateCompass(elapsed)
         and (
             self.renderDirty
             or self.markerRevealPending
+            or self.compassCityFoldAnimating
+            or self.compassPlaceLabelAnimating
             or self.renderFacing ~= facing
             or self.renderInteractive ~= not Addon.Services.IsEditMode()
         )
@@ -302,6 +319,7 @@ function Plugin:ApplySettings()
     self.showArrow = self:GetSetting(C.NAVIGATION_SYSTEM_INDEX, "ShowArrow")
     self:CacheNavigationComponents()
     self.showLabel = self:GetSetting(C.SYSTEM_INDEX, "ShowLabel")
+    self.placeNameMode = self:GetSetting(C.SYSTEM_INDEX, "PlaceNames")
     CacheSourceSetting(self, "corpse", "showCorpse", "ShowCorpse")
     CacheSourceSetting(self, "route", "followTracked", "FollowTracked")
     CacheSourceSetting(self, "questie", "questLevelRange", "QuestLevelRange")

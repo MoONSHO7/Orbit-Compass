@@ -445,6 +445,15 @@ function MarkerKeys()
     table.sort(keys)
     return table.concat(keys, ",")
 end
+function SelectedKeys()
+    local keys = {}
+    for _, marker in ipairs(OrbitCompass.selectedMarkers) do
+        keys[#keys + 1] = marker.key
+    end
+    table.sort(keys)
+    return table.concat(keys, ",")
+end
+
 function ShownSlots()
     local count = 0
     for slot in OrbitCompass.markerPool:EnumerateActive() do
@@ -495,6 +504,13 @@ function PointRowLabels(points)
     end
     table.sort(labels)
     return table.concat(labels, "|")
+end
+function PointRow(points, label)
+    for row in points.rows:EnumerateActive() do
+        if row.label:GetText() == label then
+            return row
+        end
+    end
 end
 function PointCells(points, label)
     local row
@@ -731,6 +747,11 @@ class CompassCase:
 
     family = None
 
+    @property
+    def places(self):
+        """Place icons the scene adds: Retail's catalogue names Stormwind (84), which stands alone within range."""
+        return 1 if self.family == "retail" else 0
+
     def boot(self, booter=boot, clean=True, **options):
         """Boot and, unless ``clean`` is false (an expected failure asserts its own errors), check it afterwards."""
         lua = booter(self.family, **options)
@@ -780,8 +801,9 @@ class StandaloneCases(CompassCase):
         self.frames()
         self.assertEqual(self.eval("OrbitCompass.mapID"), 37)
         self.assertEqual(self.eval("MarkerKeys()"), "poi:5001,poi:5002")
-        self.assertEqual(self.eval("#OrbitCompass.selectedMarkers"), 2)
-        self.assertEqual(self.eval("ShownSlots()"), 2)
+        expected = ("city:84," if self.places else "") + "poi:5001,poi:5002"
+        self.assertEqual(self.eval("SelectedKeys()"), expected)
+        self.assertEqual(self.eval("ShownSlots()"), 2 + self.places)
         self.assertEqual(self.eval("math.floor(OrbitCompass.markers[1].distance + 0.5)"), 172)
         self.assertTrue(self.eval("OrbitCompass.compassSearch.icon:IsShown()"))
 
@@ -792,14 +814,14 @@ class StandaloneCases(CompassCase):
         self.run_lua("wow.world.player.facing = 0.05")
         self.frames(2)
         self.assertNotEqual(self.eval("OrbitCompass.markers[1].projectedX"), ahead)
-        self.assertEqual(self.eval("#OrbitCompass.selectedMarkers"), 2)
+        self.assertEqual(self.eval("#OrbitCompass.selectedMarkers"), 2 + self.places)
         self.run_lua("wow.world.player.facing = math.pi")
         self.frames(2)
         self.assertEqual(self.eval("#OrbitCompass.selectedMarkers"), 0)
         self.assertEqual(self.eval("ShownSlots()"), 0)
         self.run_lua("wow.world.player.facing = 0")
         self.frames(10)
-        self.assertEqual(self.eval("ShownSlots()"), 2)
+        self.assertEqual(self.eval("ShownSlots()"), 2 + self.places)
 
     def test_alt_peek_skips_the_tracked_point(self):
         self.boot()
@@ -807,6 +829,43 @@ class StandaloneCases(CompassCase):
         self.eval('Command("/oway nearest inn")')
         self.run_lua('wow.keys.alt = true; wow.FireEvent("MODIFIER_STATE_CHANGED", "LALT", 1); Frames(2)')
         self.assertEqual(self.eval("OrbitCompass.compassPeek.name:GetText()"), "Northshire Abbey")
+
+    def test_alt_peek_cover_is_one_tracked_icon_in_its_own_row(self):
+        self.boot()
+        self.frames()
+        self.run_lua("""
+            local function Point(key, left, right, level, below, navigation)
+                return { key = key, projectedLeftPx = left, projectedRightPx = right, projectedHitSize = right - left,
+                    depthLevel = level, projectedBelowLine = below, navigation = navigation,
+                    destination = { mapID = 1, x = 0, y = 0 } }
+            end
+            First, Second = Point("first", 0, 10, 9, false, true), Point("second", 100, 110, 9, false, true)
+            Between, Under = Point("between", 50, 58, 1, false), Point("under", 2, 8, 1, true)
+            OrbitCompass.navigationTarget = nil
+            OrbitCompass.markerSlotsByKey = {}
+            for _, marker in ipairs({ First, Second, Between, Under }) do
+                OrbitCompass.markerSlotsByKey[marker.key] = { marker = marker, renderShown = true }
+            end
+            function Peek(...) OrbitCompass.markerGroupOrder = { ... } return OrbitCompass:FindCompassPeekMarker() end
+        """)
+        self.assertTrue(self.eval("Peek(First, Second, Between) == Between"), "the gap between two icons covers nothing")
+        self.assertTrue(self.eval("Peek(First, Under) == Under"), "an icon above the line covers none below it")
+        self.run_lua("Between.projectedRetiring = true")
+        self.assertIsNone(self.eval("Peek(First, Second, Between)"), "a point folding away is not peeked")
+
+    def test_alt_peek_box_fits_its_text(self):
+        self.boot()
+        self.frames()
+        self.run_lua("""
+            local step = CompassAddon.Services.pixel:Multiple(1, OrbitCompass.artworkLayout.scale)
+            Width = 100.3 * step
+            OrbitCompass.compassPeek.name.GetUnboundedStringWidth = function() return Width end
+            wow.keys.alt = true
+            wow.FireEvent("MODIFIER_STATE_CHANGED", "LALT", 1)
+            Frames(2)
+        """)
+        self.assertTrue(self.eval("OrbitCompass.compassPeek.shown"))
+        self.assertGreaterEqual(self.eval("OrbitCompass.compassPeek.textWidth"), self.eval("Width"))
 
     def test_reset_restores_the_ribbon_position(self):
         self.boot()
@@ -916,9 +975,21 @@ class StandaloneCases(CompassCase):
         labels = self.eval("PointRowLabels(Points)").split("|")
         self.assertIn("Zone Points of Interest", labels)
         self.assertEqual("World Quests" in labels, self.family == "retail")
+        self.assertEqual("Available Quests" in labels, self.family == "retail", "Forever's givers need QuestieDB")
         self.assertNotIn("GatherMate2", labels)
+        pois = "PLU_COMPASS_ZONE_POIS_FOREVER_TT" if self.family == "forever" else "PLU_COMPASS_ZONE_POIS_TT"
+        self.run_lua('wow.Hover(PointRow(Points, "Zone Points of Interest").hover)')
+        self.assertEqual(self.eval("CompassAddon.Services.tooltip.lines[1].left"), "Zone Points of Interest")
+        self.assertEqual(self.eval("CompassAddon.Services.tooltip.lines[2].left"), self.eval(f"CompassAddon.L.{pois}"))
+        self.run_lua("wow.Hover(nil)")
+        for label in labels:
+            described = self.eval(f'PointRow(Points, "{label}").hover.description')
+            self.assertTrue(described, f"{label} has a description")
         self.assertEqual(self.eval("#Points.cells"), len(labels) * 3)
         self.assertEqual(self.eval("Hotkey.button:GetText()"), "|cff808080Not bound|r")
+        self.run_lua("Columns = CompassAddon.LibOrbitUI.Config.Defaults.Widget")
+        self.assertEqual(self.eval("(select(4, Hotkey.button:GetPoint(1)))"), self.eval("Columns.LabelWidth + Columns.LabelGap"))
+        self.assertEqual(self.eval("(select(4, Hotkey.button:GetPoint(2)))"), self.eval("-Columns.ValueWidth"))
         self.run_lua('SetBinding("G", "ORBIT_COMPASS_TOGGLE_POINTS"); wow.FireEvent("UPDATE_BINDINGS")')
         self.assertEqual(self.eval("Hotkey.button:GetText()"), "G")
         self.run_lua("HoverFirst(Points.children)")
@@ -952,6 +1023,53 @@ class StandaloneCases(CompassCase):
         self.assertEqual(self.eval("MarkerKeys()"), "poi:5001,poi:5002")
         self.run_lua("Dialog:Hide()")
         self.assertFalse(self.eval("Points:IsVisible() or Hotkey:IsVisible()"))
+
+    def test_appearance_font_picker_restyles_compass_text(self):
+        self.boot()
+        self.frames()
+        self.run_lua('''
+            assert(Command("/orbitcompass"), "/orbitcompass is not registered")
+            Dialog = CompassAddon.App.dialogs[1]
+            Dialog:SelectTab("appearance")
+            Frames(2)
+            Picker = VisibleWidget("Font")
+        ''')
+        self.assertTrue(self.eval("Picker ~= nil"))
+        self.assertEqual(self.eval("Picker.Control.Text:GetText()"), "Default")
+        self.run_lua("Picker:ShowDropdown()")
+        names = self.eval("table.concat(CompassAddon.Fonts.List(), '|')").split("|")
+        self.assertEqual(names[:4], ["Orbit Default", "Blizzard", "Orbit UI", "Orbit UI Chat"])
+        self.run_lua('Picker.fontCallback("Blizzard"); Frames(2)')
+        self.assertEqual(self.eval("OrbitCompass:GetSetting(1, 'TextFont')"), "Blizzard")
+        self.assertEqual(self.eval("(OrbitCompass.ticks[1].label:GetFont())"), self.eval("STANDARD_TEXT_FONT"))
+        self.assertEqual(self.eval("(OrbitCompass.compassPlaceLabel.text:GetFont())"), self.eval("STANDARD_TEXT_FONT"))
+        self.run_lua('Picker.fontCallback("Orbit Default"); Frames(2)')
+        self.assertFalse(self.eval("OrbitCompass:GetSetting(1, 'TextFont')"))
+        self.assertEqual(self.eval("(OrbitCompass.ticks[1].label:GetFont())"), self.eval("CompassAddon.Fonts.Path.UI"))
+        self.run_lua('Picker.fontCallback("Orbit UI Chat"); Frames(2)')
+        self.run_lua("CompassAddon.SettingsTabs(1)[2].controls[1].onReset(); Frames(2)")
+        self.assertFalse(self.eval("OrbitCompass:GetSetting(1, 'TextFont')"))
+        self.assertEqual(self.eval("(OrbitCompass.ticks[1].label:GetFont())"), self.eval("CompassAddon.Fonts.Path.UI"))
+        self.assertEqual(self.errors(), [])
+
+    def test_place_names_slider_steps_off_above_below(self):
+        self.boot()
+        self.frames()
+        self.run_lua('''
+            for _, control in ipairs(CompassAddon.SettingsTabs(1)[2].controls) do
+                if control.key == "PlaceNames" then Slider = control end
+            end
+        ''')
+        self.assertEqual(self.eval("Slider.type"), "slider")
+        self.assertEqual(self.eval("Slider.getValue()"), 2)
+        self.assertEqual([self.eval(f"Slider.formatter({step})") for step in (1, 2, 3)], ["Off", "Above", "Below"])
+        self.run_lua("Slider.onChange(3); Frames(2)")
+        self.assertEqual(self.eval("OrbitCompass.placeNameMode"), "below")
+        self.run_lua("Slider.onChange(1); Frames(2)")
+        self.assertEqual(self.eval("OrbitCompass:GetSetting(1, 'PlaceNames')"), "off")
+        self.run_lua("Slider.onReset(); Frames(2)")
+        self.assertEqual(self.eval("OrbitCompass.placeNameMode"), "above")
+        self.assertEqual(self.errors(), [])
 
     def test_points_rows_set_their_own_scan_range(self):
         self.boot()
@@ -1039,9 +1157,6 @@ class StandaloneCases(CompassCase):
         self.run_lua("wow.Click(View.icon)")
         self.assertFalse(self.eval("View.field:HasFocus() or View.list:IsShown()"))
 
-    # Bug: CompassWaypoint.lua:122 gives a pin-less landmark artwork without sizeScale; CompassSources.lua:109-112
-    # copies that nil over the marker default and CompassMarkerGroups.lua:75 then fails on every ribbon frame.
-    @unittest.expectedFailure
     def test_choosing_a_city_result_keeps_the_ribbon_rendering(self):
         self.boot(clean=False)
         self.frames()
@@ -1051,6 +1166,9 @@ class StandaloneCases(CompassCase):
         self.frames(5)
         self.assertEqual(self.eval("Waypoint()"), (84, 0.5, 0.5))
         self.assertEqual(self.eval("OrbitCompass.navigationView.title:GetText()"), "Stormwind City")
+        # A Search city keeps its kind but is no place icon: its hover and click are an ordinary waypoint's.
+        self.run_lua("Slot = OrbitCompass.markerSlotsByKey.waypoint; wow.Hover(Slot); Frames(2)")
+        self.assertEqual(self.eval("CompassAddon.Services.tooltip.lines[1].left"), "Stormwind City")
         self.assertEqual(self.errors(), [])
 
     def test_instance_and_vehicle_pause_the_ribbon(self):
@@ -1068,7 +1186,7 @@ class StandaloneCases(CompassCase):
         self.assertFalse(self.eval("OrbitCompassFrame:IsShown()"))
         self.run_lua('wow.units.player.vehicle = false; wow.FireEvent("UNIT_EXITED_VEHICLE", "player"); Frames(30)')
         self.assertTrue(self.eval("OrbitCompassFrame:IsShown()"))
-        self.assertEqual(self.eval("ShownSlots()"), 2)
+        self.assertEqual(self.eval("ShownSlots()"), 2 + self.places)
 
     def test_disable_releases_commands_and_enable_restores_them(self):
         self.boot()
@@ -1114,6 +1232,86 @@ class StandaloneCases(CompassCase):
         self.assertEqual(self.eval("GatherMate2:ReceiverCount()"), 1)
         self.assertIn("gathermate:37:Herb Gathering:4500650000:401", self.eval("MarkerKeys()"))
 
+    def test_tracked_destinations_ignore_range_and_invisible_markers_take_no_input(self):
+        self.boot()
+        self.frames()
+        self.run_lua("""
+            Inn = OrbitCompass.markers[1]
+            Inn.priority = CompassAddon.Constants.WAYPOINT_PRIORITY
+            OrbitCompass.compassPointRanges[Inn.point] = 100
+            OrbitCompass.bearingsDirty = true
+            Frames(3)
+        """)
+        self.assertGreater(self.eval("Inn.distance"), 100)
+        self.assertTrue(self.eval("Inn.renderShown and OrbitCompass.markerSlotsByKey[Inn.key].renderAlpha > 0.5"),
+                        "a tracked destination past its row's range shows at full strength")
+        self.run_lua("Inn.sourceAlpha = 0; OrbitCompass.renderDirty = true; Frames(2)")
+        self.assertFalse(self.eval("Inn.renderShown or OrbitCompass.markerSlotsByKey[Inn.key]:IsShown()"),
+                         "a marker drawn at zero alpha is hidden, so it takes no hover or click")
+
+    def test_points_inside_the_town_you_stand_in_ignore_their_range(self):
+        if self.family != "retail":
+            self.skipTest("the scene's Elwynn map holds Goldshire only in Retail's catalogue")
+        self.boot()
+        self.frames()
+        self.assertEqual(self.eval("OrbitCompass.compassPositionTown.marker.key"), "town:87")
+        self.run_lua("""
+            wow.world.pois[5003] = { mapID = 37, name = "Goldshire Smithy", x = 0.43, y = 0.66, atlas = "poi-town" }
+            OrbitCompass.compassPointRanges.ShowPOIs = 30
+            local source = OrbitCompass.compassSources.map
+            source.dirty, source.nextAllowed, OrbitCompass.discoveryPending = true, 0, true
+            Frames(30)
+            Smithy = OrbitCompass.markerSlotsByKey["poi:5003"]
+        """)
+        self.assertGreater(self.eval("Smithy.marker.distance"), 30)
+        self.assertTrue(self.eval("Smithy:IsShown() and Smithy.renderAlpha > 0.5"), "drawn at full strength past 30 yd")
+
+    def test_a_failing_source_still_publishes_the_pass_it_shared(self):
+        self.boot(clean=False)
+        self.frames()
+        self.run_lua("""
+            wow.world.pois[5003] = { mapID = 37, name = "Goldshire Smithy", x = 0.45, y = 0.61, atlas = "poi-town" }
+            function OrbitCompass:CollectCompassFlightMasters() error("flight masters failed", 0) end
+            for _, key in ipairs({ "map", "taxi" }) do
+                local source = OrbitCompass.compassSources[key]
+                source.dirty, source.nextAllowed = true, 0
+            end
+            OrbitCompass.discoveryPending = true
+            Frames(2)
+        """)
+        self.assertIn("poi:5003", self.eval("MarkerKeys()"))
+        self.assertTrue(any("flight masters failed" in error for error in self.errors()), self.errors())
+        self.assertEqual(self.eval("OrbitCompass.compassSources.taxi.status"), "failed")
+
+    def test_a_route_step_changing_only_its_arrival_republishes(self):
+        self.boot()
+        self.frames()
+        self.run_lua("""
+            Arrived = false
+            function OrbitCompass:CollectCompassMapPoints(markers)
+                local marker = CompassAddon.SourceUtils.AddMarker(self, markers, "route:step", { x = 0.45, y = 0.6 },
+                    "Step", "poi-town", CompassAddon.Constants.POI_PRIORITY, "poi")
+                marker.arrived = Arrived
+            end
+            function Recollect()
+                local source = OrbitCompass.compassSources.map
+                source.dirty, source.nextAllowed, OrbitCompass.discoveryPending = true, 0, true
+                Frames(2)
+            end
+            Recollect()
+            Arrived = true
+            Recollect()
+        """)
+        self.assertTrue(self.eval("OrbitCompass.compassSources.map.markers[1].arrived"))
+
+    def test_gathermate_nodes_hang_clear_of_the_headings(self):
+        self.boot(setup=GATHERMATE)
+        self.frames()
+        self.run_lua("Herb = OrbitCompass.markers[1]; HerbSlot = OrbitCompass.markerSlotsByKey[Herb.key]")
+        self.assertTrue(self.eval("Herb.projectedBelowLine and HerbSlot:IsShown()"))
+        self.assertGreaterEqual(self.eval("HerbSlot.renderY - HerbSlot.layoutHitSize / 2"),
+                                self.eval("OrbitCompass.artworkLayout.headingY"))
+
     def test_secret_map_reads_are_skipped_without_faults(self):
         self.boot(setup=r'''
             local info = C_AreaPoiInfo.GetAreaPOIInfo
@@ -1128,7 +1326,7 @@ class StandaloneCases(CompassCase):
         self.run_lua("local position = UnitPosition; UnitPosition = function(unit) "
                      "local n, w, z, i = position(unit) return NewSecret(n), NewSecret(w), z, NewSecret(i) end")
         self.frames()
-        self.assertEqual(self.eval("ShownSlots()"), 1)
+        self.assertEqual(self.eval("ShownSlots()"), 1 + self.places)
 
     def test_german_locale_localizes_commands_and_bindings(self):
         self.boot(locale="deDE")
@@ -1207,6 +1405,22 @@ class HostedCases(CompassCase):
         self.eval('Command("/way 50 42 Abbey")')
         self.assertEqual(self.eval("OrbitCompass.navigationView.title:GetText()"), "Abbey")
 
+    def test_hosted_font_choice_stays_with_compass(self):
+        """Orbit inherits a plugin's "Font" from its theme, so Compass's own key must never write Orbit's theme."""
+        self.boot(boot_hosted)
+        self.frames()
+        theme = self.eval('Orbit:GetTheme("Font")')
+        self.run_lua("Control = CompassAddon.SettingsTabs(1)[2].controls[1]")
+        self.assertEqual(self.eval("Control.type"), "font")
+        self.assertEqual(self.eval("Control.getValue()"), "Orbit Default")
+        self.run_lua('Control.onChange("Blizzard"); Frames(2)')
+        self.assertEqual(self.eval("OrbitCompass:GetSetting(1, 'TextFont')"), "Blizzard")
+        self.assertEqual(self.eval('Orbit:GetTheme("Font")'), theme)
+        self.run_lua('Control.onChange("Orbit Default"); Frames(2)')
+        self.assertFalse(self.eval("OrbitCompass:GetSetting(1, 'TextFont')"))
+        self.assertEqual(self.eval("Control.getValue()"), "Orbit Default")
+        self.assertEqual(self.errors(), [])
+
     def test_hosted_reads_the_real_hosts_resource_capability(self):
         """Orbit's published capability version names a member Compass reads; an unknown one would retire polling."""
         self.boot(boot_hosted)
@@ -1223,6 +1437,20 @@ class HostedCases(CompassCase):
                             "hosted Compass refused the real host's resource capability")
         else:
             self.assertTrue(self.eval(f"{state} == nil"))
+
+
+    def test_hosted_vehicle_and_pet_battle_pause_the_ribbon(self):
+        """Orbit hides a hosted ribbon by alpha alone, so Compass itself stops updating and drops its markers."""
+        self.boot(boot_hosted)
+        self.frames()
+        self.assertEqual(self.eval("ShownSlots()"), 2 + self.places)
+        self.run_lua('wow.units.player.vehicle = true; wow.FireEvent("UNIT_ENTERED_VEHICLE", "player"); Frames(3)')
+        self.assertIsNone(self.eval('OrbitCompass.events:GetScript("OnUpdate")'))
+        self.assertEqual(self.eval("ShownSlots()"), 0)
+        self.run_lua('wow.units.player.vehicle = false; wow.FireEvent("UNIT_EXITED_VEHICLE", "player"); Frames(30)')
+        self.assertTrue(self.eval("OrbitCompassFrame:IsShown()"))
+        self.assertEqual(self.eval("ShownSlots()"), 2 + self.places)
+        self.assertEqual(self.errors(), [])
 
 
 def family_cases(base, prefix):

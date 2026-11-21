@@ -5,6 +5,8 @@ local Plugin = Addon.Controller
 local GameTooltip = Services.tooltip
 local TYPE_COLOR = { r = 1, g = 0.82, b = 0 }
 local FAILURE_COLOR = { r = 1, g = 0.2, b = 0.2 }
+local NAME_COLOR = { r = 1, g = 1, b = 1 }
+local HOSTILE_COLOR = Addon.Constants.HOSTILE_PLACE_COLOR
 local GATHERMATE_KIND_PREFIX = "gathermate:"
 local TYPE_LABELS = Addon.Constants.POINT_TYPE_LABELS
 local NO_LINES = {}
@@ -48,7 +50,8 @@ local function ShowMarkerTooltip(button)
     else
         Services.AnchorTooltip(GameTooltip, button)
     end
-    GameTooltip:SetText(marker.name, 1, 1, 1)
+    local nameColor = marker.cityRegion and Plugin:IsCompassPlaceHostile(marker) and HOSTILE_COLOR or NAME_COLOR
+    GameTooltip:SetText(marker.name, nameColor.r, nameColor.g, nameColor.b)
     GameTooltip:AddLine(Plugin:FormatCompassDistance(marker.distance), 1, 1, 1)
     local typeLabel = marker.kind:sub(1, #GATHERMATE_KIND_PREFIX) == GATHERMATE_KIND_PREFIX and L.PLU_COMPASS_GATHERMATE
         or L[TYPE_LABELS[marker.kind]]
@@ -58,6 +61,9 @@ local function ShowMarkerTooltip(button)
     end
     if button.tooltipGroupCount > 1 and not marker.displayOnly then
         GameTooltip:AddLine(L.PLU_COMPASS_OVERLAP_HINT_F:format(button.tooltipGroupCount), 1, 1, 1, true)
+    elseif marker.cityRegion then
+        local count = #Plugin:CollectCompassCityPoints(marker)
+        GameTooltip:AddLine(L.PLU_COMPASS_CITY_HINT_F:format(count), 1, 1, 1, true)
     end
     if button.failureReason then
         GameTooltip:AddLine(button.failureReason, FAILURE_COLOR.r, FAILURE_COLOR.g, FAILURE_COLOR.b, true)
@@ -92,6 +98,11 @@ local function ClickMarker(button)
         return
     end
     if marker.kind == "route" then
+        return
+    end
+    if marker.cityRegion then
+        LeaveMarker(button)
+        Plugin:ShowCompassCityMenu(marker)
         return
     end
     local destination = marker.destination

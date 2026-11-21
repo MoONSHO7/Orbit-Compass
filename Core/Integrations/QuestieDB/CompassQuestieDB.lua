@@ -4,16 +4,33 @@ local C = Addon.Constants
 local L = Addon.L
 local Utils = Addon.SourceUtils
 local Readable, Number = Utils.Readable, Utils.Number
-local Index = Addon.CompassQuestieIndex
-local Availability = Addon.CompassQuestieAvailability
+local Bridge = LibStub("LibOrbitBridge-1.0")
+local Questie = Bridge.Questie
 local Lines = Addon.CompassQuestieLines
+local Instances = Addon.CompassQuestieInstances
 local LogRows = Addon.CompassQuestieLogRows
 local Menu = Addon.CompassQuestieMenu
-local Objectives, Hints = Addon.CompassQuestieObjectives, Addon.CompassQuestieHints
+local Hidden, Hints = Addon.CompassQuestieHidden, Addon.CompassQuestieHints
 local REFRESH_INTERVAL = 60
-local GIVER_ATLAS, ENTRANCE_ATLAS = "QuestNormal", "Dungeon"
+local BRIDGE_PROFILER_PREFIX = "Compass.Bridge."
+local BRIDGE_EVENTS = { "QuestieIndexReady", "QuestieExistenceChanged", "QuestiePlacesFound", "QuestieLogChanged" }
+local GIVER_ATLAS, ENTRANCE_ATLAS, RAID_ATLAS = "QuestNormal", "Dungeon", "Raid"
 -- A giver on the host's map draws at three quarters of its atlas size, so a hub's givers crowd its ground less.
 local MAP_GIVER_SCALE = 0.75
+-- QuestNormal's mark and the service icons fill about 90% of their box where native POI art fills about 75%.
+local RIBBON_ICON_SCALE = 0.8
+-- Blizzard's 64px interaction art doubles the 32px tracking icons; bankers and auctioneers have none.
+local SERVICE_ATLASES = table.freeze({
+    Innkeeper = "crosshair_innkeeper_64",
+    Mailbox = "crosshair_mail_64",
+    Repair = "crosshair_repairnpc_64",
+    Stablemaster = "crosshair_stablemaster_64",
+})
+local SERVICE_ATLAS_PIXELS = 64
+local FULL_SERVICE_CROP =
+    table.freeze({ left = 0, right = SERVICE_ATLAS_PIXELS, top = 0, bottom = SERVICE_ATLAS_PIXELS })
+-- The envelope sits low and right in its atlas; this square of its pixels centres it.
+local SERVICE_CROPS = table.freeze({ Mailbox = table.freeze({ left = 9, right = 64, top = 8.5, bottom = 63.5 }) })
 -- Icons one map may show for quests an item starts: five such quests with their hints on at their full 24 spots.
 local MAX_START_ROWS = 120
 local DESCRIPTION_SEPARATOR = ", "
@@ -21,40 +38,17 @@ local WHITE = { r = 1, g = 1, b = 1 }
 local NO_ROWS = table.freeze({})
 local ENTRANCE_LINES = table.freeze({ table.freeze({ text = L.PLU_COMPASS_TYPE_INSTANCE, r = 1, g = 1, b = 1 }) })
 
--- Each service's localized name and icon from the client's own minimap tracking list; empty until that list loads.
-local function TrackingArt(plugin)
-    local art = plugin.compassQuestieTracking
-    if art then
-        return art
+-- Quests the player removed from the host's map stay out of every availability verdict.
+local function Excluded(plugin)
+    return function(questID)
+        return Hidden.Has(plugin, questID)
     end
-    local minimap = C_Minimap
-    if
-        type(minimap.GetNumTrackingTypes) ~= "function"
-        or type(minimap.GetTrackingInfo) ~= "function"
-        or type(minimap.GetTrackingFilter) ~= "function"
-    then
-        return {}
-    end
-    local count = Number(C_Minimap.GetNumTrackingTypes())
-    if not count or count <= 0 then
-        return {}
-    end
-    art = {}
-    for index = 1, count do
-        local info, filter = Readable(C_Minimap.GetTrackingInfo(index)), Readable(C_Minimap.GetTrackingFilter(index))
-        local filterID = type(filter) == "table" and Number(filter.filterID)
-        if filterID and type(info) == "table" and not art[filterID] then
-            local name = Readable(info.name)
-            art[filterID] = { texture = Number(info.texture), name = type(name) == "string" and name or nil }
-        end
-    end
-    plugin.compassQuestieTracking = art
-    return art
 end
 
--- The player's map, its direct child maps (cities inside a zone) and its parent zone hold nearby spawns.
+-- The player's map, its direct child maps (cities inside a zone) and its parent zone in full, then other maps that
+-- hold nearby towns, limited to the points inside those towns' rectangles (returned by map position).
 local function NearbyMaps(plugin)
-    local maps, seen = { plugin.mapID }, { [plugin.mapID] = true }
+    local maps, seen, towns = { plugin.mapID }, { [plugin.mapID] = true }, {}
     local children = Readable(C_Map.GetMapChildrenInfo(plugin.mapID))
     for _, child in ipairs(type(children) == "table" and children or {}) do
         local mapID = Readable(child) and Number(child.mapID)
@@ -67,9 +61,29 @@ local function NearbyMaps(plugin)
     local parentID = type(info) == "table" and Number(info.parentMapID)
     local parent = parentID and Readable(C_Map.GetMapInfo(parentID))
     if parent and Number(parent.mapType) == Enum.UIMapType.Zone and not seen[parentID] then
+        seen[parentID] = true
         maps[#maps + 1] = parentID
     end
-    return maps
+    for _, town in ipairs(plugin:GetCompassTownMaps()) do
+        if not seen[town.mapID] then
+            seen[town.mapID] = true
+            maps[#maps + 1] = town.mapID
+            towns[#maps] = town.rects
+        end
+    end
+    return maps, towns
+end
+
+local function InTowns(rects, point)
+    if not rects then
+        return true
+    end
+    for _, rect in ipairs(rects) do
+        if point.x >= rect[1] and point.x <= rect[3] and point.y >= rect[2] and point.y <= rect[4] then
+            return true
+        end
+    end
+    return false
 end
 
 local function EntityName(lib, record)
@@ -91,12 +105,12 @@ end
 local function GiverQuests(lib, context, record)
     local first, count, lines, quests = nil, 0, {}, {}
     for _, questID in ipairs(record.quests) do
-        if Availability.IsAvailable(context, questID) then
+        if Questie.IsAvailable(context, questID) then
             count = count + 1
             local title = QuestTitle(lib, questID)
             if title then
                 first = first or title
-                lines[#lines + 1] = Lines.Quest(Availability.Level(context, questID), title)
+                lines[#lines + 1] = Lines.Quest(Questie.Level(context, questID), title)
                 quests[#quests + 1] = { id = questID, title = lines[#lines].text }
             end
         end
@@ -119,6 +133,36 @@ local function ServiceDescription(art, record)
     return table.concat(names, DESCRIPTION_SEPARATOR)
 end
 
+-- A texture window rather than SetAtlas, so the envelope's crop applies on the ribbon, its menus and search alike.
+local function ServiceArt(plugin, filter)
+    local cache = plugin.compassQuestieServiceArt
+    if not cache then
+        cache = {}
+        plugin.compassQuestieServiceArt = cache
+    end
+    local art = cache[filter]
+    if art ~= nil then
+        return art
+    end
+    local atlas = SERVICE_ATLASES[filter]
+    local info = atlas and C_Texture.GetAtlasInfo(atlas)
+    art = false
+    if type(info) == "table" and (info.file or info.filename) then
+        local crop = SERVICE_CROPS[filter] or FULL_SERVICE_CROP
+        local width = (info.rightTexCoord - info.leftTexCoord) / SERVICE_ATLAS_PIXELS
+        local height = (info.bottomTexCoord - info.topTexCoord) / SERVICE_ATLAS_PIXELS
+        art = {
+            texture = info.file or info.filename,
+            texLeft = info.leftTexCoord + width * crop.left,
+            texRight = info.leftTexCoord + width * crop.right,
+            texTop = info.topTexCoord + height * crop.top,
+            texBottom = info.topTexCoord + height * crop.bottom,
+        }
+    end
+    cache[filter] = art
+    return art
+end
+
 local function AddPoint(plugin, markers, mapID, point, name, prefix, atlas, priority, kind)
     local position = plugin:ProjectCompassDestination(mapID, point.x, point.y)
     if not position or type(name) ~= "string" or name == "" then
@@ -132,10 +176,10 @@ local function AddPoint(plugin, markers, mapID, point, name, prefix, atlas, prio
     })
 end
 
-local function AddGivers(plugin, markers, lib, context, summaries, mapID, givers)
+local function AddGivers(plugin, markers, lib, context, summaries, mapID, givers, rects)
     for _, point in ipairs(givers) do
         local record = point.record
-        if Availability.Serves(context, record) then
+        if InTowns(rects, point) and Questie.Serves(context, record) then
             -- One summary per giver per collection; its spawns share the read-only tooltip lines.
             local quests = summaries[record]
             if quests == nil then
@@ -148,6 +192,7 @@ local function AddGivers(plugin, markers, lib, context, summaries, mapID, givers
                     AddPoint(plugin, markers, mapID, point, name, "giver", GIVER_ATLAS, C.QUEST_PRIORITY, "questOffer")
                 if marker then
                     marker.description, marker.tooltipLines = quests.description, quests.lines
+                    marker.sizeScale = RIBBON_ICON_SCALE
                 end
             end
         end
@@ -155,27 +200,27 @@ local function AddGivers(plugin, markers, lib, context, summaries, mapID, givers
     end
 end
 
-local function AddServices(plugin, markers, lib, context, mapID, services)
-    local art = TrackingArt(plugin)
+local function AddServices(plugin, markers, lib, context, mapID, services, rects)
+    local art = Questie.TrackingArt()
     for _, point in ipairs(services) do
         local record = point.record
-        if Availability.Serves(context, record) then
-            local marker = AddPoint(
-                plugin,
-                markers,
-                mapID,
-                point,
-                EntityName(lib, record),
-                "service",
-                C.FALLBACK_ATLAS,
-                C.POI_PRIORITY,
-                "service"
-            )
+        if InTowns(rects, point) and Questie.Serves(context, record) then
+            local name = EntityName(lib, record)
+            local marker =
+                AddPoint(plugin, markers, mapID, point, name, "service", C.FALLBACK_ATLAS, C.POI_PRIORITY, "service")
             if marker then
-                local primary = art[Enum.MinimapTrackingFilter[record.services[1]]]
-                marker.texture = primary and primary.texture
+                local filter = record.services[1]
+                local hd = ServiceArt(plugin, filter)
+                if hd then
+                    marker.texture, marker.texLeft, marker.texRight = hd.texture, hd.texLeft, hd.texRight
+                    marker.texTop, marker.texBottom = hd.texTop, hd.texBottom
+                else
+                    local primary = art[Enum.MinimapTrackingFilter[filter]]
+                    marker.texture = primary and primary.texture
+                end
+                marker.sizeScale = marker.texture and RIBBON_ICON_SCALE or marker.sizeScale
                 local description = ServiceDescription(art, record)
-                if description ~= "" then
+                if description ~= "" and description ~= name then
                     marker.description = description
                     marker.tooltipLines = { { text = description, r = WHITE.r, g = WHITE.g, b = WHITE.b } }
                 end
@@ -194,21 +239,20 @@ local function HasNativeEntrances(mapID)
     return type(entrances) == "table" and #entrances > 0
 end
 
-local function AddEntrances(plugin, markers, mapID, entrances)
+-- The group finder names an instance a raid and suggests its levels; one it does not list keeps the plain label.
+local function AddEntrances(plugin, markers, mapID, entrances, levels, rects)
     for _, point in ipairs(entrances) do
-        local marker = AddPoint(
-            plugin,
-            markers,
-            mapID,
-            point,
-            point.record.name,
-            "entrance",
-            ENTRANCE_ATLAS,
-            C.POI_PRIORITY,
-            "poi"
-        )
-        if marker then
-            marker.description, marker.tooltipLines = L.PLU_COMPASS_TYPE_INSTANCE, ENTRANCE_LINES
+        if InTowns(rects, point) then
+            local range = levels[point.record.id]
+            local atlas = range and range.raid and RAID_ATLAS or ENTRANCE_ATLAS
+            local marker =
+                AddPoint(plugin, markers, mapID, point, point.record.name, "entrance", atlas, C.POI_PRIORITY, "poi")
+            if marker and range then
+                marker.description = range.raid and L.PLU_COMPASS_TYPE_RAID or L.PLU_COMPASS_TYPE_INSTANCE
+                marker.tooltipLines = { Lines.Plain(marker.description), Lines.Level(range.minLevel, range.maxLevel) }
+            elseif marker then
+                marker.description, marker.tooltipLines = L.PLU_COMPASS_TYPE_INSTANCE, ENTRANCE_LINES
+            end
         end
         plugin:CompassDiscoveryCheckpoint()
     end
@@ -220,15 +264,15 @@ local function AddStartRows(plugin, rows, lib, index, context, mapID, menus)
     local count = 0
     for _, start in ipairs(index.startQuests) do
         local questID = start.id
-        local places = Availability.InRange(context, start.level)
-            and Availability.IsAvailable(context, questID)
-            and Objectives.Places(index, questID, mapID, true)
+        local places = Questie.InRange(context, start.level)
+            and Questie.IsAvailable(context, questID)
+            and Questie.Places(index, questID, mapID, true)
         local title = places and QuestTitle(lib, questID)
         if places == nil then
-            Objectives.Request(plugin, index, questID, mapID, true)
+            Questie.Prepare(plugin, index, questID, mapID, true)
         elseif title then
             local hinted = Hints.Has(plugin, questID)
-            local line = Lines.Quest(Availability.Level(context, questID), title)
+            local line = Lines.Quest(Questie.Level(context, questID), title)
             for position, item in ipairs(places.plan.objectives) do
                 local spots = places.spots[position]
                 for rank = 1, spots and (hinted and #spots or 1) or 0 do
@@ -258,7 +302,7 @@ local function AddStartRows(plugin, rows, lib, index, context, mapID, menus)
 end
 
 local function AddGiverRows(plugin, rows, lib, index, mapID, menus)
-    local context, summaries = Availability.Context(lib, plugin.questLevelRange, index.quests, plugin), {}
+    local context, summaries = Questie.Context(index, plugin.questLevelRange, Excluded(plugin)), {}
     AddStartRows(plugin, rows, lib, index, context, mapID, menus)
     local entry = index.byMap[mapID]
     if not entry then
@@ -266,7 +310,7 @@ local function AddGiverRows(plugin, rows, lib, index, mapID, menus)
     end
     for _, point in ipairs(entry.givers) do
         local record = point.record
-        if Availability.Serves(context, record) then
+        if Questie.Serves(context, record) then
             local quests = summaries[record]
             if quests == nil then
                 quests = GiverQuests(lib, context, record) or false
@@ -295,11 +339,11 @@ end
 
 -- Nil tells the host's map the index is still building; an empty list that there is nothing to draw.
 function Plugin:CollectCompassQuestieMapRows(mapID)
-    local lib = (self.showQuestOffers or self.showQuestObjectives) and Index.Provider()
+    local lib = (self.showQuestOffers or self.showQuestObjectives) and Questie.Provider()
     if not lib then
         return NO_ROWS
     end
-    local index, building = Index.Request(self, lib)
+    local index, building = Questie.Request(self, lib)
     if not index then
         return not building and NO_ROWS or nil
     end
@@ -314,31 +358,82 @@ function Plugin:CollectCompassQuestieMapRows(mapID)
 end
 
 function Plugin:CollectCompassQuestieDB(markers)
-    local lib = Index.Provider()
+    local lib = Questie.Provider()
     if not lib then
         return REFRESH_INTERVAL
     end
-    local index, building = Index.Request(self, lib)
+    local index, building = Questie.Request(self, lib)
     if not index then
         if building then
             self:MarkCompassSourcePending()
         end
         return REFRESH_INTERVAL
     end
-    local context, summaries = Availability.Context(lib, self.questLevelRange, index.quests, self), {}
-    for _, mapID in ipairs(NearbyMaps(self)) do
-        local entry = index.byMap[mapID]
+    local context, summaries = Questie.Context(index, self.questLevelRange, Excluded(self)), {}
+    local levels
+    local maps, towns = NearbyMaps(self)
+    for position, mapID in ipairs(maps) do
+        local entry, rects = index.byMap[mapID], towns[position]
         if entry then
             if self.showQuestOffers then
-                AddGivers(self, markers, lib, context, summaries, mapID, entry.givers)
+                AddGivers(self, markers, lib, context, summaries, mapID, entry.givers, rects)
             end
             if self.showServices then
-                AddServices(self, markers, lib, context, mapID, entry.services)
+                AddServices(self, markers, lib, context, mapID, entry.services, rects)
             end
             if self.showPOIs and #entry.entrances > 0 and not HasNativeEntrances(mapID) then
-                AddEntrances(self, markers, mapID, entry.entrances)
+                levels = levels or Instances.Read(self)
+                AddEntrances(self, markers, mapID, entry.entrances, levels, rects)
             end
         end
     end
     return REFRESH_INTERVAL
+end
+
+local function BridgeProfiler(plugin)
+    local profiler = Addon.Services.profiler
+    if not profiler then
+        return
+    end
+    return {
+        Begin = function()
+            if profiler.active then
+                return profiler:Begin()
+            end
+        end,
+        End = function(_, name, start, startKB)
+            profiler:End(plugin, BRIDGE_PROFILER_PREFIX .. name, start, startKB)
+        end,
+        Count = function(_, name)
+            if profiler.active then
+                profiler:Count(plugin, name)
+            end
+        end,
+    }
+end
+
+function Plugin:ConnectCompassQuestie()
+    Bridge:SetProfiler(BridgeProfiler(self))
+    Bridge.RegisterCallback(self, "QuestieIndexReady", function()
+        self:InvalidateCompassSourceSettings("questie", true)
+    end)
+    Bridge.RegisterCallback(self, "QuestieExistenceChanged", function()
+        self:InvalidateCompassMapPoints()
+    end)
+    Bridge.RegisterCallback(self, "QuestiePlacesFound", function()
+        self:InvalidateCompassMapPoints()
+    end)
+    Bridge.RegisterCallback(self, "QuestieLogChanged", function()
+        if self.showQuestObjectives then
+            self:InvalidateCompassMapPoints()
+        end
+    end)
+end
+
+-- Disabling Compass gives up its demand, so the bridge pauses background work no other addon still wants.
+function Plugin:DisconnectCompassQuestie()
+    for _, event in ipairs(BRIDGE_EVENTS) do
+        Bridge.UnregisterCallback(self, event)
+    end
+    Bridge.Release(self)
 end

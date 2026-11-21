@@ -127,6 +127,7 @@ features.points = table.freeze({
     ShowGatherMate = known,
     ShowHandyNotes = known,
     ShowWaypoint = features.supported,
+    ShowPlaces = features.supported,
     ShowSavedLocations = features.supported,
     ShowWorldQuests = features.worldQuests,
     ShowRaces = features.races,

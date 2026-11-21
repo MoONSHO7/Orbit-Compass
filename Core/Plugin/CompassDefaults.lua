@@ -8,6 +8,7 @@ Addon.Definition = {
     alwaysEnabled = true,
     liveToggle = true,
     canvasMode = true,
+    valueTypes = { TextFont = "string" },
     indexDefaults = {
         [C.NAVIGATION_SYSTEM_INDEX] = {
             Anchor = false,
@@ -55,6 +56,7 @@ Addon.Definition = {
             Distance = { CustomColorCurve = { pins = { { position = 0, color = C.NAVIGATION_TEXT_COLOR } } } },
         },
         Width = C.DEFAULT_WIDTH,
+        TextFont = false,
         FontSize = C.DEFAULT_FONT_SIZE,
         IconSize = C.DEFAULT_ICON_SIZE,
         ViewAngle = C.DEFAULT_VIEW_ANGLE,
@@ -72,6 +74,8 @@ Addon.Definition = {
         ShowRaces = true,
         ShowQuestHubs = true,
         ShowWaypoint = true,
+        ShowPlaces = true,
+        PlaceNames = "above",
         ShowLabel = false,
         ShowDirections = true,
         ShowMapLinks = true,

@@ -15,6 +15,20 @@ local QUEST_SYMBOL_ATLASES = {
     ["Worldquest-icon"] = true,
 }
 
+local function RangeFade(plugin, marker)
+    local distance = marker.distance
+    if not distance then
+        return 0
+    end
+    local range = plugin:GetCompassMarkerRange(marker)
+    if distance <= range * (1 - C.MARKER_RANGE_FADE_FRACTION) then
+        return 1
+    end
+    local fadeWidth = math.min(range * C.MARKER_RANGE_FADE_FRACTION, C.MARKER_RANGE_FADE_YARDS)
+    local progress = math.max(0, math.min(1, (range - distance) / fadeWidth))
+    return progress * progress * (3 - 2 * progress)
+end
+
 function Plugin:RenderCompassMarker(button, marker, interactive, x, alpha, markerY, outline, scale)
     local questSymbol = not marker.texture
         and (marker.kind == "quest" or marker.kind == "worldQuest" or QUEST_SYMBOL_ATLASES[marker.atlas] == true)
@@ -129,13 +143,23 @@ function Plugin:RenderCompassMarker(button, marker, interactive, x, alpha, marke
         button.glowX, button.glowY = x, glowY
         button.glowAnchor = glowAnchor
     end
-    local range = not waypoint and self:GetCompassMarkerRange(marker)
-    if range and marker.distance > range * (1 - C.MARKER_RANGE_FADE_FRACTION) then
-        local fadeWidth = math.min(range * C.MARKER_RANGE_FADE_FRACTION, C.MARKER_RANGE_FADE_YARDS)
-        local progress = math.max(0, math.min(1, (range - marker.distance) / fadeWidth))
-        alpha = alpha * progress * progress * (3 - 2 * progress)
+    -- Tracked destinations and a town's own points show at any distance; a raised place icon fades with its member.
+    if not waypoint and marker.priority ~= C.WAYPOINT_PRIORITY and not self:IsCompassTownPoint(marker) then
+        local fade = RangeFade(self, marker)
+        if fade < 1 and marker.compassRaisedBy then
+            fade = math.max(fade, RangeFade(self, marker.compassRaisedBy))
+        end
+        alpha = alpha * fade
     end
     alpha = alpha * (marker.sourceAlpha or 1)
+    -- A transparent button would still take clicks and hovers, so an invisible marker is hidden instead.
+    if alpha <= 0 then
+        if button.renderShown then
+            button:Hide()
+            button.renderShown = false
+        end
+        return false
+    end
     if button.renderAlpha ~= alpha then
         button:SetAlpha(alpha)
         button.renderAlpha = alpha

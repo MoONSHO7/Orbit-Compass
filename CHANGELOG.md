@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-11-21
+
+* Hover a point type in Points to see what it shows. On Forever, Available Quests now appears only with QuestieDB installed, since the game lists no quest givers itself.
+* Icons on the compass now shrink gradually across your whole Marker Range, or a point type's own range, instead of reaching their smallest size at 1,000 yards, so you can still tell near from far at long ranges.
+* Outside a capital, expansion hub or town, the points inside it now fold into one icon on the compass instead of a crowd of service and quest icons. Click it to choose the place itself or any point inside it; once you walk in (where the minimap names the place), every point shows as usual, and in towns the points glide out of the icon as you enter and back into it as you leave. A town lists and shows every point inside it even beyond that point type's range; on Forever with QuestieDB that includes the quest givers and town services of a town across a zone border. Your current destination always keeps its own icon. Capitals and hubs each have their own icon (the six capitals on Forever, Stormwind to Dornogal on Retail); goblin towns such as Booty Bay, Gadgetzan, Ratchet and Everlook share a goblin icon, Horde towns such as Brill, the Crossroads or Camp Mojache an orcish hut, and other towns and quest hubs such as Goldshire a town icon. On Forever this covers about 70 towns, including every flight-master town. The other faction's capitals and towns are named in red and offer only the points inside them.
+* Cities and towns are landmarks on the compass: they show within their own range even when none of their points do, and shrink with distance at half the rate of other icons. A new Cities & Towns row in Points turns them and the folding on or off for cities, the world and the toggle hotkey, and sets their range. While you are in a capital or hub, towns and their points stay off the compass. Face a city or town and its name and distance fade in beside the compass in the game's own lettering on a soft smoky backdrop, with a yellow ! before the name when it has quests you can pick up; Place Names under Appearance puts them above or below the compass, or turns them off.
+* Compass has a Font option under Appearance that changes all Compass text, including the compass letters, the arrow and town names, without touching your Orbit font. Default follows your Orbit font, Blizzard uses the game's own font, and Compass's own fonts and any font your other addons share are listed too.
+* Fixed: choosing a zone or city in Search no longer stops the compass drawing, and a map pin or rare you follow no longer fades away beyond its point type's range. With Orbit, the compass now pauses in vehicles and pet battles instead of leaving invisible points under your cursor. GatherMate nodes no longer overlap the compass letters, Alt's label no longer cuts a name short or skips a point beside the one you are tracking, and with Orbit Navigation the arrow no longer misses Arrived when the route step itself stays put.
+
+## 2026-11-20
+
+* On Forever with QuestieDB, Available Quests no longer shows quests no giver offers you: holiday quests, Season of Discovery-only and removed quests, the ended Ahn'Qiraj War Effort, battleground reputation turn-ins and similar event and reward quests.
+* With Orbit Navigation, the compass shows how long it will take to reach your destination, based on your current speed.
+* On Forever with QuestieDB, raid entrances use Blizzard's green raid icon. Hovering a dungeon or raid entrance shows its level, coloured for your level.
+
+## 2026-11-19
+
+* On Forever with QuestieDB, mailboxes now show under Town Services. Quest givers and town services are a little smaller, and innkeepers, mailboxes, repairers and stable masters have sharper icons.
+
 ## 2026-11-17
 
 * With Orbit Navigation, the arrow now reads Arrived for a moment when you reach a destination and then fades out, and it stays hidden while you are inside your tracked quest's area. Hand-ins read Arrived at 8 yards instead of 15. Needs the matching Orbit Navigation update.

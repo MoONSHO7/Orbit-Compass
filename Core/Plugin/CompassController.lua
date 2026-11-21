@@ -6,7 +6,8 @@ if Bridge then
     Addon.Controller = Bridge.CreateController()
 else
     Addon.Events = UI.Events:Create()
-    Addon.Store = UI.SettingsStore:Create(Addon.Definition.defaults, Addon.Definition.indexDefaults)
+    Addon.Store =
+        UI.SettingsStore:Create(Addon.Definition.defaults, Addon.Definition.indexDefaults, Addon.Definition.valueTypes)
     Addon.Controller = UI.Controller:Create({
         name = "Compass",
         system = Addon.Constants.SYSTEM_ID,

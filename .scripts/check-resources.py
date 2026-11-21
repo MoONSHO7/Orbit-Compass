@@ -734,7 +734,7 @@ for _,height in ipairs({720,1080,2160})do
       "symmetric snapping stays within one physical pixel of the native ring ratio")
      if distance<=C.MARKER_NEAR_DISTANCE then
       nearSize=nearSize or iw;Near(iw,nearSize,"near-size plateau")
-     elseif distance>=C.MARKER_FAR_DISTANCE then
+     elseif distance>=P:GetCompassMarkerRange(marker) then
       Near(iw,pixel:Snap(size*marker.sizeScale*C.MARKER_FAR_SCALE,scale),"far-size plateau")
      end
      Near(marker.projectedLeftPx,left/step,"group left equals rendered left")
@@ -854,6 +854,7 @@ P.markerSlots,P.nextMarkerSlots,P.markerSlotsByKey={},{},{}
 P.selectedMarkers,P.selectionKeys={},{}
 P.markerGeneration=0;P.detail=Region()
 function P:HideCompassPeek()end
+function P:HideCompassPlaceLabel()end
 P:CreateCompassMarkerPool()
 local weakMarkers=setmetatable({},{__mode="v"})
 local resourceAllowed=Addon.ClientFeatures.sources.resources

@@ -120,16 +120,67 @@ local function ArrowAppearanceControls()
     }
 end
 
+-- Default clears the override: Compass text then follows Orbit's global font (Orbit UI alone).
+local function FontPicker()
+    local default = Addon.Fonts.Name.Default
+    local control = Bind({ type = "font", label = L.PLU_COMPASS_FONT, default = default }, C.SYSTEM_INDEX, "TextFont")
+    control.getValue = function()
+        return Plugin:GetSetting(C.SYSTEM_INDEX, "TextFont") or default
+    end
+    control.onChange = function(value)
+        Changed(C.SYSTEM_INDEX, "TextFont", value ~= default and value or nil)
+    end
+    return control
+end
+
+local PLACE_NAME_MODES = { "off", "above", "below" }
+
+local function PlaceNamesSlider()
+    local labels = { L.PLU_COMPASS_PLACE_NAMES_OFF, L.PLU_COMPASS_PLACE_NAMES_ABOVE, L.PLU_COMPASS_PLACE_NAMES_BELOW }
+    local default = Addon.Definition.defaults.PlaceNames
+    local function Index(mode)
+        for index, candidate in ipairs(PLACE_NAME_MODES) do
+            if candidate == mode then
+                return index
+            end
+        end
+    end
+    return {
+        type = "slider",
+        key = "PlaceNames",
+        label = L.PLU_COMPASS_PLACE_NAMES,
+        tooltip = L.PLU_COMPASS_PLACE_NAMES_TT,
+        min = 1,
+        max = #PLACE_NAME_MODES,
+        step = 1,
+        default = Index(default),
+        formatter = function(value)
+            return labels[value]
+        end,
+        getValue = function()
+            return Index(Plugin:GetSetting(C.SYSTEM_INDEX, "PlaceNames")) or Index(default)
+        end,
+        onChange = function(value)
+            Changed(C.SYSTEM_INDEX, "PlaceNames", PLACE_NAME_MODES[value])
+        end,
+        onReset = function()
+            Changed(C.SYSTEM_INDEX, "PlaceNames", nil)
+        end,
+    }
+end
+
 -- The quest level range only filters QuestieDB givers, so it renders only while a compatible QuestieDB is loaded.
 local function AppearanceControls()
     local controls = {
+        FontPicker(),
         Slider(C.SYSTEM_INDEX, "FontSize", L.CMN_FONT_SIZE, C.FONT_MIN, C.FONT_MAX, 1),
         Slider(C.SYSTEM_INDEX, "IconSize", L.CMN_ICON_SIZE, C.ICON_MIN, C.ICON_MAX, 1),
+        PlaceNamesSlider(),
     }
     if
         Addon.ClientFeatures.sources.questie
         and C_AddOns.IsAddOnLoaded("QuestieDB")
-        and Addon.CompassQuestieIndex.Provider()
+        and LibStub("LibOrbitBridge-1.0").Questie.Provider()
     then
         local range = Slider(
             C.SYSTEM_INDEX,

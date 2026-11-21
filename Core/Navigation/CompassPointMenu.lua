@@ -7,6 +7,8 @@ local CENTER_ANGLE = 15
 local MENU_ICON_SIZE = 18
 local MENU_ICON_PADDING = 8
 local Pixel = Addon.Services.pixel
+local HOSTILE = Addon.Constants.HOSTILE_PLACE_COLOR
+local HOSTILE_COLOR = CreateColor(HOSTILE.r, HOSTILE.g, HOSTILE.b)
 
 local function SnapshotPoint(plugin, marker)
     local destination = marker.destination
@@ -21,6 +23,7 @@ local function SnapshotPoint(plugin, marker)
         distance = marker.distance,
         atlas = marker.atlas,
         texture = marker.texture,
+        textureFilter = marker.textureFilter,
         texLeft = marker.texLeft,
         texRight = marker.texRight,
         texTop = marker.texTop,
@@ -41,7 +44,7 @@ local function AddPointIcon(description, point)
         icon:SetSize(size, size)
         icon:SetPoint("RIGHT")
         if point.texture then
-            if Addon.Artwork.ApplyTexture(icon, point.texture) then
+            if Addon.Artwork.ApplyTexture(icon, point.texture, point.textureFilter) then
                 icon:SetTexCoord(point.texLeft or 0, point.texRight or 1, point.texTop or 0, point.texBottom or 1)
             end
             icon:SetVertexColor(point.colorR or 1, point.colorG or 1, point.colorB or 1)
@@ -60,14 +63,20 @@ function Plugin:FindCompassPoint(centered, query)
     local best, bestAngle
     for _, marker in ipairs(self.markers) do
         local angle = facing and marker.bearing and math.abs(Addon.Math:WrapDegrees(facing - marker.bearing)) or 0
+        -- The point ahead is whatever the ribbon draws there, including a town's points beyond their own range.
+        local eligible
+        if centered then
+            eligible = marker.renderShown and not marker.projectedRetiring and angle <= CENTER_ANGLE
+        else
+            eligible = marker.distance and marker.distance <= self:GetCompassMarkerRange(marker)
+        end
         if
-            marker.bearing
+            eligible
+            and marker.bearing
             and marker.distance
             and marker.key ~= self.navigationKey
             and marker.kind ~= "route"
             and (not query or marker.name:lower():find(query, 1, true))
-            and marker.distance <= self:GetCompassMarkerRange(marker)
-            and (not centered or (marker.renderShown and angle <= CENTER_ANGLE))
             and (
                 not best
                 or (centered and angle < bestAngle)
@@ -149,7 +158,7 @@ function Plugin:ShowCompassNearby()
     end)
 end
 
-function Plugin:ShowCompassOverlapMenu(markers)
+function Plugin:ShowCompassOverlapMenu(markers, title)
     if not self:IsActive() or self:IsProfileSuppressed() or self.inInstance or Addon.Services.IsEditMode() then
         return
     end
@@ -161,7 +170,7 @@ function Plugin:ShowCompassOverlapMenu(markers)
     end
     table.freeze(points)
     MenuUtil.CreateContextMenu(self.frame, function(_, root)
-        root:CreateTitle(L.PLU_COMPASS_CHOOSE_POINT)
+        root:CreateTitle(title or L.PLU_COMPASS_CHOOSE_POINT)
         root:SetScrollMode(Addon.Services.pixel:Snap(OVERLAP_MENU_HEIGHT, UIParent:GetEffectiveScale()))
         for _, point in ipairs(points) do
             local description = root:CreateButton(point.label, function()
@@ -189,6 +198,17 @@ function Plugin:ShowCompassOverlapMenu(markers)
             AddPointIcon(description, point)
         end
     end)
+end
+
+-- The city itself leads the list, so one choice travels to the city instead of a point inside it.
+-- An enemy place offers only the points inside it, under its name in red.
+function Plugin:ShowCompassCityMenu(cityMarker)
+    local markers = self:CollectCompassCityPoints(cityMarker)
+    if not self:IsCompassPlaceHostile(cityMarker) then
+        table.insert(markers, 1, cityMarker)
+        return self:ShowCompassOverlapMenu(markers, cityMarker.name)
+    end
+    self:ShowCompassOverlapMenu(markers, HOSTILE_COLOR:WrapTextInColorCode(cityMarker.name))
 end
 
 function Plugin:HandleCompassPointCommand(command, argument)

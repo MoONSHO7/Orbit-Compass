@@ -14,6 +14,7 @@
 Libs\LibOrbitUI-1.0\LibOrbitUI-1.0.xml
 Libs\LibStub\LibStub.lua
 Libs\LibOrbitSearch-1.0\LibOrbitSearch-1.0.xml
+Libs\LibOrbitBridge-1.0\LibOrbitBridge-1.0.xml
 Core\Foundation\CompassClientFeatures.lua
 Core\CompassCompatibility.lua
 Localization\Localization.xml

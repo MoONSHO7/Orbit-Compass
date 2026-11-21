@@ -9,9 +9,11 @@ Render one bounded set of marker buttons while keeping each button's current des
 ## Implementation
 `Markers.xml` loads overlap groups, input and artwork before the pool and view. `CompassMarkerGroups.lua` assigns
 pixel intervals and group actions. `CompassMarkerInput.lua` owns mouse scripts, tooltip binding and destination
-validation; a marker's optional `tooltipLines` (`{ text, r, g, b }`, read-only once published) follow its type line.
+validation, and opens Navigation's city menu for a city marker (an enemy place's name in red); optional `tooltipLines`
+(`{ text, r, g, b }`, read-only once published) follow its type line.
 `CompassMarkerArt.lua` owns atlas and texture binding, including resource masks. `CompassMarkerPool.lua` owns button
-construction, reset and reuse by key. `CompassMarkerView.lua` positions and fades each bound button.
+construction, reset and reuse by key; a point gliding out of a place skips the reveal delay. `CompassMarkerView.lua`
+positions and fades each bound button.
 
 ## Gotchas
 - A click must match the destination captured on press, even if a new record reuses the slot and its artwork.

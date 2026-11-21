@@ -1,11 +1,7 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
-    <Script file="CompassQuestieIndex.lua"/>
-    <Script file="CompassQuestieExistence.lua"/>
     <Script file="CompassQuestieHidden.lua"/>
-    <Script file="CompassQuestieAvailability.lua"/>
     <Script file="CompassQuestieLines.lua"/>
-    <Script file="CompassQuestieObjectives.lua"/>
-    <Script file="CompassQuestieLog.lua"/>
+    <Script file="CompassQuestieInstances.lua"/>
     <Script file="CompassQuestieMenu.lua"/>
     <Script file="CompassQuestieLogRows.lua"/>
     <Script file="CompassQuestieDB.lua"/>

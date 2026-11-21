@@ -8,8 +8,9 @@ from lupa.lua51 import LuaRuntime
 ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE = ROOT.parent
 UI = WORKSPACE / "Orbit-Libs/LibOrbitUI/LibOrbitUI-1.0"
+BRIDGE = WORKSPACE / "Orbit-Libs/LibOrbitBridge/LibOrbitBridge-1.0"
 NAMESPACES = sorted(set(re.findall(r"\b(C_\w+)\.", "\n".join(
-    p.read_text(encoding="utf-8") for p in (ROOT / "Core").rglob("*.lua")
+    p.read_text(encoding="utf-8") for p in [*(ROOT / "Core").rglob("*.lua"), *BRIDGE.rglob("*.lua")]
 ))))
 HARNESS = r'''
 mock = { now = 1, calls = {}, loaded = {}, events = {}, maps = {}, prints = {}, waypoints = 0 }
@@ -24,11 +25,18 @@ function issecretvalue(v) return type(v) == "table" and rawget(v, "secret") == t
 function GetTime() return mock.now end
 function debugprofilestop() return 0 end
 function strlenutf8(s) return #s end
-function UnitFactionGroup() return "Alliance" end
+function UnitFactionGroup() return mock.faction or "Alliance" end
+function CreateColor(r, g, b) return { r=r, g=g, b=b, WrapTextInColorCode=function(_, text)
+ return ("|cff%02x%02x%02x%s|r"):format(math.floor(r * 255 + 0.5), math.floor(g * 255 + 0.5), math.floor(b * 255 + 0.5), text)
+end } end
 function UnitIsGhost() return false end
+function GetSubZoneText() return mock.subzone or "" end
 function CreateVector2D(x,y) return { x=x, y=y } end
 function print(s) mock.prints[#mock.prints+1] = s end
-function LibStub() return mock.search end
+-- LibStub's own registry for libraries the suites load for real; any other lookup answers the search double.
+mock.libs = {}
+LibStub = setmetatable({ NewLibrary = function(_, major) if mock.libs[major] then return nil end
+ mock.libs[major] = {} return mock.libs[major] end }, { __call = function(_, major) return mock.libs[major] or mock.search end })
 mock.search = { PROVIDER_CONTRACT=1, RegisterCallback=function() end, IsKindIncluded=function() return false end,
  RegisterProvider=function(_, _, provider) mock.provider=provider; return true end }
 function CreateFrame()
@@ -142,10 +150,11 @@ def bundle_scripts(relative):
 
 
 FILES = [
- "Foundation/CompassClientFeatures.lua", "Foundation/CompassConstants.lua", "Foundation/CompassArtwork.lua",
+ "Foundation/CompassClientFeatures.lua", "Foundation/CompassConstants.lua", "Foundation/CompassFonts.lua", "Foundation/CompassArtwork.lua",
+ "Foundation/CompassTownCatalog.lua", "Foundation/CompassCityCatalog.lua",
  "Foundation/CompassText.lua", "Plugin/CompassDefaults.lua", "Plugin/CompassStandaloneStore.lua",
  "Discovery/CompassSourceUtils.lua",
- "Discovery/CompassPointVisibility.lua", "Navigation/CompassAutoAdvance.lua", "Navigation/CompassLocations.lua",
+ "Discovery/CompassPointVisibility.lua", "Discovery/CompassCities.lua", "Navigation/CompassAutoAdvance.lua", "Navigation/CompassLocations.lua",
  "Navigation/CompassWaypoint.lua", "Navigation/CompassTargets.lua", "Discovery/Sources/CompassTravelSources.lua",
  "Discovery/Sources/CompassContentSources.lua", "Discovery/Sources/CompassOfferSources.lua",
  "Discovery/Sources/CompassMapSources.lua", "Discovery/Sources/CompassQuestSources.lua",
@@ -171,16 +180,20 @@ def client(family="forever", before=""):
     lua.execute(before)
     load = lua.eval('function(code, name) assert(loadstring(code,name))("Orbit_Compass",Addon) end')
     load((UI / "Core/Client.lua").read_text(encoding="utf-8"), "Client.lua")
+    for node in ElementTree.parse(BRIDGE / "LibOrbitBridge-1.0.xml").getroot():
+        name = node.attrib["file"].replace("\\", "/")
+        load((BRIDGE / name).read_text(encoding="utf-8"), name)
     for file in FILES:
         load((ROOT / "Core" / file).read_text(encoding="utf-8"), file)
     load((UI / "Core/SettingsStore.lua").read_text(encoding="utf-8"), "SettingsStore.lua")
     lua.execute('''
-      Addon.Store=Addon.LibOrbitUI.SettingsStore:Create(Addon.Definition.defaults,Addon.Definition.indexDefaults)
+      Addon.Store=Addon.LibOrbitUI.SettingsStore:Create(Addon.Definition.defaults,Addon.Definition.indexDefaults,Addon.Definition.valueTypes)
       assert(Addon.Store:Initialize())
       function P:GetSetting(i,k) return Addon.Store:Get(i,k) end
       function P:SetSetting(i,k,v) assert(Addon.Store:Set(i,k,v)) end
       P.compassLocations=Addon.Store:Collection("CompassLocations")
       P.events=CreateFrame(); P.mapID=3; P.mapWidth=1000; P.mapHeight=1000; P.markers={}
+      if P.ConnectCompassQuestie then P:ConnectCompassQuestie() end
       P:InitializeCompassDiscovery(); if Addon.ClientFeatures.supported then P:CacheCompassPointVisibility() end; P:CacheCompassRanges(); P:InitializeCompassLandmarks()
       function Drain() for i=1,30 do P:DiscoverCompassMarkers() end end
       function Build() P:AcquireCompassLandmarkDemand("test",true); for i=1,30 do mock.now=mock.now+0.01; P:StepCompassLandmarkCatalog() end end

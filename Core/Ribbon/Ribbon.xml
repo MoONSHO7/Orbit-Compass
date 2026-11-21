@@ -2,5 +2,6 @@
     <Include file="Markers/Markers.xml"/>
     <Script file="CompassProjection.lua"/>
     <Script file="CompassPeek.lua"/>
+    <Script file="CompassPlaceLabel.lua"/>
     <Script file="CompassView.lua"/>
 </Ui>

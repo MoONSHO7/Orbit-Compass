@@ -692,6 +692,22 @@ assert(shown:find("Step 4",1,true) and shown:find("Step 9",1,true) and not shown
 markers={}; mock.guidance.steps={"Walk 40 yd",7}; P:CollectCompassNavigationRoute(markers)
 assert(markers[1].description=="Walk 40 yd")
 """)
+check("Navigation's travel time heads the steps and is optional", NAVIGATION_PROVIDER + """
+mock.loaded.Orbit_Navigation=true
+mock.guidance.steps={"Walk 40 yd to the lift","Take the lift up"}; mock.guidance.step=1
+mock.guidance.time="About 3:20|n"
+local markers={}; P:CollectCompassNavigationRoute(markers)
+local lines={}
+for line in (markers[1].description.."\\n"):gmatch("(.-)\\n") do lines[#lines+1]=line end
+assert(#lines==3 and lines[1]=="|cffbfbfbfAbout 3:20||n|r", lines[1])
+assert(lines[2]:find("Walk 40 yd to the lift",1,true) and lines[3]:find("Take the lift up",1,true))
+markers={}; mock.guidance.steps=nil; P:CollectCompassNavigationRoute(markers)
+assert(markers[1].description=="|cffbfbfbfAbout 3:20||n|r\\nWalk 40 yd", markers[1].description)
+markers={}; mock.guidance.time=180; P:CollectCompassNavigationRoute(markers)
+assert(markers[1].description=="Walk 40 yd","a malformed time was drawn")
+markers={}; mock.guidance.time=nil; P:CollectCompassNavigationRoute(markers)
+assert(markers[1].description=="Walk 40 yd","an older Navigation's guidance lost its text")
+""")
 check("Navigation provider outranks the native route step", '''
 P.markers={{key="route:1",kind="route",x=.5,y=.52,name="Native",source="route",destination={mapID=3,x=.9,y=.9}},
 ''' + NAVIGATION_MARKER + '''}

@@ -1,7 +1,8 @@
 local _, Addon = ...
 local Utils = Addon.SourceUtils
 local Readable, Number = Utils.Readable, Utils.Number
-local Objectives, Log, Lines = Addon.CompassQuestieObjectives, Addon.CompassQuestieLog, Addon.CompassQuestieLines
+local Questie = LibStub("LibOrbitBridge-1.0").Questie
+local Lines = Addon.CompassQuestieLines
 local Menu, Hidden, Hints = Addon.CompassQuestieMenu, Addon.CompassQuestieHidden, Addon.CompassQuestieHints
 local OBJECTIVE_SCALE = 0.6
 -- Turn-ins and objective icons one map may show together: ten objectives at their full 24 spots.
@@ -62,7 +63,7 @@ local function AddTurnIns(rows, snapshot, turnIns, mapID, limit, pins, menus)
     for _, turnIn in ipairs(turnIns) do
         local quest, spot = turnIn.quest, turnIn.spot
         local finisher = spot.sources[1]
-        if finisher.name and quest.line and Serves(snapshot, finisher) then
+        if finisher.name and Lines.ForQuest(quest) and Serves(snapshot, finisher) then
             pins = pins or ClientPins(mapID)
             if not Pinned(pins[quest.id], spot) then
                 local key = ("turnin:%s:%d"):format(finisher.ref, spot.cell)
@@ -73,10 +74,10 @@ local function AddTurnIns(rows, snapshot, turnIns, mapID, limit, pins, menus)
                     byKey[key], rows[#rows + 1] = row, row
                 end
                 if row and #row.lines < MAX_LINES then
-                    row.lines[#row.lines + 1] = quest.line
+                    row.lines[#row.lines + 1] = Lines.ForQuest(quest)
                 end
                 if row then
-                    Menu.Add(menus, row, quest.id, quest.line.text)
+                    Menu.Add(menus, row, quest.id, Lines.ForQuest(quest).text)
                 end
             end
         end
@@ -97,7 +98,7 @@ end
 -- Rank by rank, every objective keeps its densest cells before the map's cap trims anyone's sparser ones.
 local function Group(tasks, limit)
     local groups, cells = {}, {}
-    for rank = 1, Objectives.MAX_SPOTS do
+    for rank = 1, Questie.MAX_SPOTS do
         local ranked = false
         for _, task in ipairs(tasks) do
             local spot = (rank == 1 or not task.single) and task.spots[rank]
@@ -138,7 +139,7 @@ local function GroupLines(entries)
         local task = entry.task
         local text = task.live and task.live.text or task.objective.name
         local sources = LISTS_SOURCES[task.objective.kind] and Lines.Sources(entry.spot.sources) or nil
-        local title = task.quest ~= quest and task.quest.line or nil
+        local title = task.quest ~= quest and Lines.ForQuest(task.quest) or nil
         if #lines + (title and 1 or 0) + (text and 1 or 0) + (sources and 1 or 0) > MAX_LINES then
             break
         end
@@ -152,12 +153,15 @@ local function GroupLines(entries)
     return lines
 end
 
-local function ItemIcon(index, itemID)
-    if not index.icons[itemID] then
+-- Item icons are static client data, so the session keeps each one it has read.
+local itemIcons = {}
+
+local function ItemIcon(itemID)
+    if not itemIcons[itemID] then
         local icon = Number(C_Item.GetItemIconByID(itemID))
-        index.icons[itemID] = icon and icon > 0 and icon or nil
+        itemIcons[itemID] = icon and icon > 0 and icon or nil
     end
-    return index.icons[itemID]
+    return itemIcons[itemID]
 end
 
 -- The lowest quest and objective owns key and place, so the host reuses the record while that objective is active.
@@ -170,7 +174,7 @@ local function GroupRow(index, group, menus)
     if not name then
         return
     end
-    local texture = objective.itemID and ItemIcon(index, objective.itemID) or nil
+    local texture = objective.itemID and ItemIcon(objective.itemID) or nil
     local atlas = not texture and KIND_ATLASES[objective.kind] or nil
     local row = {
         key = ("objective:%d:%d:%d"):format(task.quest.id, task.position, spot.cell),
@@ -184,19 +188,25 @@ local function GroupRow(index, group, menus)
     }
     for _, entry in ipairs(group.entries) do
         local quest = entry.task.quest
-        Menu.Add(menus, row, quest.id, quest.line and quest.line.text or quest.title, not entry.task.single)
+        Menu.Add(
+            menus,
+            row,
+            quest.id,
+            Lines.ForQuest(quest) and Lines.ForQuest(quest).text or quest.title,
+            not entry.task.single
+        )
     end
     return row
 end
 
 function Rows.Add(plugin, rows, index, mapID, menus)
-    local snapshot = Log.Read(plugin, index.lib)
+    local snapshot = Questie.ReadLog(index.lib)
     local turnIns, tasks, pins = {}, {}, nil
     for _, quest in ipairs(snapshot.quests) do
         -- Every quest is prepared, shown or not: its plan decides whether the host offers its hint.
-        local places = not quest.failed and Objectives.Places(index, quest.id, mapID)
+        local places = not quest.failed and Questie.Places(index, quest.id, mapID)
         if places == nil then
-            Objectives.Request(plugin, index, quest.id, mapID)
+            Questie.Prepare(plugin, index, quest.id, mapID)
         elseif places then
             local plan, live = places.plan, quest.objectives
             if quest.complete or #live == 0 and #plan.objectives == 0 then
@@ -210,7 +220,7 @@ function Rows.Add(plugin, rows, index, mapID, menus)
                 -- to stand for it, since nothing else there could take the right-click that shows its hint.
                 if hinted or not pins[quest.id] then
                     -- Objectives that cannot be matched to the client's list all count, rather than none.
-                    local aligned = Objectives.Aligned(plan, live)
+                    local aligned = Questie.Aligned(plan, live)
                     for position, objective in ipairs(plan.objectives) do
                         local spots = places.spots[position]
                         if spots and not (aligned and live[position].finished) then

@@ -8,9 +8,9 @@ local QUEST_DATA_DIRTY = "questData"
 local Catalog = Addon.CompassDiscoveryCatalog
 local SOURCES = Catalog.sources
 local EVENT_SOURCES = Catalog.eventSources
-local QUESTIE_LOG_EVENTS = Catalog.questieLogEvents
 local PATH_SOURCES = Catalog.pathSources
 local CONTEXT_EVENTS = Catalog.contextEvents
+local STATE_FIELDS = { "routeDestination", "routeTracking", "arrival", "arrived", "handynotesGuide" }
 local SUBZONE_RETAINED_LABELS = {
     taxi = "Discovery/SubzoneTaxiRetained",
     handynotes = "Discovery/SubzoneHandyNotesRetained",
@@ -75,6 +75,11 @@ local function SourceChanged(plugin, previous, markers)
                 return true
             end
         end
+        for _, field in ipairs(STATE_FIELDS) do
+            if old[field] ~= marker[field] then
+                return true
+            end
+        end
         plugin:CompassDiscoveryCheckpoint()
     end
     return false
@@ -108,6 +113,7 @@ function Plugin:InitializeCompassDiscovery()
     self.bearingSampleX = nil
     self.selectionKeys = {}
     self.compassSources = {}
+    self:ResetCompassCities()
     for _, definition in ipairs(SOURCES) do
         self.compassSources[definition.key] = { markers = {}, dirty = true, nextAllowed = 0, nextRefresh = 0 }
     end
@@ -154,10 +160,6 @@ function Plugin:InvalidateCompassSource(event)
     local profiler = Addon.Services.profiler
     if profiler and profiler.active and (EVENT_SOURCES[event] or CONTEXT_EVENTS[event]) then
         profiler:Count(self, "Discovery/Invalidate/" .. event)
-    end
-    local burst = QUESTIE_LOG_EVENTS[event]
-    if burst ~= nil then
-        self:NoteCompassQuestieLog(event, burst)
     end
     if event == "USER_WAYPOINT_UPDATED" then
         self.compassSources.route.dirty = true
@@ -371,7 +373,7 @@ function Plugin:DiscoverCompassMarkers()
     end
     self.discoveryDeadline = debugprofilestop() + C.DISCOVERY_BUDGET_MS
     self.discoverySteps = 0
-    local changed = false
+    local changed, failure, failedJob = false, nil, nil
     repeat
         local job = self.discoveryJob
         if not job then
@@ -427,17 +429,15 @@ function Plugin:DiscoverCompassMarkers()
         if start then
             profiler:End(self, job.pathOnly and job.definition.pathLabel or job.definition.label, start, startKB)
         end
-        if self.discoveryJob ~= job then
-            if not ok then
-                error(result, 0)
+        -- A failure re-raises only after the pass publishes what other sources already completed.
+        if not ok then
+            failure = result
+            if self.discoveryJob == job then
+                self.discoveryJob, failedJob = nil, job
             end
             break
         end
-        if not ok then
-            self.discoveryJob = nil
-            FailSource(self, job.source, job.countKey, job.pathOnly, result)
-        end
-        if coroutine.status(job.thread) ~= "dead" then
+        if self.discoveryJob ~= job or coroutine.status(job.thread) ~= "dead" then
             break
         end
         if profiler and profiler.active then
@@ -465,5 +465,10 @@ function Plugin:DiscoverCompassMarkers()
     if changed or self.waypointDirty then
         self.waypointDirty = false
         self:RebuildCompassMarkers()
+    end
+    if failedJob then
+        FailSource(self, failedJob.source, failedJob.countKey, failedJob.pathOnly, failure)
+    elseif failure then
+        error(failure, 0)
     end
 end

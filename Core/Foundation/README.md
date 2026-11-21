@@ -10,10 +10,16 @@ Provide the dependency floor for Compass without controller state, settings read
 `CompassClientFeatures.lua` loads directly from the TOC after the libraries, before compatibility and localization. It
 consumes `UI.Client` and owns product source, point and kind eligibility plus minimum native contracts. `Foundation.xml`
 loads constants and the private font paths before artwork, math, text and native button declarations. The Orbit font
-names use bundled Western/Cyrillic faces and Blizzard's locale-aware font on Korean and Chinese clients. Consumers use
-those private Addon exports; constants own shared point labels, pin prefixes, the ribbon's geometry (`MAX_MARKERS`,
-`STRATA_FOOTPRINT`, `RIBBON_HEIGHT`, the marker scale curve) and Navigation's `ARRIVAL_DISTANCE`. `Addon.Artwork`
-validates native atlases and rejected texture assignments, falling back to a native marker or the bundled arrow.
+names use bundled Western/Cyrillic faces and Blizzard's locale-aware font on Korean and Chinese clients;
+`Addon.Fonts.List`/`Fetch` lead with Default (`Orbit Default`, no file: owners use their own default) and Blizzard
+(`STANDARD_TEXT_FONT`), the identities Orbit and Events share, then the bundled faces and any LibSharedMedia font.
+Consumers use those private Addon exports; constants own shared point labels, pin prefixes, the ribbon's geometry
+(`MAX_MARKERS`, `STRATA_FOOTPRINT`, `RIBBON_HEIGHT`, the marker scale curve) and Navigation's `ARRIVAL_DISTANCE`.
+`CompassCityCatalog.lua` lists each family's capitals and hubs by map with their bundled icon, plus the named towns of
+the generated `CompassTownCatalog.lua` (`../../.scripts/build-town-catalog.py`) as terrain-chunk outlines
+(`CompassTownMasks`) within rectangles on their zone maps, with a goblin, Horde hut or town icon (the generator picks
+Horde for Horde-faction towns), and each place's faction. `Addon.Artwork` validates native atlases and rejected texture assignments, falling back to a native marker or
+the bundled arrow.
 
 ## Gotchas
 - Keep this module independent of the controller, services and optional host. Defaults belong to `../Plugin/`, not

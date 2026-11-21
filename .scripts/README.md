@@ -14,14 +14,15 @@ runtime subdirectories. Omitted `path` means the repository root. Existing junct
 
 `check-package.py` walks the TOC/XML load order, including Bindings.xml. It strips development blocks, compiles Lua 5.1,
 checks product metadata/assets and required APIs in the loaded libraries. Compass requires UI API 1.11 with client
-identity/widget registration and LibOrbitSearch revision 2 with provider contract 1; Events requires UI API 1.11 and
+identity/widget registration, LibOrbitSearch revision 2 with provider contract 1 and LibOrbitBridge API 1 with every
+bridge function it calls; Events requires UI API 1.11 and
 picker revision 10. Interface metadata accepts distinct positive integers including Retail 120100; this does not certify
 loader behavior. API checks inspect declarations without executing addon code.
 
 Run `python .scripts/check-package.py` for linked sources. Release CI fetches libraries, runs
 `check-package.py --release`, then checks the materialized package with `--root .release/ADDON --release`. Release mode
-requires Compass Search/LibStub externals and rejects filesystem links; a different root also requires substituted
-version metadata. Python needs `lupa==2.8`.
+requires Compass Search/Bridge/LibStub externals and rejects filesystem links; a different root also requires
+substituted version metadata. Python needs `lupa==2.8`.
 
 `compass_harness.py` is the suites' shared Lua 5.1 client: native namespace doubles, the loaded Compass files and the
 LibOrbitUI client/store, read from the sibling `../Orbit-Libs/LibOrbitUI/LibOrbitUI-1.0` path (the workspace checkout
@@ -51,20 +52,31 @@ independently, and native detection, CPU and heap still need in-game verificatio
 `check-questie.py` drives the QuestieDB adapter through a double of QuestieDB's documented contract-4 reads: provider
 admission, per-map indexing, quest availability rules (including race masks beyond 32 bits), faction service filters,
 client-named entrances, point toggles and Retail silence. For the quest log's host-map rows it covers each objective
-kind, finished and misaligned objectives, hints shown and hidden from a quest's right-click and off until then, the
-one icon that stands for a quest the client pins nowhere, quests an item starts,
-turn-ins and their de-duplication against client pins, clustering and caps,
-merged tooltips, coalesced log events and read bounds. Real QuestieDB data still needs in-game verification.
-Release CI runs these four suites.
+kind, finished and misaligned objectives, hints shown and hidden from a quest's right-click and off until then, the one
+icon that stands for a quest the client pins nowhere, quests an item starts, turn-ins and their de-duplication against
+client pins, clustering and caps, merged tooltips, coalesced log events and read bounds. Real QuestieDB data still needs
+in-game verification. `build-town-catalog.py` regenerates `Core/Foundation/CompassTownCatalog.lua` from each client's
+AreaTable, WorldMapOverlay, UiMap art/assignment, TaxiNodes and Map exports (cached from wago.tools under the ignored
+`.cache/`), with factions from flight masters or zones. Each town's outline is its subzone's terrain chunks, read from
+the installed clients through NavBuilder's CascLib and cached per ADT; `--check` compares the committed file from those
+caches. `check-cities.py` drives city and town grouping through the shipped Discovery, Sources, Bearings, menu,
+marker-group and place-title owners on both families: folding outside a city, every point inside it (child floors
+included), towns with their goblin or fallback art, entry by subzone name or outline position with its exit margin (a
+rectangle's empty corner and ground 60 yards out stay outside), the destination, waypoint and route exemptions,
+out-of-range members, the menu's order and choice, enemy places and town factions, the fade-and-glide transition
+(reversal, snap on first sight or a gap), the Cities & Towns row and places alone within its range, the half-rate
+distance shrink, the facing title's fades, colours, distance line and Off/Above/Below placement, other continents, and
+one bounds read per map with membership matched once per position, unchanged by walking in and out of a town. Release CI
+runs these five suites.
 
 `check-full-boot.py` loads the whole TOC closure (XML bundles, `Bindings.xml` bodies, real LibOrbitUI and
 LibOrbitSearch, LibStub as a double) on Orbit's strict shared client double,
 `../../Orbit/.scripts/tests/wow_fixture.py`, standalone on both families and once under Orbit Core with Spotlight. It
-drives commands, bindings, the ribbon and peek, search, the arrow, Edit Mode, Points and hotkey settings, GatherMate2,
-secret map reads, locales and refused hosts, and fails on any recorded error, blocked call, secret fault or frozen
-write. Hosted, it also checks that the real host's resource capability version is one Compass reads. Expected failures
-mark open addon bugs; `--coverage` prints line shares. Run
-`python .scripts/check-full-boot.py`; it needs that sibling Orbit checkout.
+drives commands, bindings, the ribbon and peek, search, the arrow, Edit Mode, Points and hotkey settings, the Font
+picker (a hosted choice never writes Orbit's theme font), GatherMate2, secret map reads, locales and refused hosts, and
+fails on any recorded error, blocked call, secret fault or frozen write. Hosted, it also checks that the real host's
+resource capability version is one Compass reads. Expected failures mark open addon bugs; `--coverage` prints line
+shares. Run `python .scripts/check-full-boot.py`; it needs that sibling Orbit checkout.
 
 ## Gotchas
 - Compass pins verified UI 1.15/API 1.18 and Search 1.5/revision 8 releases. Linked checks do not establish release

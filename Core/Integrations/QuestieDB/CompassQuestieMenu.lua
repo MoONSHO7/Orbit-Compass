@@ -2,7 +2,7 @@ local _, Addon = ...
 local L = Addon.L
 local Readable = Addon.SourceUtils.Readable
 local Hidden, Hints = Addon.CompassQuestieHidden, Addon.CompassQuestieHints
-local Index, Objectives, Log = Addon.CompassQuestieIndex, Addon.CompassQuestieObjectives, Addon.CompassQuestieLog
+local Questie = LibStub("LibOrbitBridge-1.0").Questie
 local MAX_MAPS = 8
 local SOURCE = "questie"
 -- What a row's right-click is named after, the most useful of its quests' choices first.
@@ -135,10 +135,10 @@ function Menu.Build(plugin, key, root)
 end
 
 local function Snapshot(plugin)
-    local lib = plugin.showQuestObjectives and Index.Provider()
-    local index = lib and Index.Request(plugin, lib)
+    local lib = plugin.showQuestObjectives and Questie.Provider()
+    local index = lib and Questie.Request(plugin, lib)
     if index then
-        return index, Log.Read(plugin, lib)
+        return index, Questie.ReadLog(lib)
     end
 end
 
@@ -153,8 +153,8 @@ function Menu.QuestHint(plugin, questID)
     if Hints.Has(plugin, questID) then
         return L.PLU_COMPASS_MAP_HINT_HIDE
     end
-    local plan = Objectives.Plan(index, questID)
-    return plan and Objectives.Locates(plan, quest.objectives) and L.PLU_COMPASS_MAP_HINT_SHOW or nil
+    local plan = Questie.Plan(index, questID)
+    return plan and Questie.Locates(plan, quest.objectives) and L.PLU_COMPASS_MAP_HINT_SHOW or nil
 end
 
 -- Adds that choice to a menu of the host's.

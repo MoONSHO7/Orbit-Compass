@@ -34,8 +34,13 @@ function Bridge.Collection(plugin)
     return plugin:OpenSettingsCollection("CompassLocations")
 end
 
-function Services.GetFont()
-    return Orbit:GetTheme("Font")
+function Services.GetFont(name)
+    return name or Orbit:GetTheme("Font")
+end
+
+-- A chosen LibSharedMedia face can be uninstalled since; the theme font then stands in.
+function Services.FontPath(name)
+    return Orbit.Media:FetchFont(name) or Orbit.Media:FetchFont(Orbit:GetTheme("Font")) or STANDARD_TEXT_FONT
 end
 
 function Services.IsEditMode()

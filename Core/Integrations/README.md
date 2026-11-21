@@ -42,7 +42,8 @@ reconciles imports and enablement changes. Disable unregisters the owned message
   (`ORBIT_COMPASS_NAVIGATION_ROUTE`); its collector turns `GetGuidance(mapID)` into one kind-`route` marker whose
   position is the current step's endpoint and destination is the goal. Navigation's `steps` appear with finished steps
   ticked and greyed, the current `step` white, the rest dimmed, at most six lines (two finished), with the objective tracker's
-  check and nub atlases; without steps it is the localized leg text. `../Navigation/CompassTargets.lua` ranks it above
+  check and nub atlases; without steps it is the localized leg text. Navigation's optional `time` (its estimate of
+  the travel left) heads those lines, dimmed; an older Navigation sends none. `../Navigation/CompassTargets.lua` ranks it above
   the native route step. `GetWaypointLabel` names waypoints that Navigation's nearest buttons placed. The marker also
   carries Navigation's `arrival` range and `arrived` verdict, and `GetCompassNavigationFinishedKey` reads the optional
   `GetFinishedDestination`; an older Navigation supplies none of the three and the arrow keeps its distance rule.
@@ -57,6 +58,7 @@ and before consumers capture service hooks. Its `OrbitCanvas.lua` companion load
   external in `.pkgmeta`; release-mode `.scripts/check-package.py` verifies the loaded provider APIs. Local links cannot
   satisfy delivery. Provider functions read Compass through controller methods; landmarks stay frozen. Missing native
   atlases present the bundled arrow to the shared Search host.
+- LibOrbitBridge loads after LibStub and owns QuestieDB reading and cleaning; `.pkgmeta` pins its release commit.
 - Orbit and standalone stores have separate ownership. Provider adapters feed observations and explicit selection
   actions; they must not bypass the selected controller's settings or navigation path.
 - Complete HandyNotes snapshots remain cached until provider/context changes. Native waypoint ownership survives

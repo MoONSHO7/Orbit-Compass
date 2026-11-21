@@ -2,10 +2,8 @@ local _, Addon = ...
 local L = Addon.L
 local ACTION = "ORBIT_COMPASS_TOGGLE_POINTS"
 local ROW_HEIGHT = 26
-local BUTTON_WIDTH = 140
-local BUTTON_HEIGHT = 22
+local CONTROL_HEIGHT = 24
 local LAYOUT_PADDING = 10
-local LABEL_GAP = 8
 local SECTION_GAP = 14
 local SELECTION_TEXTURE = 921208
 local SELECTION_OFFSET_Y = -3
@@ -69,7 +67,8 @@ local function CreateHotkey(layout, container)
     button.selectedHighlight = button:CreateTexture(nil, "OVERLAY")
     button.selectedHighlight:SetTexture(SELECTION_TEXTURE)
     button.selectedHighlight:SetBlendMode("ADD")
-    layout.pixel:Point(button.selectedHighlight, "CENTER", button, "CENTER", 0, SELECTION_OFFSET_Y)
+    layout.pixel:Point(button.selectedHighlight, "TOPLEFT", button, "TOPLEFT", 0, SELECTION_OFFSET_Y)
+    layout.pixel:Point(button.selectedHighlight, "BOTTOMRIGHT", button, "BOTTOMRIGHT", 0, SELECTION_OFFSET_Y)
     button:SetScript("OnKeyDown", ProcessInput)
     button:SetScript("OnMouseWheel", function(self, delta)
         ProcessInput(self, delta > 0 and "MOUSEWHEELUP" or "MOUSEWHEELDOWN")
@@ -132,25 +131,19 @@ function Addon.RegisterPointHotkeyWidget(layout)
         frame:SetParent(container)
         local pixel = layout.pixel
         local scale = frame:GetEffectiveScale()
-        local width = pixel:Snap(container:GetWidth() - LAYOUT_PADDING * 2, scale)
-        local buttonWidth = pixel:Snap(BUTTON_WIDTH, scale)
-        frame:SetWidth(width)
-        frame.label:SetWidth(0)
-        frame.label:SetWidth(
-            pixel:Snap(
-                math.min(frame.label:GetStringWidth(), width - buttonWidth - pixel:Multiple(LABEL_GAP, scale)),
-                scale
-            )
-        )
-        local labelHeight = frame.label:GetStringHeight()
-        local rowHeight = pixel:Snap(math.max(ROW_HEIGHT, labelHeight), scale)
+        -- The shared label and value columns every picker uses, so the key lines up with the other tabs' controls.
+        local columns = layout.configOptions.constants.Widget
+        frame:SetWidth(pixel:Snap(container:GetWidth() - LAYOUT_PADDING * 2, scale))
+        frame.label:SetWidth(columns.LabelWidth)
+        local rowHeight = pixel:Snap(math.max(ROW_HEIGHT, frame.label:GetStringHeight()), scale)
+        local middle = -pixel:Snap(rowHeight / 2, scale)
         frame:SetHeight(rowHeight + pixel:Multiple(SECTION_GAP, scale))
-        frame.button:SetSize(buttonWidth, pixel:Snap(BUTTON_HEIGHT, scale))
-        frame.button.selectedHighlight:SetSize(buttonWidth, pixel:Snap(BUTTON_HEIGHT, scale))
+        frame.button:SetHeight(pixel:Snap(CONTROL_HEIGHT, scale))
         frame.label:ClearAllPoints()
-        frame.label:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, -pixel:Snap((rowHeight - labelHeight) / 2, scale))
+        frame.label:SetPoint("LEFT", frame, "TOPLEFT", 0, middle)
         frame.button:ClearAllPoints()
-        frame.button:SetPoint("RIGHT", frame, "TOPRIGHT", 0, -pixel:Snap(rowHeight / 2, scale))
+        frame.button:SetPoint("LEFT", frame, "TOPLEFT", columns.LabelWidth + columns.LabelGap, middle)
+        frame.button:SetPoint("RIGHT", frame, "TOPRIGHT", -columns.ValueWidth, middle)
         return frame
     end)
 end

@@ -32,8 +32,8 @@ function Artwork.Apply(region, atlas, useSize)
     end
 end
 
-function Artwork.ApplyTexture(region, texture)
-    local success = region:SetTexture(texture)
+function Artwork.ApplyTexture(region, texture, filter)
+    local success = region:SetTexture(texture, nil, nil, filter)
     if not success then
         Artwork.Apply(region, Addon.Constants.FALLBACK_ATLAS)
     end
